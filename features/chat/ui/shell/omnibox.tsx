@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import {
     RiArrowLeftSLine,
     RiArrowRightSLine,
-    RiEqualizer2Line,
+    RiFolderLine,
     RiRefreshLine,
     RiSearchLine,
     RiSettings3Line,
@@ -46,7 +46,7 @@ function NavButton({
             aria-label={label}
             disabled={disabled}
             onClick={onClick}
-            className="flex size-8 items-center justify-center squircle-xl text-text-secondary hover:bg-panel-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-40"
+            className="flex size-8 items-center justify-center rounded-full text-text-secondary hover:bg-panel-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-40"
         >
             {children}
         </button>
@@ -67,6 +67,8 @@ export function ChatOmnibox({
     tabCount,
     titleWorking = false,
     fill = false,
+    filesOpen = false,
+    onToggleFiles,
     children,
 }: {
     title: string;
@@ -87,6 +89,8 @@ export function ChatOmnibox({
     titleWorking?: boolean;
     /** Address field fills the row. Used when tabs live on their own row. */
     fill?: boolean;
+    filesOpen?: boolean;
+    onToggleFiles?: () => void;
     children?: ReactNode;
 }) {
     const { project_path } = useProjectState();
@@ -265,17 +269,21 @@ export function ChatOmnibox({
                 <div
                     className={cn(
                         "relative flex h-8 items-center bg-surface-4",
-                        panel ? "squircle-t-xl rounded-b-none" : "squircle-2xl",
+                        panel ? "rounded-t-full rounded-b-none" : "rounded-full",
                     )}
                 >
-                    <Tooltip content="Open Folder" side="bottom">
+                    <Tooltip content={filesOpen ? "Hide files" : "Show files"} side="bottom">
                         <button
                             type="button"
-                            aria-label="Open Folder"
-                            className="absolute inset-y-0 start-1 z-10 grid w-6 place-items-center rounded-md text-text-secondary hover:bg-panel-hover hover:text-text-primary"
-                            onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}
+                            aria-label={filesOpen ? "Hide files" : "Show files"}
+                            aria-pressed={filesOpen}
+                            className={cn(
+                                "absolute inset-y-0 start-1 z-10 grid w-6 place-items-center rounded-full text-text-secondary hover:bg-panel-hover hover:text-text-primary",
+                                filesOpen && "text-text-primary",
+                            )}
+                            onClick={() => onToggleFiles?.()}
                         >
-                            <RiEqualizer2Line size={19} />
+                            <RiFolderLine size={18} />
                         </button>
                     </Tooltip>
                     {open === "find" ? (
@@ -312,7 +320,7 @@ export function ChatOmnibox({
                     <div
                         ref={panelRef}
                         className={cn(
-                            "fixed z-dropdown overflow-hidden bg-surface-4 shadow-md squircle-b-2xl transition-[max-height,opacity] duration-150 ease-[var(--ease-out)]",
+                            "fixed z-dropdown overflow-hidden bg-surface-4 shadow-md rounded-b-[22px] transition-[max-height,opacity] duration-150 ease-[var(--ease-out)]",
                             panelShown ? "max-h-[640px] opacity-100" : "pointer-events-none max-h-0 border-transparent opacity-0",
                         )}
                         style={{ top: anchor.top, left: anchor.left, width: anchor.width }}

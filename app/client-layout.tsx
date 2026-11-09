@@ -18,6 +18,7 @@ import { installBenignErrorFilters } from "@/lib/editor/benign-errors";
 import { isMainTauriWindow, isTauriRuntime } from "@/lib/window/tauri-window";
 import { FilterProvider } from "@/features/git/ui/manager/filter-context";
 import { SuppressNativeTooltips } from "@/components/ui/suppress-native-tooltips";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { CommandPaletteBridge } from "@/features/agent/palette";
 import { cn } from "@/lib/utils";
 import Onboarding from "@/features/onboarding/ui/view";
@@ -157,6 +158,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         return (
             <LoadingProvider>
                 <NotificationProvider>
+                    <TooltipProvider delayDuration={100} skipDelayDuration={0}>
                     <SuppressNativeTooltips />
                     <GlobalContextMenu>
                         <div
@@ -171,6 +173,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                             <div id="shape-overlays" />
                         </div>
                     </GlobalContextMenu>
+                    </TooltipProvider>
                 </NotificationProvider>
             </LoadingProvider>
         );
@@ -191,10 +194,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         return (
             <LoadingProvider>
                 <NotificationProvider>
+                    <TooltipProvider delayDuration={100} skipDelayDuration={0}>
                     <SuppressNativeTooltips />
                     <GlobalContextMenu>
                         {isBranch ? <FilterProvider>{body}</FilterProvider> : body}
                     </GlobalContextMenu>
+                    </TooltipProvider>
                 </NotificationProvider>
             </LoadingProvider>
         );
@@ -203,12 +208,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     return (
         <LoadingProvider>
             <NotificationProvider>
+                <TooltipProvider delayDuration={100} skipDelayDuration={0}>
                 <SuppressNativeTooltips />
                 <GlobalContextMenu>
                     <ChatStreamProvider>
                         <Content>{children}</Content>
                     </ChatStreamProvider>
                 </GlobalContextMenu>
+                </TooltipProvider>
             </NotificationProvider>
         </LoadingProvider>
     );

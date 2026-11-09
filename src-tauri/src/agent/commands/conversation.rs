@@ -9,6 +9,11 @@ use crate::core::error::AppError;
 use serde_json::json;
 use tauri::Emitter;
 
+/// Tauri keeps async commands on the WebView thread until the first `.await`.
+async fn leave_webview() {
+    tokio::task::yield_now().await;
+}
+
 #[tauri::command]
 pub fn get_chat_title(state: tauri::State<'_, AgentState>) -> Result<String, AppError> {
     Ok(state
@@ -24,11 +29,12 @@ pub fn get_current_conversation_id(state: tauri::State<'_, AgentState>) -> Resul
 }
 
 #[tauri::command]
-pub fn get_chat_history(
+pub async fn get_chat_history(
     limit: Option<usize>,
     state: tauri::State<'_, AgentState>,
     _app_state: tauri::State<'_, AppState>,
 ) -> Result<Vec<ChatMessage>, AppError> {
+    leave_webview().await;
     // Opening or closing a coding folder must not wipe the live conversation.
     // Persistence store is owned by load/new/send, not by the workspace path.
     let history = state.merge_in_flight_into_history(state.history.lock()?.clone());
@@ -49,12 +55,13 @@ pub fn get_chat_generation_state(
 }
 
 #[tauri::command]
-pub fn get_conversations(
+pub async fn get_conversations(
     _state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
     project_path: Option<String>,
     all: Option<bool>,
 ) -> Result<Vec<crate::agent::models::Conversation>, AppError> {
+    leave_webview().await;
     let mut path = dirs::data_local_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
     path.push("Shape");
     path.push("chat_history");
@@ -66,7 +73,9 @@ pub fn get_conversations(
     };
 
     let mut all_convs = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(path) {
+    if let Some(ref fp) = filter_path {
+        all_convs = history::load_conversations(fp);
+    } else if let Ok(entries) = std::fs::read_dir(path) {
         for entry in entries.flatten() {
             if entry.path().extension().and_then(|s| s.to_str()) == Some("json") {
                 if let Ok(content) = std::fs::read_to_string(entry.path()) {
@@ -80,11 +89,6 @@ pub fn get_conversations(
         }
     }
 
-    if let Some(ref fp) = filter_path {
-        let normalized = history::normalize_project_path(fp);
-        all_convs.retain(|c| history::normalize_project_path(&c.project_path) == normalized);
-    }
-
     all_convs.sort_by(|a, b| {
         b.timestamp
             .partial_cmp(&a.timestamp)
@@ -94,10 +98,11 @@ pub fn get_conversations(
 }
 
 #[tauri::command]
-pub fn get_conversation(
+pub async fn get_conversation(
     id: String,
     project_path: Option<String>,
 ) -> Result<crate::agent::models::Conversation, AppError> {
+    leave_webview().await;
     history::find_conversation_by_id(&id, project_path.as_deref())
         .map(|(_, conv)| conv)
         .ok_or_else(|| AppError::Message("Conversation not found".to_string()))
@@ -209,35 +214,35 @@ pub async fn restore_checkpoint(
     Ok(())
 }
 
-#[tauri::command]
-pub fn new_chat(
+pub(crate) fn apply_new_chat(
+    state: &AgentState,
     store_path: Option<String>,
-    state: tauri::State<'_, AgentState>,
-    app_state: tauri::State<'_, AppState>,
-    index_state: tauri::State<'_, crate::agent::index::IndexState>,
-    app_handle: tauri::AppHandle,
-) -> Result<(), AppError> {
-    // Keep any in-flight turn running in the background — only Stop cancels.
-    // Save the outgoing conversation (including in-flight partial) before
-    // clearing live history so a mid-turn new chat does not drop the user message.
-    let active_proj = state.current_project.lock()?.clone();
-
-    if let Some(path) = active_proj {
-        let _ = history::save_current_conversation(&state, &path);
-    } else if let Some(path) = app_state.0.lock()?.project_path.clone() {
-        let _ = history::save_current_conversation(&state, &path);
-        *state.current_project.lock()? = Some(path);
-    } else {
-        let _ = history::save_current_conversation(&state, history::TALK_STORE);
-        *state.current_project.lock()? = Some(history::TALK_STORE.to_string());
+    fallback_project: Option<String>,
+) -> Result<String, AppError> {
+    let persist_path = state
+        .current_project
+        .lock()?
+        .clone()
+        .or(fallback_project)
+        .unwrap_or_else(|| history::TALK_STORE.to_string());
+    let _ = history::stash_live_conversation(state, &persist_path);
+    let snapshot = state
+        .conversations
+        .lock()
+        .ok()
+        .and_then(|convs| convs.get(&persist_path).cloned());
+    if let Some(list) = snapshot {
+        let path = persist_path.clone();
+        std::thread::spawn(move || history::save_conversations(&path, &list));
     }
+    *state.current_project.lock()? = Some(persist_path.clone());
 
     state.history.lock()?.clear();
     state.title.lock()?.take();
     state.reset_title_meta();
     *state.history_summary.lock()? = None;
     let next_id = format!("{}", history::now_f64() as u64);
-    *state.current_conversation_id.lock()? = Some(next_id);
+    *state.current_conversation_id.lock()? = Some(next_id.clone());
     *state.conversation_kind.lock()? = Some("chat".to_string());
     if let Some(store) = store_path.filter(|s| !s.trim().is_empty()) {
         *state.current_project.lock()? = Some(store);
@@ -245,109 +250,79 @@ pub fn new_chat(
     state.clear_design_preview_state();
     state.clear_file_checkpoints();
     state.set_incognito(false);
+    Ok(next_id)
+}
 
-    // Refresh the index only when it is actually stale — an unconditional
-    // rescan on every new chat wasted a full project walk.
+#[tauri::command]
+pub async fn new_chat(
+    store_path: Option<String>,
+    state: tauri::State<'_, AgentState>,
+    app_state: tauri::State<'_, AppState>,
+    index_state: tauri::State<'_, crate::agent::index::IndexState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), AppError> {
+    leave_webview().await;
+    let fallback = app_state.0.lock()?.project_path.clone();
+    apply_new_chat(&state, store_path, fallback)?;
     if let Some(path) = app_state.0.lock()?.project_path.clone() {
         if index_state.should_background_index(&path) {
             let _ = index_state.spawn_background_index(app_handle, path);
         }
     }
-
     Ok(())
 }
 
-#[tauri::command]
-pub fn load_conversation(
-    id: String,
-    project_path: Option<String>,
-    state: tauri::State<'_, AgentState>,
-    app_state: tauri::State<'_, AppState>,
-) -> Result<(), AppError> {
-    if let Some(active_path) = state.current_project.lock()?.as_ref() {
-        let _ = history::save_current_conversation(&state, active_path);
-    }
-
-    let preferred_proj = project_path
-        .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
-        .filter(|p| !p.is_empty());
-
-    let (load_proj, conv) = history::find_conversation_by_id(
-        &id,
-        preferred_proj.as_deref(),
-    )
-    .ok_or(AppError::Message("Conversation not found".to_string()))?;
-
-    {
-        let mut convs = state.conversations.lock()?;
-        if !convs.contains_key(&load_proj) {
-            convs.insert(load_proj.clone(), history::load_conversations(&load_proj));
-        }
-    }
-
-    *state.current_project.lock()? = Some(load_proj);
+fn install_conversation(state: &AgentState, id: &str, load_proj: String, conv: crate::agent::models::Conversation) {
     let mut history = conv.history;
     history::collapse_duplicate_assistants(&mut history);
+    history = state.merge_in_flight_into_history_for(history, Some(id));
     let user_turns = history.iter().filter(|m| m.role == "user").count() as u32;
-    *state.history.lock()? = history;
-    *state.title.lock()? = Some(conv.title);
     let anchor = if conv.title_anchor_turns == 0 {
         user_turns
     } else {
         conv.title_anchor_turns
     };
+    if let Ok(mut hist) = state.history.lock() {
+        *hist = history;
+    }
+    if let Ok(mut title) = state.title.lock() {
+        *title = Some(conv.title);
+    }
     state.set_title_meta(conv.title_locked, anchor);
-    *state.current_conversation_id.lock()? = Some(id.clone());
-    *state.conversation_kind.lock()? = Some("chat".to_string());
+    if let Ok(mut project) = state.current_project.lock() {
+        *project = Some(load_proj);
+    }
+    if let Ok(mut current) = state.current_conversation_id.lock() {
+        *current = Some(id.to_string());
+    }
+    if let Ok(mut kind) = state.conversation_kind.lock() {
+        *kind = Some(if conv.kind.trim().is_empty() {
+            "chat".to_string()
+        } else {
+            conv.kind
+        });
+    }
     state.clear_design_preview_state();
-    state.replace_file_checkpoints(checkpoints::load_checkpoints(&id));
     state.set_incognito(false);
-
-    Ok(())
 }
 
-/// Point the agent at a conversation that is already on screen.
-/// Uses the in-memory transcript and does not read or write the history file
-/// when that transcript is cached. A live generation is left untouched.
-#[tauri::command]
-pub fn focus_conversation(
-    id: String,
-    project_path: Option<String>,
-    state: tauri::State<'_, AgentState>,
-    app_state: tauri::State<'_, AppState>,
+pub(crate) fn apply_focus_conversation(
+    state: &AgentState,
+    id: &str,
+    preferred_proj: Option<String>,
 ) -> Result<(), AppError> {
-    if state.current_conversation_id.lock()?.as_deref() == Some(id.as_str()) {
+    if state.current_conversation_id.lock()?.as_deref() == Some(id) {
         return Ok(());
     }
-    let generating = state.generation_state();
-    if generating.is_generating {
-        if generating.conversation_id.as_deref() == Some(id.as_str()) {
-            *state.current_conversation_id.lock()? = Some(id);
-        }
-        return Ok(());
-    }
+    let persist_path = state
+        .current_project
+        .lock()?
+        .clone()
+        .or_else(|| preferred_proj.clone())
+        .unwrap_or_else(|| history::TALK_STORE.to_string());
+    let _ = history::stash_live_conversation(state, &persist_path);
 
-    let preferred = project_path
-        .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
-        .filter(|p| !p.is_empty());
-
-    if let Some(prev_id) = state.current_conversation_id.lock()?.clone() {
-        if let Some(proj) = state.current_project.lock()?.clone().filter(|p| !p.is_empty()) {
-            let history = state.history.lock()?.clone();
-            let title = state
-                .title
-                .lock()?
-                .clone()
-                .unwrap_or_else(|| "Chat".to_string());
-            let mut convs = state.conversations.lock()?;
-            let list = history::project_conversation_list(&mut convs, &proj);
-            if let Some(existing) = list.iter_mut().find(|c| c.id == prev_id) {
-                existing.history = history;
-                existing.title = title;
-            }
-        }
-    }
-
+    let preferred = preferred_proj.filter(|p| !p.is_empty());
     let found = {
         let convs = state.conversations.lock()?;
         let preferred_hit = preferred.as_ref().and_then(|proj| {
@@ -365,35 +340,47 @@ pub fn focus_conversation(
             })
         })
     };
-
     let (load_proj, conv) = if let Some(hit) = found {
         hit
     } else {
-        history::find_conversation_by_id(&id, preferred.as_deref())
+        history::find_conversation_by_id(id, preferred.as_deref())
             .ok_or_else(|| AppError::Message("Conversation not found".to_string()))?
     };
-
-    {
-        let mut convs = state.conversations.lock()?;
-        if !convs.contains_key(&load_proj) {
-            convs.insert(load_proj.clone(), history::load_conversations(&load_proj));
-        }
-    }
-
-    *state.current_project.lock()? = Some(load_proj);
-    *state.history.lock()? = conv.history;
-    *state.title.lock()? = Some(conv.title);
-    state.set_title_meta(conv.title_locked, conv.title_anchor_turns);
-    *state.current_conversation_id.lock()? = Some(id);
-    *state.conversation_kind.lock()? = Some(
-        if conv.kind.trim().is_empty() {
-            "chat".to_string()
-        } else {
-            conv.kind
-        },
-    );
-    state.set_incognito(false);
+    install_conversation(state, id, load_proj, conv);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn load_conversation(
+    id: String,
+    project_path: Option<String>,
+    state: tauri::State<'_, AgentState>,
+    app_state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    leave_webview().await;
+    let preferred = project_path
+        .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
+        .filter(|p| !p.is_empty());
+    apply_focus_conversation(&state, &id, preferred)?;
+    state.replace_file_checkpoints(checkpoints::load_checkpoints(&id));
+    Ok(())
+}
+
+/// Point the agent at a conversation that is already on screen.
+/// Uses the in-memory transcript and does not read or write the history file
+/// when that transcript is cached. A live generation is left untouched.
+#[tauri::command]
+pub async fn focus_conversation(
+    id: String,
+    project_path: Option<String>,
+    state: tauri::State<'_, AgentState>,
+    app_state: tauri::State<'_, AppState>,
+) -> Result<(), AppError> {
+    leave_webview().await;
+    let preferred = project_path
+        .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
+        .filter(|p| !p.is_empty());
+    apply_focus_conversation(&state, &id, preferred)
 }
 
 #[tauri::command]
@@ -411,12 +398,13 @@ pub fn get_chat_incognito(state: tauri::State<'_, AgentState>) -> Result<bool, A
 }
 
 #[tauri::command]
-pub fn rename_conversation(
+pub async fn rename_conversation(
     id: String,
     title: String,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
+    leave_webview().await;
     let title = title.trim().to_string();
     if title.is_empty() {
         return Err(AppError::Message("Title cannot be empty".to_string()));
@@ -436,28 +424,34 @@ pub fn rename_conversation(
         }
         return Ok(());
     }
-    let mut convs = state.conversations.lock()?;
-    if !convs.contains_key(&proj_path) {
-        convs.insert(proj_path.clone(), history::load_conversations(&proj_path));
-    }
-    if let Some(list) = convs.get_mut(&proj_path) {
-        if let Some(conv) = list.iter_mut().find(|c| c.id == id) {
-            conv.title = title;
-            conv.title_locked = true;
-            conv.timestamp = history::now_f64();
+    history::hydrate_project_conversations(&state, &proj_path);
+    let snapshot = {
+        let mut convs = state.conversations.lock()?;
+        if let Some(list) = convs.get_mut(&proj_path) {
+            if let Some(conv) = list.iter_mut().find(|c| c.id == id) {
+                conv.title = title;
+                conv.title_locked = true;
+                conv.timestamp = history::now_f64();
+            }
+            Some(list.clone())
+        } else {
+            None
         }
-        history::save_conversations(&proj_path, list);
+    };
+    if let Some(snapshot) = snapshot {
+        history::save_conversations(&proj_path, &snapshot);
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn set_conversation_archived(
+pub async fn set_conversation_archived(
     id: String,
     archived: bool,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
+    leave_webview().await;
     let proj_path = history::find_conversation_by_id(
         &id,
         state.current_project.lock().ok().and_then(|p| p.clone()).as_deref(),
@@ -466,25 +460,31 @@ pub fn set_conversation_archived(
     .or_else(|| state.current_project.lock().ok().and_then(|p| p.clone()))
     .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
     .unwrap_or_else(|| history::TALK_STORE.to_string());
-    let mut convs = state.conversations.lock()?;
-    if !convs.contains_key(&proj_path) {
-        convs.insert(proj_path.clone(), history::load_conversations(&proj_path));
-    }
-    if let Some(list) = convs.get_mut(&proj_path) {
-        if let Some(conv) = list.iter_mut().find(|c| c.id == id) {
-            conv.archived = archived;
+    history::hydrate_project_conversations(&state, &proj_path);
+    let snapshot = {
+        let mut convs = state.conversations.lock()?;
+        if let Some(list) = convs.get_mut(&proj_path) {
+            if let Some(conv) = list.iter_mut().find(|c| c.id == id) {
+                conv.archived = archived;
+            }
+            Some(list.clone())
+        } else {
+            None
         }
-        history::save_conversations(&proj_path, list);
+    };
+    if let Some(snapshot) = snapshot {
+        history::save_conversations(&proj_path, &snapshot);
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn delete_conversation(
+pub async fn delete_conversation(
     id: String,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
+    leave_webview().await;
     let proj_path = history::find_conversation_by_id(
         &id,
         state.current_project.lock().ok().and_then(|p| p.clone()).as_deref(),
@@ -493,13 +493,18 @@ pub fn delete_conversation(
     .or_else(|| state.current_project.lock().ok().and_then(|p| p.clone()))
     .or_else(|| app_state.0.lock().ok().and_then(|s| s.project_path.clone()))
     .unwrap_or_else(|| history::TALK_STORE.to_string());
-    let mut convs = state.conversations.lock()?;
-    if !convs.contains_key(&proj_path) {
-        convs.insert(proj_path.clone(), history::load_conversations(&proj_path));
-    }
-    if let Some(list) = convs.get_mut(&proj_path) {
-        list.retain(|c| c.id != id);
-        history::save_conversations_removing(&proj_path, list, &id);
+    history::hydrate_project_conversations(&state, &proj_path);
+    let snapshot = {
+        let mut convs = state.conversations.lock()?;
+        if let Some(list) = convs.get_mut(&proj_path) {
+            list.retain(|c| c.id != id);
+            Some(list.clone())
+        } else {
+            None
+        }
+    };
+    if let Some(snapshot) = snapshot {
+        history::save_conversations_removing(&proj_path, &snapshot, &id);
     }
     checkpoints::delete_checkpoints(&id);
     for j in journals::list_open_turn_journals()
@@ -522,11 +527,12 @@ pub fn get_open_turn_journals() -> Vec<journals::TurnJournal> {
 }
 
 #[tauri::command]
-pub fn fork_conversation(
+pub async fn fork_conversation(
     message_index: usize,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<serde_json::Value, AppError> {
+    leave_webview().await;
     let proj_path = state
         .current_project
         .lock()?
@@ -593,13 +599,14 @@ fn normalize_feedback(feedback: Option<String>) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn set_message_feedback(
+pub async fn set_message_feedback(
     index: usize,
     feedback: Option<String>,
     conversation_id: Option<String>,
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
+    leave_webview().await;
     let value = normalize_feedback(feedback);
     let current = state.current_conversation_id.lock()?.clone();
     let target = conversation_id.filter(|id| !id.is_empty());
@@ -642,10 +649,11 @@ pub fn set_message_feedback(
 }
 
 #[tauri::command]
-pub fn flush_chat_history(
+pub async fn flush_chat_history(
     state: tauri::State<'_, AgentState>,
     app_state: tauri::State<'_, AppState>,
 ) -> Result<(), AppError> {
+    leave_webview().await;
     let path = app_state.0.lock()?.project_path.clone();
     if let Some(path) = path {
         let _ = history::save_current_conversation(&state, &path);
@@ -702,6 +710,149 @@ fn login_item_enabled() -> bool {
     #[cfg(not(windows))]
     {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::models::{ChatMessage, Conversation};
+
+    fn user(content: &str) -> ChatMessage {
+        ChatMessage {
+            role: "user".to_string(),
+            content: content.to_string(),
+            timestamp: 1.0,
+            stats: None,
+            model: None,
+            feedback: None,
+            hidden: false,
+        }
+    }
+
+    fn conv(id: &str, content: &str, proj: &str) -> Conversation {
+        Conversation {
+            id: id.to_string(),
+            title: id.to_string(),
+            history: vec![user(content)],
+            project_path: proj.to_string(),
+            timestamp: 1.0,
+            title_locked: false,
+            title_anchor_turns: 1,
+            archived: false,
+            kind: "chat".to_string(),
+            parent_id: None,
+        }
+    }
+
+    #[test]
+    fn focus_switches_away_from_generating_chat() {
+        let state = AgentState::new();
+        let proj = format!("shape-switch-{}", uuid::Uuid::new_v4());
+        *state.current_project.lock().unwrap() = Some(proj.clone());
+        *state.current_conversation_id.lock().unwrap() = Some("a".into());
+        *state.history.lock().unwrap() = vec![user("hello a")];
+        *state.title.lock().unwrap() = Some("a".into());
+        assert!(state.try_begin_in_flight("turn-a".into(), Some("a".into())));
+        history::stash_live_conversation(&state, &proj).unwrap();
+        {
+            let mut convs = state.conversations.lock().unwrap();
+            convs
+                .entry(proj.clone())
+                .or_default()
+                .push(conv("b", "hello b", &proj));
+        }
+        apply_focus_conversation(&state, "b", Some(proj.clone())).unwrap();
+        assert_eq!(state.current_conversation_id.lock().unwrap().as_deref(), Some("b"));
+        assert_eq!(state.history.lock().unwrap()[0].content, "hello b");
+        assert!(state.in_flight_contains_turn("turn-a"));
+
+        apply_focus_conversation(&state, "a", Some(proj.clone())).unwrap();
+        assert_eq!(state.current_conversation_id.lock().unwrap().as_deref(), Some("a"));
+        assert!(
+            state
+                .history
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|m| m.content.contains("hello a"))
+        );
+        let _ = std::fs::remove_file(history::get_chat_history_path(&proj));
+    }
+
+    #[test]
+    fn new_chat_during_turn_keeps_background_flight() {
+        let state = AgentState::new();
+        let proj = format!("shape-new-{}", uuid::Uuid::new_v4());
+        *state.current_project.lock().unwrap() = Some(proj.clone());
+        *state.current_conversation_id.lock().unwrap() = Some("a".into());
+        *state.history.lock().unwrap() = vec![user("hello a")];
+        *state.title.lock().unwrap() = Some("a".into());
+        assert!(state.try_begin_in_flight("turn-a".into(), Some("a".into())));
+        let started = std::time::Instant::now();
+        let next = apply_new_chat(&state, Some(proj.clone()), Some(proj.clone())).unwrap();
+        assert!(started.elapsed() < std::time::Duration::from_millis(400));
+        assert_ne!(next, "a");
+        assert!(state.history.lock().unwrap().is_empty());
+        assert!(state.in_flight_contains_turn("turn-a"));
+        let _ = std::fs::remove_file(history::get_chat_history_path(&proj));
+    }
+
+    #[test]
+    fn switching_tabs_during_partial_stream_keeps_each_transcript() {
+        use std::sync::Arc;
+        let state = Arc::new(AgentState::new());
+        let proj = format!("shape-race-{}", uuid::Uuid::new_v4());
+        *state.current_project.lock().unwrap() = Some(proj.clone());
+        *state.current_conversation_id.lock().unwrap() = Some("a".into());
+        *state.history.lock().unwrap() = vec![user("hello a")];
+        *state.title.lock().unwrap() = Some("a".into());
+        assert!(state.try_begin_in_flight("turn-a".into(), Some("a".into())));
+        history::stash_live_conversation(&state, &proj).unwrap();
+        {
+            let mut convs = state.conversations.lock().unwrap();
+            convs
+                .entry(proj.clone())
+                .or_default()
+                .push(conv("b", "hello b", &proj));
+        }
+
+        let writer = {
+            let state = Arc::clone(&state);
+            let proj = proj.clone();
+            std::thread::spawn(move || {
+                for i in 0..80 {
+                    state.append_in_flight(
+                        &format!("tok{i}"),
+                        None,
+                        Some(&proj),
+                        Some("a"),
+                    );
+                }
+            })
+        };
+
+        let started = std::time::Instant::now();
+        for _ in 0..40 {
+            apply_focus_conversation(&state, "b", Some(proj.clone())).unwrap();
+            assert_eq!(state.current_conversation_id.lock().unwrap().as_deref(), Some("b"));
+            let live = state.history.lock().unwrap().clone();
+            assert!(
+                live.iter().any(|m| m.content.contains("hello b")),
+                "live history must stay on the focused chat"
+            );
+            assert!(
+                live.iter().all(|m| !m.content.contains("tok")),
+                "background tokens must not land in the other chat"
+            );
+            apply_new_chat(&state, Some(proj.clone()), Some(proj.clone())).unwrap();
+            assert!(state.history.lock().unwrap().is_empty());
+            apply_focus_conversation(&state, "a", Some(proj.clone())).unwrap();
+        }
+        writer.join().unwrap();
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+        assert!(state.in_flight_contains_turn("turn-a"));
+        let _ = std::fs::remove_file(history::get_chat_history_path(&proj));
     }
 }
 

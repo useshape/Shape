@@ -44,12 +44,12 @@ function Card({ card }: { card: SubagentCard }) {
             role="button"
             tabIndex={0}
             onClick={() => {
-                void import("./store").then(({ openSubagent }) => openSubagent(card.id));
+                window.dispatchEvent(new CustomEvent("shape-open-subagent", { detail: { id: card.id } }));
             }}
             onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    void import("./store").then(({ openSubagent }) => openSubagent(card.id));
+                    window.dispatchEvent(new CustomEvent("shape-open-subagent", { detail: { id: card.id } }));
                 }
             }}
             className="flex cursor-pointer flex-col gap-1 squircle-2xl bg-surface-3 p-2.5 text-left"

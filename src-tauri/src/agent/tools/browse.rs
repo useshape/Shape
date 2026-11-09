@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use base64::Engine;
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use tauri::{Emitter, Manager};
@@ -21,8 +22,8 @@ use super::dispatch::{SideEffect, ToolCtx, ToolOutcome};
 use super::runtime_inspect::{fetch_page_ws, find_chromium, free_port};
 use crate::browser::cdp::PageConn;
 
-const VIEW_W: f64 = 1280.0;
-const VIEW_H: f64 = 720.0;
+const VIEW_W: f64 = 1920.0;
+const VIEW_H: f64 = 1080.0;
 
 static STOP: AtomicBool = AtomicBool::new(false);
 static SHOW_FRAMES: AtomicBool = AtomicBool::new(false);
@@ -32,6 +33,7 @@ static TRACE_GEN: AtomicU64 = AtomicU64::new(0);
 static LIVE_PORT: AtomicU16 = AtomicU16::new(0);
 static TRACE_PORT: AtomicU16 = AtomicU16::new(0);
 static FRAME_KEY: AtomicU64 = AtomicU64::new(0);
+static FRAME_SEQ: AtomicU64 = AtomicU64::new(0);
 static PAGE_WS: Mutex<Option<(u16, String)>> = Mutex::new(None);
 static LAST_FRAME: Mutex<Option<String>> = Mutex::new(None);
 static LAST_SNAP: Mutex<Option<Value>> = Mutex::new(None);
@@ -304,11 +306,20 @@ pub async fn tool_browse(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     };
     let mut side = None;
     if capture {
-        match capture_jpeg(&mut conn, stopped).await {
+        match capture_jpeg(&mut conn, stopped, 1.0, 88).await {
             Ok(jpeg) => {
-                let image = format!("data:image/jpeg;base64,{jpeg}");
-                publish_still(&ctx.app_handle, &image);
-                let tag = super::page_shot::attached_image_tag("browse.jpg", "image/jpeg", &image);
+                publish_still(
+                    &ctx.app_handle,
+                    &format!("data:image/jpeg;base64,{jpeg}"),
+                );
+                let model_jpeg = capture_jpeg(&mut conn, stopped, 0.5, 58)
+                    .await
+                    .unwrap_or(jpeg);
+                let tag = super::page_shot::attached_image_tag(
+                    "browse.jpg",
+                    "image/jpeg",
+                    &format!("data:image/jpeg;base64,{model_jpeg}"),
+                );
                 side = Some(SideEffect::PageScreenshot { tag });
             }
             Err(err) => {
@@ -730,7 +741,36 @@ pub async fn finish_browse_markup(content: String) -> String {
     seal_browse_markup(&content)
 }
 
-/// Put the last screenshot into the saved card and mark the session finished.
+/// Drop JPEG data URLs from chat text. Live frames stay on disk; stuffing them
+/// into the transcript froze WebView2.
+pub fn scrub_transcript_screenshots(content: &str) -> String {
+    strip_data_urls(&seal_browse_markup(content))
+}
+
+pub fn strip_data_urls(content: &str) -> String {
+    let mut out = String::with_capacity(content.len().min(4096));
+    let mut rest = content;
+    while let Some(at) = rest.find("data:image") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at..];
+        let end = after
+            .find(|c: char| c.is_whitespace() || c == '<' || c == '"')
+            .unwrap_or(after.len());
+        if end > 180 {
+            out.push_str("[image]");
+            rest = &after[end..];
+        } else {
+            let ch = after.chars().next().unwrap_or('d');
+            out.push(ch);
+            rest = &after[ch.len_utf8()..];
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Mark the session finished. The live pane keeps the last frame; do not copy
+/// JPEG data URLs into the saved chat (that froze the UI).
 pub fn seal_browse_markup(content: &str) -> String {
     let Some(start) = content.rfind("<browse_session") else {
         return content.to_string();
@@ -742,16 +782,10 @@ pub fn seal_browse_markup(content: &str) -> String {
     let block = &content[start..end];
     let url = xml_attr(block, "url");
     let title = xml_attr(block, "title");
-    let image = LAST_FRAME.lock().ok().and_then(|guard| guard.clone()).unwrap_or_default();
-    let body = if image.is_empty() {
-        String::new()
-    } else {
-        json!({ "image": image }).to_string()
-    };
-    let mut out = String::with_capacity(content.len() + body.len());
+    let mut out = String::with_capacity(content.len());
     out.push_str(&content[..start]);
     out.push_str(&format!(
-        "<browse_session id=\"live\" status=\"stopped\" url=\"{url}\" title=\"{title}\">{body}</browse_session>"
+        "<browse_session id=\"live\" status=\"stopped\" url=\"{url}\" title=\"{title}\"></browse_session>"
     ));
     out.push_str(&content[end..]);
     out
@@ -822,10 +856,10 @@ async fn run_screencast(app: &tauri::AppHandle, gen: u64) -> Result<(), String> 
         "method": "Page.startScreencast",
         "params": {
             "format": "jpeg",
-            "quality": 64,
-            "maxWidth": 1024,
-            "maxHeight": 576,
-            "everyNthFrame": 1
+            "quality": 85,
+            "maxWidth": 1920,
+            "maxHeight": 1080,
+            "everyNthFrame": 2
         }
     });
     ws.send(Message::Text(start.to_string().into()))
@@ -874,7 +908,7 @@ async fn run_screencast(app: &tauri::AppHandle, gen: u64) -> Result<(), String> 
             Err(_) => {}
         }
         let due = pending.as_ref().is_some_and(|(key, _)| {
-            *key != FRAME_KEY.load(Ordering::Relaxed) && last_emit.elapsed() >= Duration::from_millis(80)
+            *key != FRAME_KEY.load(Ordering::Relaxed) && last_emit.elapsed() >= Duration::from_millis(200)
         });
         if !due {
             continue;
@@ -885,18 +919,7 @@ async fn run_screencast(app: &tauri::AppHandle, gen: u64) -> Result<(), String> 
         last_emit = Instant::now();
         FRAME_KEY.store(key, Ordering::Relaxed);
         CAST_SEEN.store(true, Ordering::SeqCst);
-        let image = format!("data:image/jpeg;base64,{data}");
-        if let Ok(mut guard) = LAST_FRAME.lock() {
-            *guard = Some(image.clone());
-        }
-        let _ = app.emit(
-            "agent-browse",
-            json!({
-                "id": "live",
-                "status": "controlling",
-                "image": image
-            }),
-        );
+        publish_jpeg_b64(app, &data);
     }
     Ok(())
 }
@@ -1377,14 +1400,19 @@ async fn click_px(conn: &mut PageConn, px: f64, py: f64, stop: fn() -> bool) -> 
     .map(|_| ())
 }
 
-async fn capture_jpeg(conn: &mut PageConn, stop: fn() -> bool) -> Result<String, String> {
+async fn capture_jpeg(
+    conn: &mut PageConn,
+    stop: fn() -> bool,
+    scale: f64,
+    quality: u8,
+) -> Result<String, String> {
     let v = conn
         .call(
             "Page.captureScreenshot",
             json!({
                 "format": "jpeg",
-                "quality": 58,
-                "clip": { "x": 0, "y": 0, "width": VIEW_W, "height": VIEW_H, "scale": 0.75 }
+                "quality": quality,
+                "clip": { "x": 0, "y": 0, "width": VIEW_W, "height": VIEW_H, "scale": scale }
             }),
             stop,
         )
@@ -1396,21 +1424,43 @@ async fn capture_jpeg(conn: &mut PageConn, stop: fn() -> bool) -> Result<String,
         .ok_or_else(|| "Screenshot was empty.".into())
 }
 
-fn publish_still(app: &tauri::AppHandle, image: &str) {
-    if CAST_SEEN.load(Ordering::SeqCst) {
+fn live_frame_path() -> PathBuf {
+    std::env::temp_dir().join("shape-browse-live.jpg")
+}
+
+fn publish_jpeg_b64(app: &tauri::AppHandle, jpeg_b64: &str) {
+    let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(jpeg_b64.trim()) else {
+        return;
+    };
+    if bytes.is_empty() {
         return;
     }
+    let path = live_frame_path();
+    if std::fs::write(&path, &bytes).is_err() {
+        return;
+    }
+    let seq = FRAME_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
+    let path_s = path.to_string_lossy().to_string();
     if let Ok(mut guard) = LAST_FRAME.lock() {
-        *guard = Some(image.to_string());
+        *guard = Some(path_s.clone());
     }
     let _ = app.emit(
         "agent-browse",
         json!({
             "id": "live",
             "status": "controlling",
-            "image": image
+            "path": path_s,
+            "seq": seq,
         }),
     );
+}
+
+fn publish_still(app: &tauri::AppHandle, image: &str) {
+    if CAST_SEEN.load(Ordering::SeqCst) {
+        return;
+    }
+    let jpeg = image.strip_prefix("data:image/jpeg;base64,").unwrap_or(image);
+    publish_jpeg_b64(app, jpeg);
 }
 
 fn emit_cursor(app: &tauri::AppHandle, x: f64, y: f64) {
@@ -1867,10 +1917,199 @@ mod tests {
     }
 
     #[test]
+    fn seal_browse_markup_does_not_embed_screenshots() {
+        let saved = seal_browse_markup(
+            "<browse_session id=\"live\" status=\"controlling\" url=\"https://example.com\" title=\"Example\"></browse_session>",
+        );
+        assert!(saved.contains("status=\"stopped\""));
+        assert!(!saved.contains("data:image"));
+        assert!(!saved.contains("base64"));
+    }
+
+    #[test]
+    fn scrub_transcript_screenshots_drops_jpeg_payloads() {
+        let jpeg = "A".repeat(200);
+        let raw = format!(
+            "hello <attached_image name=\"browse.jpg\" type=\"image/jpeg\">data:image/jpeg;base64,{jpeg}</attached_image>"
+        );
+        let out = scrub_transcript_screenshots(&raw);
+        assert!(out.contains("hello"));
+        assert!(!out.contains("data:image"));
+        assert!(out.contains("[image]"));
+    }
+
+    #[test]
     fn wallpaper_filter_accepts_images_only() {
         assert!(is_wallpaper(std::path::Path::new("desk.PNG")));
         assert!(is_wallpaper(std::path::Path::new("paper.webp")));
         assert!(!is_wallpaper(std::path::Path::new(".gitkeep")));
         assert!(!is_wallpaper(std::path::Path::new("notes.txt")));
+    }
+
+    #[test]
+    fn invalid_open_is_a_tool_error_not_success() {
+        let outcome = fail("browse open requires url.");
+        assert!(outcome.tool_result.starts_with("BLOCKED:"));
+        assert!(outcome.ui_chunk.is_empty());
+        let missing = planned_steps(&json!({ "action": "open" }));
+        assert!(missing.is_ok());
+        let steps = missing.unwrap();
+        assert_eq!(step_action(&steps[0]), "open");
+        assert!(steps[0].get("url").and_then(|v| v.as_str()).unwrap_or("").is_empty());
+    }
+
+    fn never_stop() -> bool {
+        false
+    }
+
+    fn serve_fixture() -> (std::net::TcpListener, String) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        (listener, format!("http://127.0.0.1:{port}/"))
+    }
+
+    fn pump_http(listener: &std::net::TcpListener) -> bool {
+        use std::io::{Read, Write};
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                let _ = stream.set_nonblocking(false);
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf);
+                let req = String::from_utf8_lossy(&buf);
+                let body = if req.contains("GET /next") {
+                    "<!doctype html><html><body><p>Redirected page</p></body></html>"
+                } else {
+                    r#"<!doctype html><html><body>
+<h1>Browse fixture</h1>
+<button id="go">Go</button>
+<input id="name" placeholder="name" />
+<div id="out">idle</div>
+<div style="height:1600px">scroll pad</div>
+<p>bottom marker</p>
+<script>
+document.getElementById('go').onclick = function(){
+  document.getElementById('out').textContent = 'Saved ' + (document.getElementById('name').value || '');
+};
+</script>
+<a href="/next">Next</a>
+</body></html>"#
+                };
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(resp.as_bytes());
+                true
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => false,
+            Err(_) => false,
+        }
+    }
+
+    #[tokio::test]
+    async fn chromium_session_open_act_type_scroll_check_shot() {
+        if super::super::runtime_inspect::find_chromium().is_none() {
+            eprintln!("skip: Chromium/Edge is not installed");
+            return;
+        }
+        let (listener, origin) = serve_fixture();
+        let stop_server = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stop_flag = stop_server.clone();
+        let server = std::thread::spawn(move || {
+            while !stop_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                if !pump_http(&listener) {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+            }
+        });
+        if let Err(err) = ensure_session().await {
+            stop_session();
+            panic!("{err}");
+        }
+        let port = {
+            let guard = SESSION.lock().unwrap_or_else(|p| p.into_inner());
+            guard.as_ref().map(|s| s.port).unwrap()
+        };
+        let ws = page_ws(port).await.expect("devtools ws");
+        let mut conn = crate::browser::cdp::PageConn::connect(&ws)
+            .await
+            .expect("page conn");
+        let _ = conn.call("Page.enable", json!({}), never_stop).await;
+        let nav = conn
+            .call("Page.navigate", json!({ "url": origin }), never_stop)
+            .await
+            .expect("navigate");
+        assert!(
+            nav.get("errorText").and_then(|e| e.as_str()).unwrap_or("").is_empty(),
+            "navigate error: {nav}"
+        );
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        let snap_raw = conn.eval(SNAPSHOT_JS, never_stop).await.unwrap_or_else(|_| "{}".into());
+        let snap: Value = serde_json::from_str(&snap_raw).unwrap_or(json!({}));
+        let elements = snap.get("elements").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        assert!(!elements.is_empty(), "expected interactive elements, got {snap_raw}");
+        let go = elements.iter().find(|el| el.get("name").and_then(|n| n.as_str()) == Some("Go"));
+        assert!(go.is_some(), "Go button missing: {snap_raw}");
+        let x = go.unwrap().get("x").and_then(|v| v.as_f64()).unwrap_or(50.0);
+        let y = go.unwrap().get("y").and_then(|v| v.as_f64()).unwrap_or(50.0);
+        click_at(&mut conn, x, y, never_stop).await.expect("click");
+        let _ = conn.call("Input.insertText", json!({ "text": "ok" }), never_stop).await;
+        let _ = conn
+            .call(
+                "Input.dispatchMouseEvent",
+                json!({ "type": "mouseWheel", "x": 400, "y": 300, "deltaX": 0, "deltaY": 500 }),
+                never_stop,
+            )
+            .await;
+        let visible = conn
+            .eval(
+                r#"(function(){var t=(document.body&&document.body.innerText)||"";return t.replace(/\s+/g," ").slice(0,8000)})()"#,
+                never_stop,
+            )
+            .await
+            .unwrap_or_default();
+        let (ok, note) = judge_check(&visible, "Browse fixture", "missing-token");
+        assert!(ok, "{note} text={visible}");
+        let shot = conn
+            .call("Page.captureScreenshot", json!({ "format": "jpeg", "quality": 40 }), never_stop)
+            .await
+            .expect("shot");
+        let data = shot.get("data").and_then(|d| d.as_str()).unwrap_or("");
+        assert!(data.len() > 80, "screenshot missing");
+
+        let bad = conn
+            .call(
+                "Page.navigate",
+                json!({ "url": "http://127.0.0.1:1/" }),
+                never_stop,
+            )
+            .await;
+        match bad {
+            Ok(v) => {
+                let err = v.get("errorText").and_then(|e| e.as_str()).unwrap_or("");
+                let href = conn
+                    .eval(r#"(function(){return location.href||""})()"#, never_stop)
+                    .await
+                    .unwrap_or_default();
+                let title = conn
+                    .eval(r#"(function(){return document.title||""})()"#, never_stop)
+                    .await
+                    .unwrap_or_default();
+                assert!(
+                    !err.is_empty() || page_failed(&href, &title),
+                    "expected unreachable page, href={href} title={title} err={err}"
+                );
+            }
+            Err(e) => {
+                assert!(!e.is_empty());
+            }
+        }
+
+        stop_session();
+        stop_server.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = server.join();
     }
 }

@@ -61,7 +61,7 @@ export function CreateWorkerDialog({
             setName("");
             setJob("");
             setShape("circle");
-            setColor(nextWorkerColor("Chat"));
+            setColor(nextWorkerColor("Code"));
         }
         onOpenChange(next);
     };
@@ -69,7 +69,7 @@ export function CreateWorkerDialog({
     const create = () => {
         const title = name.trim();
         if (!title) return;
-        armNextChat({ mode: "Chat", shape, color, title, job: job.trim() });
+        armNextChat({ mode: "Code", shape, color, title, job: job.trim() });
         window.dispatchEvent(new Event("shape-chat-new"));
         window.dispatchEvent(new Event("shape-chat-focus-input"));
         close(false);

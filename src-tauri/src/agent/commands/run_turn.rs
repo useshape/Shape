@@ -7,7 +7,6 @@ use super::logging;
 use super::streaming::{self, ProxyContext};
 use crate::agent::model_router;
 use crate::agent::models::AgentState;
-use crate::agent::tools::page_shot;
 use crate::agent::tools::dispatch::{self, SideEffect, ToolCtx, ToolOutcome};
 use crate::commands::pty::PtyState;
 use crate::core::error::AppError;
@@ -526,10 +525,14 @@ pub struct AgentTurnOutcome {
 }
 
 fn emit_turn_chat_token(config: &AgentTurnConfig<'_>, chunk: impl Into<String>) {
+    let chunk = crate::agent::tools::browse::strip_data_urls(&chunk.into());
+    if chunk.is_empty() {
+        return;
+    }
     let _ = config.app_handle.emit(
         "chat_token",
         json!({
-            "chunk": chunk.into(),
+            "chunk": chunk,
             "turnId": config.proxy_ctx.turn_id,
             "conversationId": config.proxy_ctx.conversation_id,
         }),
@@ -562,24 +565,20 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut consecutive_readonly_rounds = 0usize;
     let mut explore_nudge_sent = false;
     let mut last_round_failed = false;
-    let mut page_shots: Vec<String> = Vec::new();
     let mut denied_paths: HashSet<String> = HashSet::new();
 
     let turn_id = config.proxy_ctx.turn_id.clone();
     let conversation_id = config.proxy_ctx.conversation_id.clone();
     crate::agent::parent_resume::set_parent_turn_active(conversation_id.as_deref(), true);
-    struct ParentTurnGuard<'a> {
-        app: &'a tauri::AppHandle,
+    struct ParentTurnGuard {
         id: Option<String>,
     }
-    impl Drop for ParentTurnGuard<'_> {
+    impl Drop for ParentTurnGuard {
         fn drop(&mut self) {
             crate::agent::parent_resume::set_parent_turn_active(self.id.as_deref(), false);
-            crate::agent::parent_resume::schedule_wake_if_idle(self.app, self.id.as_deref());
         }
     }
     let _parent_guard = ParentTurnGuard {
-        app: config.app_handle,
         id: conversation_id.clone(),
     };
 
@@ -649,13 +648,12 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         );
 
         if let Some(cid) = conversation_id.as_deref() {
-            let mut updates = crate::agent::subagents::take_parent_updates(cid);
-            updates.extend(crate::agent::parent_resume::take_pending(cid));
+            let updates = crate::agent::parent_resume::take_pending(cid);
             if !updates.is_empty() {
                 let body = updates.join("\n\n");
                 config.api_messages.push(json!({
                     "role": "user",
-                    "content": format!("<subagent_update>\n{body}\n</subagent_update>\nIncorporate this if it is relevant and keep working. Do not wait for more subagents unless you need their output."),
+                    "content": format!("<subagent_update>\n{body}\n</subagent_update>\nIncorporate this if it is relevant and keep working. Do not wait for more threads unless you need their output."),
                 }));
             }
         }
@@ -663,7 +661,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         // Reset the UI activity label: we're back in the model, not a tool.
         streaming::emit_chat_status(
             &config.app_handle,
-            json!({ "phase": "model" }),
+            json!({ "phase": "model", "conversationId": conversation_id }),
         );
 
         if !config.mode.eq_ignore_ascii_case("agent") {
@@ -679,6 +677,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     git: packs.git,
                     terminal: packs.terminal,
                     media: packs.media,
+                    reverse: packs.reverse,
                     hint: String::new(),
                 };
                 live_tools = crate::agent::tools::schema::assemble_tools(
@@ -693,6 +692,10 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 pack_sig = sig;
             }
         }
+        if crate::agent::subagents::spawn_depth(conversation_id.as_deref()) >= 2 {
+            crate::agent::tools::schema::strip_spawn_subagent(&mut live_tools);
+        }
+        let allowed_tool_names = crate::agent::tools::schema::listed_tool_names(&live_tools);
 
         let outcome = match streaming::stream_chat_with_retry(
             config.client,
@@ -751,7 +754,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 );
                 streaming::emit_chat_status(
                     &config.app_handle,
-                    json!({ "phase": "model", "label": "Retrying after model error" }),
+                    json!({ "phase": "model", "label": "Retrying after model error", "conversationId": conversation_id }),
                 );
                 continue;
             }
@@ -832,7 +835,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 }));
                 streaming::emit_chat_status(
                     &config.app_handle,
-                    json!({ "phase": "model", "label": "Continuing" }),
+                    json!({ "phase": "model", "label": "Continuing", "conversationId": conversation_id }),
                 );
                 continue;
             }
@@ -925,7 +928,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             if tool_calls[0].name != "decide" {
                 streaming::emit_chat_status(
                     &config.app_handle,
-                    json!({ "phase": "tool", "tool": tool_calls[0].name }),
+                    json!({ "phase": "tool", "tool": tool_calls[0].name, "conversationId": conversation_id }),
                 );
             }
 
@@ -986,6 +989,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     turn_id: turn_id.clone(),
                     conversation_id: conversation_id.clone(),
                     sealed_project: config.sealed_project,
+                    allowed_tools: Some(allowed_tool_names.as_slice()),
                 })
                 .collect();
 
@@ -1049,7 +1053,6 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 }
                 if let Some(SideEffect::PageScreenshot { tag }) = &tool_outcome.side_effect {
                     let tag = tag.clone();
-                    page_shots.push(tag.clone());
                     drop_prior_page_shots(config.api_messages);
                     inject_page_screenshot(&mut config, &tag).await;
                 }
@@ -1108,7 +1111,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
 
             if call.name != "decide" {
-                let tool_status = if call.name == "render_design_previews" {
+                let mut tool_status = if call.name == "render_design_previews" {
                     json!({
                         "phase": "tool",
                         "tool": call.name,
@@ -1117,6 +1120,10 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 } else {
                     json!({ "phase": "tool", "tool": call.name })
                 };
+                if let Some(obj) = tool_status.as_object_mut() {
+                    obj.entry("conversationId")
+                        .or_insert(json!(conversation_id));
+                }
                 streaming::emit_chat_status(&config.app_handle, tool_status);
             }
 
@@ -1337,6 +1344,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 turn_id: turn_id.clone(),
                 conversation_id: conversation_id.clone(),
                 sealed_project: config.sealed_project,
+                allowed_tools: Some(allowed_tool_names.as_slice()),
             };
 
             let tool_outcome = dispatch::execute_tool(&call.name, &call.arguments, &ctx).await;
@@ -1451,7 +1459,6 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     SideEffect::PageScreenshot { tag } => {
                         drop_prior_page_shots(config.api_messages);
                         inject_page_screenshot(&mut config, &tag).await;
-                        page_shots.push(tag);
                     }
                 }
             }
@@ -1542,11 +1549,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             .await;
     }
 
-    if !page_shots.is_empty() {
-        final_full_response = page_shot::place_page_screenshots(&final_full_response, &page_shots);
-    } else if final_full_response.contains("<attached_image") {
-        final_full_response = page_shot::place_page_screenshots(&final_full_response, &[]);
-    }
+    // Page JPEGs stay in the model follow-up (`inject_page_screenshot`) and the
+    // live Browser pane. Putting them in the assistant transcript froze the UI
+    // (100k+ character data URLs on every save and render).
 
     // `chat_complete` (with stats) is emitted from `send_chat_message` after the turn returns.
 
@@ -1686,6 +1691,7 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
     if chunk.contains("<generated_svg")
         || chunk.contains("<generated_image")
         || chunk.contains("<generated_audio")
+        || chunk.contains("<generated_model")
     {
         upsert_media_chunk(accumulated, chunk);
         return;
@@ -1738,6 +1744,8 @@ fn upsert_media_chunk(accumulated: &mut String, chunk: &str) {
         "<generated_svg"
     } else if chunk.contains("<generated_audio") {
         "<generated_audio"
+    } else if chunk.contains("<generated_model") {
+        "<generated_model"
     } else {
         "<generated_image"
     };
@@ -1745,6 +1753,8 @@ fn upsert_media_chunk(accumulated: &mut String, chunk: &str) {
         "</generated_svg>"
     } else if chunk.contains("<generated_audio") {
         "</generated_audio>"
+    } else if chunk.contains("<generated_model") {
+        "</generated_model>"
     } else {
         "</generated_image>"
     };
@@ -1830,6 +1840,21 @@ mod file_cache_tests {
         assert!(text.contains("one"));
         assert!(text.contains("three"));
         assert!(!text.contains(">two<"));
+    }
+
+    #[test]
+    fn generated_model_revisions_replace_the_same_media_id() {
+        let mut text = String::new();
+        upsert_media_chunk(
+            &mut text,
+            "<generated_model media_id=\"m1\" name=\"a.glb\"></generated_model>",
+        );
+        upsert_media_chunk(
+            &mut text,
+            "<generated_model media_id=\"m1\" name=\"b.glb\"></generated_model>",
+        );
+        assert!(text.contains("b.glb"));
+        assert!(!text.contains("a.glb"));
     }
 }
 

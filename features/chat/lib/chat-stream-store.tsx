@@ -7,7 +7,7 @@ import type { ChatMessage } from "@/lib/backend/types";
 import { setChatGenerating } from "./generating-chats";
 import { NEW_CHAT_TAB_ID } from "../ui/shell/tabs";
 import { upsertTaggedBlockInContent } from "./upsert-stream-blocks";
-import { isPlaceholderView, resolveLiveTurnKey, streamVisibleToView } from "./live-turn-key";
+import { isPlaceholderView, isThreadConversationId, resolveLiveTurnKey, streamVisibleToView } from "./live-turn-key";
 
 function isForeignConversation(id?: string | null) {
     return Boolean(id && id.startsWith("mw-worker-"));
@@ -246,6 +246,12 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 applyLive(shown);
                 return;
             }
+            if (
+                requestedView
+                && (liveTurnsRef.current.has(requestedView) || liveTurnsRef.current.has(PENDING_KEY))
+            ) {
+                return;
+            }
 
             setMessages(history);
             setIsLoading(false);
@@ -344,7 +350,12 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 key,
                 PENDING_KEY,
             );
-            if (shown && live.conversationId && isPlaceholderView(viewingIdRef.current)) {
+            if (
+                shown
+                && live.conversationId
+                && isPlaceholderView(viewingIdRef.current)
+                && !isThreadConversationId(live.conversationId)
+            ) {
                 viewingIdRef.current = live.conversationId;
             }
             if (!shown || paintFrame) return;
@@ -370,10 +381,19 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 }
                 const pending = liveTurnsRef.current.get(PENDING_KEY);
                 const named = convId ? liveTurnsRef.current.get(convId) : undefined;
-                const unbound = isPlaceholderView(viewingIdRef.current);
-                const claimPending = unbound && !!pending && !named;
-                const existing = named ?? (claimPending ? pending : undefined);
-                const viewingThis = viewingIdRef.current === convId || claimPending;
+                const viewing = viewingIdRef.current;
+                const unbound = isPlaceholderView(viewing);
+                const viewLive = viewing && viewing !== convId
+                    ? liveTurnsRef.current.get(viewing)
+                    : undefined;
+                const threadStart = isThreadConversationId(convId);
+                const claimPending =
+                    !named
+                    && unbound
+                    && (!!pending || !!viewLive)
+                    && !threadStart;
+                const existing = threadStart ? named : named ?? pending ?? viewLive;
+                const viewingThis = viewing === convId || claimPending;
                 let snapshot = existing?.messages ?? (viewingThis ? messagesRef.current : []);
                 if (startedModel) {
                     const latest = snapshot[snapshot.length - 1];
@@ -392,7 +412,10 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     }
                 }
                 const key = convId || PENDING_KEY;
-                if (claimPending) liveTurnsRef.current.delete(PENDING_KEY);
+                if (claimPending) {
+                    liveTurnsRef.current.delete(PENDING_KEY);
+                    if (viewing && viewing !== key) liveTurnsRef.current.delete(viewing);
+                }
                 liveTurnsRef.current.set(key, {
                     conversationId: convId,
                     turnId: tid,
@@ -437,7 +460,12 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     const key = convId;
                     if (!liveTurnsRef.current.has(key)) {
                         const pending = liveTurnsRef.current.get(PENDING_KEY);
-                        if (pending && key !== PENDING_KEY && isPlaceholderView(viewingIdRef.current)) {
+                        if (
+                            pending
+                            && key !== PENDING_KEY
+                            && isPlaceholderView(viewingIdRef.current)
+                            && !isThreadConversationId(key)
+                        ) {
                             liveTurnsRef.current.delete(PENDING_KEY);
                             pending.conversationId = convId;
                             pending.turnId = meta?.turnId ?? pending.turnId;

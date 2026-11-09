@@ -77,23 +77,26 @@ function Tooltip({
         shortcut
         ?? (typeof content === "string" ? getShortcutForLabel(content) : undefined);
     return (
-        <TooltipProvider delayDuration={delayDuration} skipDelayDuration={0}>
-            <TooltipRoot open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
-                <TooltipTrigger asChild>{children}</TooltipTrigger>
-                <TooltipContent side={side} {...props}>
-                    {chord ? (
-                        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                            <span>{content}</span>
-                            <kbd className="squircle-xl bg-panel-active px-1 py-px text-[12px] font-sans leading-4 text-text-secondary">
-                                {chord}
-                            </kbd>
-                        </span>
-                    ) : (
-                        content
-                    )}
-                </TooltipContent>
-            </TooltipRoot>
-        </TooltipProvider>
+        <TooltipRoot
+            delayDuration={delayDuration}
+            open={open}
+            defaultOpen={defaultOpen}
+            onOpenChange={onOpenChange}
+        >
+            <TooltipTrigger asChild>{children}</TooltipTrigger>
+            <TooltipContent side={side} {...props}>
+                {chord ? (
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <span>{content}</span>
+                        <kbd className="squircle-xl bg-panel-active px-1 py-px text-[12px] font-sans leading-4 text-text-secondary">
+                            {chord}
+                        </kbd>
+                    </span>
+                ) : (
+                    content
+                )}
+            </TooltipContent>
+        </TooltipRoot>
     );
 }
 

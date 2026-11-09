@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+    hasGeneratingChats,
     isChatGenerating,
     resetGeneratingChatsForTests,
     setChatGenerating,
@@ -14,5 +15,8 @@ describe("generating chats", () => {
         setChatGenerating("A", true);
         setChatGenerating("B", false);
         expect(isChatGenerating("A")).toBe(true);
+        expect(hasGeneratingChats()).toBe(true);
+        setChatGenerating("A", false);
+        expect(hasGeneratingChats()).toBe(false);
     });
 });

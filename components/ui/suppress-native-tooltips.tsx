@@ -32,19 +32,14 @@ export function SuppressNativeTooltips() {
                 if (m.type === "attributes" && m.attributeName === "title") {
                     const t = m.target;
                     if (t instanceof Element) stripEl(t);
-                    continue;
                 }
-                m.addedNodes.forEach((node) => {
-                    if (node instanceof Element || node instanceof DocumentFragment) {
-                        stripTree(node);
-                    }
-                });
             }
         });
 
+        // Attribute-only. A subtree childList observer walks every streamed
+        // chat token and freezes the WebView.
         mo.observe(document.body, {
             subtree: true,
-            childList: true,
             attributes: true,
             attributeFilter: ["title"],
         });

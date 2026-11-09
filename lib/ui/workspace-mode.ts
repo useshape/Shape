@@ -4,13 +4,12 @@ import { useSyncExternalStore } from "react";
 
 export const WORKSPACE_MODES = [
     { id: "Code", verb: "Build", description: "Edit a project with files, terminal, and git" },
-    { id: "Chat", verb: "Ask", description: "A conversation that can run tools, scripts, and creative work" },
 ] as const;
 
 export const WORKSPACE_MODE_ICON = "/code.png";
 
-export function isTalkWorkspace(id: string) {
-    return id === "Chat";
+export function isTalkWorkspace(_id: string) {
+    return false;
 }
 
 export type WorkspaceModeId = (typeof WORKSPACE_MODES)[number]["id"];
@@ -25,7 +24,7 @@ function isMode(value: string | null): value is WorkspaceModeId {
 }
 
 function coerceMode(value: string | null): WorkspaceModeId | null {
-    if (value === "GTM" || value === "Cowork" || value === "Image") return "Chat";
+    if (value === "Chat" || value === "GTM" || value === "Cowork" || value === "Image") return "Code";
     return isMode(value) ? value : null;
 }
 
@@ -52,7 +51,7 @@ export function useWorkspaceMode() {
 
 export function getWorkspaceMode(): WorkspaceModeId {
     const stored = current as string;
-    if (stored === "GTM" || stored === "Cowork" || stored === "Image") current = "Chat";
+    if (stored === "Chat" || stored === "GTM" || stored === "Cowork" || stored === "Image") current = "Code";
     return current;
 }
 

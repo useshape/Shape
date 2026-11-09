@@ -35,6 +35,7 @@ import {
     SCROLLBACK_PRESETS,
     AUTO_FETCH_INTERVAL_PRESETS,
 } from "./shared/controls";
+import { WorkspaceLayoutSettings } from "@/features/agent/dock/settings";
 import { AiSettingsPanel } from "./sections/ai";
 import { AccountSettingsPanel } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
@@ -1283,6 +1284,7 @@ export function SettingsView({
                             {activeLeafId === "ai-context" ? <AiSettings settings={settings} page="context" /> : null}
                             {activeLeafId === "editor-font" ? <EditorSettings settings={settings} /> : null}
                             {activeLeafId === "terminal" ? <TerminalSettings settings={settings} /> : null}
+                            {activeLeafId === "workspace-layout" ? <WorkspaceLayoutSettings /> : null}
                             {activeLeafId === "git" ? <GitSettings settings={settings} /> : null}
                             {activeLeafId === "updates" ? <UpdatesSettings settings={settings} /> : null}
                             {activeLeafId === "notifications" ? <PrivacySettings settings={settings} part="notifications" /> : null}

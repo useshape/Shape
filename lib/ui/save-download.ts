@@ -36,7 +36,7 @@ async function bytesFromSrc(src: string): Promise<Uint8Array> {
     return new Uint8Array(await res.arrayBuffer());
 }
 
-export async function saveDownload(name: string, src: string, mime?: string): Promise<boolean> {
+export async function saveDownloadBytes(name: string, bytes: Uint8Array, mime?: string): Promise<boolean> {
     const ext = extensionOf(name, mime);
     const { save } = await import("@tauri-apps/plugin-dialog");
     const selected = await save({
@@ -44,9 +44,23 @@ export async function saveDownload(name: string, src: string, mime?: string): Pr
         filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
     });
     if (typeof selected !== "string") return false;
-    const bytes = await bytesFromSrc(src);
     await commands.saveFileBytes(selected, Array.from(bytes));
     return true;
+}
+
+export async function saveDownload(name: string, src: string, mime?: string): Promise<boolean> {
+    const bytes = await bytesFromSrc(src);
+    return saveDownloadBytes(name, bytes, mime);
+}
+
+export async function saveDownloadBytesOrNotify(name: string, bytes: Uint8Array, mime?: string): Promise<void> {
+    try {
+        const saved = await saveDownloadBytes(name, bytes, mime);
+        if (saved) notify.success("Saved", name);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        notify.error("Save failed", message);
+    }
 }
 
 export async function saveDownloadOrNotify(name: string, src: string, mime?: string): Promise<void> {

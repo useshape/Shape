@@ -58,8 +58,7 @@ function emit() {
     for (const listener of listeners) listener();
 }
 
-function normalizeMode(mode: string | undefined): WorkspaceModeId {
-    if (mode === "Chat" || mode === "GTM" || mode === "Cowork" || mode === "Image") return "Chat";
+function normalizeMode(_mode: string | undefined): WorkspaceModeId {
     return "Code";
 }
 
@@ -80,8 +79,7 @@ function load() {
         const raw = JSON.parse(localStorage.getItem(LAST_KEY) || "{}") as Record<string, string>;
         if (raw && typeof raw === "object") {
             last = {
-                Code: raw.Code,
-                Chat: raw.Chat || raw.GTM || raw.Cowork,
+                Code: raw.Code || raw.Chat || raw.GTM || raw.Cowork,
             };
         }
     } catch {

@@ -31,10 +31,45 @@ pub async fn stop_chat_message(
             .map(|g| g.contains_key(id))
             .unwrap_or(false)
     }).unwrap_or(false);
-    if !target_generating {
+    let stopping_thread = target_id
+        .as_deref()
+        .is_some_and(crate::agent::subagents::is_thread_id);
+    let has_child_threads = target_id
+        .as_deref()
+        .map(crate::agent::subagents::has_children)
+        .unwrap_or(false);
+    if !target_generating && !stopping_thread && !has_child_threads {
         // Idle / launch remounts used to call stop and still abort captures +
         // kill PTYs below, which tore down WebView2 frames and reloaded the UI.
         // A new empty chat must not cancel a background turn.
+        return Ok(());
+    }
+    let mut cancelled_children = Vec::new();
+    if stopping_thread {
+        if let Some(id) = target_id.as_deref() {
+            crate::agent::subagents::cancel_thread(id);
+            if let Some(token) = state.conversation_cancel_token(id) {
+                token.cancel();
+            }
+        }
+    } else if let Some(id) = target_id.as_deref() {
+        cancelled_children = crate::agent::subagents::cancel_children(id);
+        for child in &cancelled_children {
+            if let Some(token) = state.conversation_cancel_token(child) {
+                token.cancel();
+            }
+        }
+    }
+    if !target_generating {
+        if let Some(id) = target_id.as_deref() {
+            if let Some(token) = state.conversation_cancel_token(id) {
+                token.cancel();
+            }
+            state.dismiss_unresolved_approvals_for(Some(id));
+        }
+        for child in &cancelled_children {
+            state.dismiss_unresolved_approvals_for(Some(child));
+        }
         return Ok(());
     }
     let already_cancelled = target_id
@@ -58,7 +93,10 @@ pub async fn stop_chat_message(
             token.cancel();
         }
     }
-    state.dismiss_unresolved_approvals();
+    state.dismiss_unresolved_approvals_for(target_id.as_deref());
+    for child in &cancelled_children {
+        state.dismiss_unresolved_approvals_for(Some(child));
+    }
 
     // Unlock the UI immediately — title gen / long HTTP must not leave the
     // sidebar spinning until the upstream request finishes.

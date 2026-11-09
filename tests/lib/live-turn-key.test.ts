@@ -11,6 +11,11 @@ describe("resolveLiveTurnKey", () => {
         expect(resolveLiveTurnKey("chat-a", ["__pending__"], "chat-b")).toBe("__pending__");
     });
 
+    it("does not let a thread token claim a draft pending turn", () => {
+        expect(resolveLiveTurnKey("thread-abc", ["__pending__"], "__draft__")).toBe("thread-abc");
+        expect(resolveLiveTurnKey("sub-run-old", ["__pending__"], null)).toBe("sub-run-old");
+    });
+
     it("accepts an unscoped event only for the viewed turn or a single pending turn", () => {
         expect(resolveLiveTurnKey(null, ["chat-a"], "chat-a")).toBe("chat-a");
         expect(resolveLiveTurnKey(null, ["__pending__"], "chat-b")).toBe("__pending__");

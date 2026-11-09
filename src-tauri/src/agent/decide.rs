@@ -53,6 +53,7 @@ pub struct Packs {
     pub git: bool,
     pub terminal: bool,
     pub media: bool,
+    pub reverse: bool,
 }
 
 impl Packs {
@@ -65,6 +66,7 @@ impl Packs {
             git: self.git || other.git,
             terminal: self.terminal || other.terminal,
             media: self.media || other.media,
+            reverse: self.reverse || other.reverse,
         }
     }
 
@@ -79,7 +81,7 @@ impl Packs {
 
     pub fn signature(self) -> String {
         format!(
-            "{}{}{}{}{}{}{}",
+            "{}{}{}{}{}{}{}{}",
             self.workspace as u8,
             self.plugins as u8,
             self.browse as u8,
@@ -87,6 +89,7 @@ impl Packs {
             self.git as u8,
             self.terminal as u8,
             self.media as u8,
+            self.reverse as u8,
         )
     }
 }
@@ -140,13 +143,29 @@ pub fn decide(
     hint: Option<Capability>,
 ) -> TurnDecision {
     let text = message.trim().to_ascii_lowercase();
-    let change = has_change_verb(&text);
+    if is_internal_continuation(&text) {
+        if let Some(stuck) = sticky {
+            return TurnDecision {
+                capability: stuck,
+                packs: Packs::default(),
+                skills: Vec::new(),
+                context: ContextNeed {
+                    repo_map: false,
+                    diagnostics: false,
+                    git_status: false,
+                },
+                confident: true,
+            };
+        }
+    }
+    let change = !is_internal_continuation(&text) && has_change_verb(&text);
     let plan = has_plan_signal(&text);
     let go_ahead = is_go_ahead(&text);
     let question = is_question(&text);
     let browse = has_browse_signal(&text);
     let git = has_git_signal(&text);
     let media = has_media_signal(&text);
+    let reverse = has_reverse_signal(&text);
     let terminal = has_terminal_signal(&text);
     let plugins = has_plugin_signal(&text);
     let web = question || text.contains("search") || text.contains("look up") || text.contains("http");
@@ -183,6 +202,7 @@ pub fn decide(
     packs.browse = browse;
     packs.git = git;
     packs.media = media;
+    packs.reverse = reverse;
     packs.plugins = plugins;
     packs.web = web || browse;
     match capability {
@@ -247,6 +267,12 @@ pub fn decide(
             if packs.browse {
                 push_skill(&mut skills, "browse");
             }
+            if packs.reverse {
+                push_skill(&mut skills, "reverse");
+            }
+            if packs.media && has_model_signal(&text) {
+                push_skill(&mut skills, "models");
+            }
             if skills.is_empty() {
                 push_skill(&mut skills, "edits");
             }
@@ -254,6 +280,9 @@ pub fn decide(
         _ => {
             if packs.browse {
                 push_skill(&mut skills, "browse");
+            }
+            if packs.reverse {
+                push_skill(&mut skills, "reverse");
             }
         }
     }
@@ -274,10 +303,14 @@ fn push_skill(skills: &mut Vec<&'static str>, name: &'static str) {
     }
 }
 
+fn is_internal_continuation(text: &str) -> bool {
+    text.contains("<subagent_update>") || text.contains("<scheduled_followup")
+}
+
 fn has_change_verb(text: &str) -> bool {
     const WORDS: &[&str] = &[
         "fix", "implement", "refactor", "add ", "create", "build", "edit", "update", "change",
-        "write", "remove", "delete", "install", "wire", "rename", "replace", "debug",
+        "write", "remove", "delete", "install", "wire", "rename", "replace", "debug", "generate",
     ];
     WORDS.iter().any(|w| text.contains(w))
 }
@@ -332,6 +365,31 @@ fn has_media_signal(text: &str) -> bool {
         || text.contains("generate an image")
         || text.contains("generate image")
         || text.contains("audio")
+        || has_model_signal(text)
+}
+
+fn has_model_signal(text: &str) -> bool {
+    text.contains("3d")
+        || text.contains("3-d")
+        || text.contains("glb")
+        || text.contains("gltf")
+        || text.contains("low-poly")
+        || text.contains("low poly")
+        || text.contains("3d model")
+        || text.contains("mesh")
+}
+
+fn has_reverse_signal(text: &str) -> bool {
+    text.contains("disassembl")
+        || text.contains("decompile")
+        || text.contains("reverse engineer")
+        || text.contains("binary")
+        || text.contains("firmware")
+        || text.contains(".exe")
+        || text.contains(" pe ")
+        || text.contains("elf")
+        || text.contains("wasm")
+        || text.contains("imports of")
 }
 
 fn has_terminal_signal(text: &str) -> bool {
@@ -403,12 +461,41 @@ mod tests {
     }
 
     #[test]
+    fn subagent_update_keeps_ask() {
+        let body = "<subagent_update>\nThread finished. Create a summary of the files it touched.\n</subagent_update>";
+        let d = decide(body, Some(Capability::Ask), locks(), None);
+        assert_eq!(d.capability, Capability::Ask);
+        assert!(!d.packs.workspace);
+    }
+
+    #[test]
+    fn scheduled_followup_keeps_plan() {
+        let body = "<scheduled_followup>create the missing tests</scheduled_followup>";
+        let d = decide(body, Some(Capability::Plan), locks(), None);
+        assert_eq!(d.capability, Capability::Plan);
+        assert!(!d.packs.workspace);
+    }
+
+    #[test]
     fn implementation_requests_enable_edits_and_shell() {
         let d = decide("Fix the off-by-one in the pager and run the tests", None, locks(), None);
         assert_eq!(d.capability, Capability::Code);
         assert!(d.confident);
         assert!(d.packs.workspace);
         assert!(d.packs.terminal);
+    }
+
+    #[test]
+    fn low_poly_model_request_loads_media() {
+        let d = decide("Generate a low-poly medieval sword", None, locks(), None);
+        assert!(d.packs.media);
+        assert_eq!(d.capability, Capability::Code);
+    }
+
+    #[test]
+    fn reverse_request_loads_reverse_pack() {
+        let d = decide("Disassemble this PE binary and list imports", None, locks(), None);
+        assert!(d.packs.reverse);
     }
 
     #[test]

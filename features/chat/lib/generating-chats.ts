@@ -19,11 +19,13 @@ export function setChatGenerating(chatId: string | null | undefined, generating:
     else generatingIds.delete(chatId);
     if (before !== generatingIds.has(chatId)) {
         emit();
-        window.dispatchEvent(
-            new CustomEvent("shape-chat-generating", {
-                detail: { id: chatId, generating },
-            }),
-        );
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(
+                new CustomEvent("shape-chat-generating", {
+                    detail: { id: chatId, generating },
+                }),
+            );
+        }
     }
 }
 

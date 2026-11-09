@@ -40,6 +40,7 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "git_create_branch",
     "git_switch",
     "git_sync",
+    "git_fetch",
     "git_worktree",
     "plugin_run",
     "save_media",
@@ -47,6 +48,10 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "generate_image",
     "generate_audio",
     "edit_image",
+    "generate_3d_model",
+    "edit_3d_model",
+    "convert_3d_model",
+    "re_extract",
 ];
 
 const WORKSPACE_UNTRUSTED_MSG: &str =
@@ -74,11 +79,16 @@ pub struct ToolCtx<'a> {
     /// When set, shell commands that name this directory are refused.
     /// Chat uses it so the open code project cannot be edited from that mode.
     pub sealed_project: Option<&'a str>,
+    /// Tool names listed on this turn. `None` allows any known tool (tests).
+    pub allowed_tools: Option<&'a [String]>,
 }
 
 impl<'a> ToolCtx<'a> {
     pub fn emit_ui_token(&self, chunk: impl Into<String>) {
-        let chunk = chunk.into();
+        let chunk = crate::agent::tools::browse::strip_data_urls(&chunk.into());
+        if chunk.is_empty() {
+            return;
+        }
         let _ = self.app_handle.emit(
             "chat_token",
             serde_json::json!({
@@ -114,6 +124,17 @@ pub enum SideEffect {
 }
 
 pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    if let Some(allowed) = ctx.allowed_tools {
+        if !allowed.iter().any(|n| n == name) {
+            return blocked_outcome(
+                name,
+                "That tool is not available on this turn. Use a listed tool, or load_tools if that pack is offered.",
+            );
+        }
+    }
+    if name == "spawn_subagent" && crate::agent::subagents::spawn_depth(ctx.conversation_id.as_deref()) >= 2 {
+        return blocked_outcome(name, "Threads can nest one level. This thread cannot spawn another.");
+    }
     if design_gate_blocks_tool(name, ctx) {
         return blocked_outcome(name, DESIGN_GATE_BLOCK_MSG);
     }
@@ -125,7 +146,11 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
             || name == "generate_image"
             || name == "generate_audio"
             || name == "edit_image"
+            || name == "generate_3d_model"
+            || name == "edit_3d_model"
+            || name == "convert_3d_model"
             || name == "save_media"
+            || name == "re_extract"
             || name == "browse")
     {
         return blocked_outcome(name, "This tool is not available in Ask or Plan mode.");
@@ -221,6 +246,18 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "generate_image" => crate::agent::tools::generate::tool_generate_image(&args, ctx).await,
         "generate_audio" => crate::agent::tools::generate::tool_generate_audio(&args, ctx).await,
         "edit_image" => crate::agent::tools::generate::tool_edit_image(&args, ctx).await,
+        "generate_3d_model" => crate::agent::tools::model3d::tool_generate_3d_model(&args, ctx).await,
+        "edit_3d_model" => crate::agent::tools::model3d::tool_edit_3d_model(&args, ctx).await,
+        "inspect_3d_model" => crate::agent::tools::model3d::tool_inspect_3d_model(&args, ctx).await,
+        "convert_3d_model" => crate::agent::tools::model3d::tool_convert_3d_model(&args, ctx).await,
+        "re_catalog" => crate::agent::tools::reverse::tool_re_catalog(&args, ctx),
+        "re_identify" => crate::agent::tools::reverse::tool_re_identify(&args, ctx),
+        "re_inspect" => crate::agent::tools::reverse::tool_re_inspect(&args, ctx),
+        "re_strings" => crate::agent::tools::reverse::tool_re_strings(&args, ctx),
+        "re_disassemble" => crate::agent::tools::reverse::tool_re_disassemble(&args, ctx),
+        "re_functions" => crate::agent::tools::reverse::tool_re_functions(&args, ctx),
+        "re_callgraph" => crate::agent::tools::reverse::tool_re_callgraph(&args, ctx),
+        "re_extract" => crate::agent::tools::reverse::tool_re_extract(&args, ctx),
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,
         "finish" => meta::tool_finish(&args),
         "load_tools" => tool_load_tools(&args, ctx),
@@ -299,6 +336,7 @@ fn tool_load_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             }
             "web" => packs.web = true,
             "media" => packs.media = true,
+            "reverse" => packs.reverse = true,
             "plugins" => packs.plugins = true,
             _ => {
                 refused.push(name);
@@ -339,7 +377,7 @@ fn tool_load_skill(args: &Value) -> ToolOutcome {
         },
         None => error_outcome(
             "load_skill",
-            "Unknown skill. Use terminal, git, edits, browse, plan, or review.",
+            "Unknown skill. Use terminal, git, edits, browse, plan, review, reverse, or models.",
         ),
     }
 }

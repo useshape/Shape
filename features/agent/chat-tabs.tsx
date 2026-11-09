@@ -4,18 +4,18 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { commands, useProjectState } from "@/lib/backend";
 import { useGeneratingChatIds } from "@/features/chat/lib/generating-chats";
 import type { Conversation } from "@/lib/backend/types";
-import { useGitHubAuth } from "@/lib/github/store";
-import { useShapeAuth } from "@/lib/cloud/store";
 import { conversationStorePath, TALK_CONVERSATION_STORE } from "@/lib/chat/conversation-store";
 import { isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
 import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
+import { getSubagents, subscribeSubagents } from "@/features/agent/subagents/store";
 import { WindowControlsSpacer } from "@/features/agent/workbench/titlebar/ui/window-controls";
 import { ChatOmnibox } from "@/features/chat/ui/shell/omnibox";
-import { BrowserTabStrip } from "./browser-tab-strip";
 import { chromePlatform, subscribeChromePlatform } from "@/lib/ui/chrome-platform";
 import { publishChatTitles } from "./chat-titles";
-import { AccountMenu, ProfileAvatar } from "./sidebar/menu";
+import { ChatTabTree } from "./sidebar/tab-tree";
 import { cn } from "@/lib/utils";
+import { createPortal } from "react-dom";
+import { AGENT_TAB_SIDEBAR_SLOT } from "./chrome";
 import {
     activateChat,
     closeChatTab,
@@ -29,43 +29,19 @@ import {
     setOpenTabs,
     showView,
     SHOWCASE_TAB_ID,
-    splitWith,
     subscribeStrip,
     toolTitle,
-    unsplit,
 } from "./strip";
 
-const MAX_TABS = 8;
+const MAX_TABS = 24;
 
-function ChromeAvatar() {
-    const shapeAuth = useShapeAuth();
-    const github = useGitHubAuth();
-    const name =
-        (shapeAuth.name && !/^n\/?a$/i.test(shapeAuth.name.trim()) ? shapeAuth.name.trim() : null)
-        ?? (github.loggedIn && github.username ? github.username : null)
-        ?? "Account";
-
-    return (
-        <AccountMenu side="bottom">
-            <button
-                type="button"
-                aria-label={name}
-                data-no-drag
-                className="grid size-7 place-items-center overflow-hidden rounded-full hover:bg-panel-hover"
-            >
-                <ProfileAvatar
-                    gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
-                    shapeUserId={shapeAuth.userId}
-                    offline={Boolean(shapeAuth.offline)}
-                    name={name}
-                    size={32}
-                />
-            </button>
-        </AccountMenu>
-    );
-}
-
-export function ChatChromeTabs() {
+export function ChatChromeTabs({
+    filesOpen = false,
+    onToggleFiles,
+}: {
+    filesOpen?: boolean;
+    onToggleFiles?: () => void;
+}) {
     const { project_path } = useProjectState();
     const mode = useWorkspaceMode();
     const [chats, setChats] = useState<Conversation[]>([]);
@@ -73,6 +49,7 @@ export function ChatChromeTabs() {
     const [activeId, setActiveId] = useState<string | null>(null);
     const strip = useSyncExternalStore(subscribeStrip, getStrip, getStrip);
     const generating = useGeneratingChatIds();
+    const threadCards = useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
     const platform = useSyncExternalStore(subscribeChromePlatform, chromePlatform, () => "windows" as const);
 
     const loadChats = useCallback(async () => {
@@ -154,13 +131,29 @@ export function ChatChromeTabs() {
             const ids = new Set(chats.map((chat) => chat.id));
             const kept = prev.filter((id) => ids.has(id));
             const known = new Set(kept);
-            const added = chats.filter((chat) => !known.has(chat.id)).map((chat) => chat.id);
+            const added = chats.filter((chat) => !known.has(chat.id));
             if (kept.length === 0) {
-                return [...chats]
-                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-                    .map((chat) => chat.id);
+                const sorted = [...chats].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                const parents = sorted.filter((chat) => chat.kind !== "thread" && !chat.parent_id);
+                const threads = sorted.filter((chat) => chat.kind === "thread" || Boolean(chat.parent_id));
+                const ids: string[] = parents.map((chat) => chat.id);
+                for (const thread of threads) {
+                    const parent = thread.parent_id;
+                    const at = parent ? ids.indexOf(parent) : -1;
+                    if (at >= 0) ids.splice(at + 1, 0, thread.id);
+                    else ids.push(thread.id);
+                }
+                return ids;
             }
-            return [...kept, ...added];
+            const next = [...kept];
+            for (const chat of added) {
+                if (next.includes(chat.id)) continue;
+                const parent = chat.parent_id;
+                const at = parent ? next.indexOf(parent) : -1;
+                if (at >= 0) next.splice(at + 1, 0, chat.id);
+                else next.push(chat.id);
+            }
+            return next;
         });
     }, [chats]);
 
@@ -213,15 +206,15 @@ export function ChatChromeTabs() {
             : order;
         const items = source.flatMap((id) => {
             if (isShowcaseTab(id)) {
-                return [{ id, title: "Components", active: strip.activeId === id, tool: true, file: false }];
+                return [{ id, title: "Components", active: strip.activeId === id, tool: true, file: false, parentId: undefined as string | undefined }];
             }
             if (isFileTab(id)) {
                 const path = id.slice("file:".length);
                 const name = path.split(/[/\\]/).pop() || path;
-                return [{ id, title: name, active: strip.activeId === id, tool: false, file: true }];
+                return [{ id, title: name, active: strip.activeId === id, tool: false, file: true, parentId: undefined as string | undefined }];
             }
             if (isToolId(id)) {
-                return [{ id, title: toolTitle(id), active: strip.activeId === id, tool: true, file: false }];
+                return [{ id, title: toolTitle(id), active: strip.activeId === id, tool: true, file: false, parentId: undefined as string | undefined }];
             }
             const chat = byId.get(id);
             const pending = !chat && id !== NEW_CHAT_TAB_ID && strip.activeId === id;
@@ -229,28 +222,38 @@ export function ChatChromeTabs() {
             return [{
                 id,
                 title: chat?.title?.trim() || "New chat",
+                parentId: chat?.parent_id || threadCards.find((card) => card.id === id)?.parentId,
                 active: !isToolId(strip.activeId || "") && !isFileTab(strip.activeId || "") && !isShowcaseTab(strip.activeId || "") && (strip.activeId === id || (!strip.activeId && id === activeId)),
                 tool: false,
                 file: false,
             }];
         });
         if (items.some((tab) => tab.active)) return items;
-        return [{ id: NEW_CHAT_TAB_ID, title: "New chat", active: !strip.activeId || (!isToolId(strip.activeId) && !isFileTab(strip.activeId) && !isShowcaseTab(strip.activeId)), tool: false, file: false }, ...items];
-    }, [order, byId, activeId, strip]);
+        return [{ id: NEW_CHAT_TAB_ID, title: "New chat", active: !strip.activeId || (!isToolId(strip.activeId) && !isFileTab(strip.activeId) && !isShowcaseTab(strip.activeId)), tool: false, file: false, parentId: undefined as string | undefined }, ...items];
+    }, [order, byId, activeId, strip, threadCards]);
 
     const shown = useMemo(() => {
         const chats = tabs.filter((tab) => !tab.tool && !tab.file && !isShowcaseTab(tab.id));
         const keep = new Set(chats.slice(0, MAX_TABS).map((tab) => tab.id));
         const active = chats.find((tab) => tab.active);
-        if (active) {
-            keep.add(active.id);
-            if (keep.size > MAX_TABS) {
-                const drop = chats.find((tab) => keep.has(tab.id) && tab.id !== active.id);
-                if (drop) keep.delete(drop.id);
+        if (active) keep.add(active.id);
+        for (const tab of chats) {
+            if (generating.has(tab.id) || tab.id.startsWith("thread-") || tab.id.startsWith("sub-run-")) {
+                keep.add(tab.id);
             }
         }
+        if (keep.size > MAX_TABS) {
+            const drop = chats.find((tab) =>
+                keep.has(tab.id)
+                && tab.id !== active?.id
+                && !generating.has(tab.id)
+                && !tab.id.startsWith("thread-")
+                && !tab.id.startsWith("sub-run-"),
+            );
+            if (drop) keep.delete(drop.id);
+        }
         return tabs.filter((tab) => tab.tool || tab.file || isShowcaseTab(tab.id) || keep.has(tab.id));
-    }, [tabs]);
+    }, [tabs, generating]);
 
     const openChat = (id: string) => {
         if (isShowcaseTab(id)) {
@@ -271,6 +274,7 @@ export function ChatChromeTabs() {
         if (id === NEW_CHAT_TAB_ID) {
             activateChat(NEW_CHAT_TAB_ID);
             setActiveId(null);
+            window.dispatchEvent(new CustomEvent("shape-dock-open", { detail: { id: NEW_CHAT_TAB_ID, title: "New chat", focus: true } }));
             window.dispatchEvent(new Event("shape-chat-new"));
             window.dispatchEvent(new Event("shape-chat-focus-input"));
             return;
@@ -278,6 +282,7 @@ export function ChatChromeTabs() {
         showView("chat");
         setActiveId(id);
         activateChat(id);
+        window.dispatchEvent(new CustomEvent("shape-dock-open", { detail: { id, title: byId.get(id)?.title, focus: true } }));
         window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id } }));
     };
 
@@ -334,10 +339,14 @@ export function ChatChromeTabs() {
         const rest = order.filter((item) => item !== id);
         setOrder(rest);
         closeChatTab(id);
-        void commands
-            .setConversationArchived(id, true)
-            .then(() => window.dispatchEvent(new CustomEvent("shape-chat-refresh")))
-            .catch(() => {});
+        void commands.stopChatMessage(id).catch(() => {});
+        const isThread = id.startsWith("thread-") || id.startsWith("sub-run-");
+        if (!isThread) {
+            void commands
+                .setConversationArchived(id, true)
+                .then(() => window.dispatchEvent(new CustomEvent("shape-chat-refresh")))
+                .catch(() => {});
+        }
         if (id !== activeId) return;
         const next = rest[0];
         if (next) openChat(next);
@@ -358,6 +367,20 @@ export function ChatChromeTabs() {
     };
 
     const mac = platform === "macos";
+    const [sidebarHost, setSidebarHost] = useState<HTMLElement | null>(null);
+
+    useEffect(() => {
+        const find = () => document.getElementById(AGENT_TAB_SIDEBAR_SLOT);
+        setSidebarHost(find());
+        const timer = window.setInterval(() => {
+            const node = find();
+            if (node) {
+                setSidebarHost(node);
+                window.clearInterval(timer);
+            }
+        }, 50);
+        return () => window.clearInterval(timer);
+    }, []);
 
     const stripTabs = shown.filter((tab) => tab.id !== NEW_CHAT_TAB_ID);
     const activeTab = shown.find((tab) => tab.active);
@@ -371,45 +394,44 @@ export function ChatChromeTabs() {
     );
     const reloadPath = activeTab?.file ? activeTab.id.slice("file:".length) : null;
 
+    const tree = (
+        <ChatTabTree
+            tabs={stripTabs.map((tab) => {
+                const card = threadCards.find((item) => item.id === tab.id);
+                const isThread = tab.id.startsWith("thread-") || tab.id.startsWith("sub-run-") || Boolean(card);
+                return {
+                    id: tab.id,
+                    title: tab.title,
+                    active: tab.active,
+                    parentId: tab.parentId,
+                    tool: tab.tool,
+                    file: tab.file,
+                    working: !tab.file && !tab.tool && generating.has(tab.id),
+                    threadStatus: isThread
+                        ? (generating.has(tab.id) ? "running" as const : card?.status === "error" ? "error" as const : card?.status === "done" ? "done" as const : undefined)
+                        : undefined,
+                };
+            })}
+            onActivate={openChat}
+            onClose={closeChat}
+            onNew={newChat}
+            onCloseOthers={closeOthers}
+        />
+    );
+
     return (
         <div
             className="relative z-30 flex w-full min-w-0 shrink-0 flex-col overflow-visible bg-chrome font-normal tracking-normal text-[13px] text-text-primary"
             data-no-drag
         >
-            <div className={cn("flex h-9 w-full min-w-0 items-center", mac ? "ps-[78px]" : "ps-1")}>
-                {stripTabs.length > 0 ? (
-                    <BrowserTabStrip
-                        tabs={stripTabs.map((tab) => ({
-                            id: tab.id,
-                            title: tab.title,
-                            active: tab.active,
-                            tool: tab.tool,
-                            file: tab.file,
-                            working: !tab.file && !tab.tool && generating.has(tab.id),
-                        }))}
-                        splitIds={strip.split ? [strip.split.left, strip.split.right] : null}
-                        onActivate={openChat}
-                        onClose={closeChat}
-                        onReorder={moveTab}
-                        onSplitPair={(anchor, incoming) => splitWith(anchor, incoming)}
-                        onUnsplit={unsplit}
-                        onNew={newChat}
-                        onCloseOthers={closeOthers}
-                        onCloseRight={closeToRight}
-                    />
-                ) : (
-                    <div className="h-full min-w-0 flex-1" data-tauri-drag-region />
-                )}
-                <div className="flex shrink-0 items-center pe-1.5" data-no-drag>
-                    <ChromeAvatar />
-                </div>
-                {mac ? null : <WindowControlsSpacer />}
-            </div>
-            <div className="flex h-10 w-full min-w-0 items-center pb-1">
+            {sidebarHost ? createPortal(tree, sidebarHost) : null}
+            <div className={cn("flex h-10 w-full min-w-0 items-center pb-1", mac ? "ps-[78px]" : "ps-1")}>
                 <ChatOmnibox
                     title={activeTab?.title || "New chat"}
                     projectPath={project_path}
                     fill
+                    filesOpen={filesOpen}
+                    onToggleFiles={onToggleFiles}
                     titleWorking={titleWorking}
                     reloadId={
                         activeTab && !activeTab.file && !activeTab.tool && activeTab.id !== NEW_CHAT_TAB_ID
@@ -418,6 +440,7 @@ export function ChatChromeTabs() {
                     }
                     reloadPath={reloadPath}
                 />
+                {mac ? null : <WindowControlsSpacer />}
             </div>
         </div>
     );

@@ -38,7 +38,7 @@ import { PluginLogo } from "@/components/ui/plugin-logo";
 import { ApprovalCard } from "./approval";
 import { humanizeToolName } from "@/lib/mcp/oauth";
 import { BrowseChatCard } from "./browse-frame";
-import { openSubagent, upsertSubagent } from "@/features/agent/subagents/store";
+import { upsertSubagent } from "@/features/agent/subagents/store";
 
 function estimateThoughtSeconds(content: string): number {
     const words = content.trim().split(/\s+/).filter(Boolean).length;
@@ -82,7 +82,7 @@ function modelChipLabel(model?: string): string {
 }
 
 function openSpawnedAgent(block: Chunk) {
-    const name = block.query || "agent";
+    const name = block.query || "Thread";
     const id = block.file || name;
     upsertSubagent({
         id,
@@ -94,7 +94,7 @@ function openSpawnedAgent(block: Chunk) {
         transcript: block.type === "subagent" ? block.content : undefined,
         status: (block.commandStatus as "running" | "done" | "error" | "pending") || "running",
     });
-    openSubagent(id);
+    window.dispatchEvent(new CustomEvent("shape-open-subagent", { detail: { id } }));
 }
 
 function SubagentRow({ block }: { block: Chunk }) {
@@ -103,7 +103,7 @@ function SubagentRow({ block }: { block: Chunk }) {
     const model = modelChipLabel(block.command);
     return (
         <ActionLine
-            action="Spawned"
+            action="Thread"
             detail={task || name}
             icon={providerIcon(block.command || "auto", 14)}
             onClick={() => openSpawnedAgent(block)}
@@ -282,11 +282,13 @@ function ThoughtStep({
 function WorkflowEditPreview({
     original,
     replacement,
+    flush,
 }: {
     original: string;
     replacement: string;
+    flush?: boolean;
 }) {
-    return <ChatEditDiff original={original} replacement={replacement} />;
+    return <ChatEditDiff original={original} replacement={replacement} flush={flush} />;
 }
 
 /**
@@ -376,6 +378,7 @@ function EditApprovalRow({ block }: { block: Chunk }) {
                 <WorkflowEditPreview
                     original={block.original || ""}
                     replacement={block.replacement || ""}
+                    flush
                 />
             </Collapse>
         </ApprovalCard>
@@ -387,7 +390,7 @@ function StepRowAppliedEdit({ block }: { block: Chunk }) {
     const { add, del } = editDelta(block);
     const file = block.file || "";
     return (
-        <ActionLine action="Edited" detail={fileName(file)} add={add} del={del}>
+        <ActionLine action="Edited" detail={fileName(file)} add={add} del={del} defaultOpen>
             {add > 0 || del > 0 ? (
                 <WorkflowEditPreview
                     original={block.original || ""}
@@ -523,7 +526,14 @@ function StepRow({ block }: { block: Chunk }) {
             <ActionLine
                 action="Ran"
                 detail={summary ? `${summary}${raw.length > 72 ? "…" : ""}` : "tool"}
-            />
+                defaultOpen
+            >
+                {raw.trim() ? (
+                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap font-mono text-sm text-text-secondary">
+                        {raw}
+                    </pre>
+                ) : null}
+            </ActionLine>
         );
     }
 
@@ -609,7 +619,7 @@ function StepRow({ block }: { block: Chunk }) {
         const { add, del } = editDelta(block);
         const file = block.file;
         return (
-            <ActionLine action="Edited" detail={fileName(file)} add={add} del={del}>
+            <ActionLine action="Edited" detail={fileName(file)} add={add} del={del} defaultOpen>
                 {add > 0 || del > 0 ? (
                     <WorkflowEditPreview
                         original={block.original || ""}

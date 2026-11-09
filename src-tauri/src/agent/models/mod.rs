@@ -19,6 +19,7 @@ pub struct PendingDesignPick {
     #[allow(dead_code)]
     pub id: String,
     pub concepts: Vec<DesignPickConcept>,
+    pub conversation_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +132,8 @@ pub struct PendingEdit {
     pub id: String,
     pub path: String,
     pub is_new_file: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -190,6 +193,9 @@ pub struct Conversation {
     /// Conversation surface. Legacy `"multiwork"` values are treated as `"chat"`.
     #[serde(default = "default_conversation_kind")]
     pub kind: String,
+    /// Parent chat id when `kind` is `"thread"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
 }
 
 fn default_conversation_kind() -> String {
@@ -202,6 +208,8 @@ fn default_conversation_kind() -> String {
 pub struct PendingAsk {
     pub id: String,
     pub questions_json: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
 }
 
 /// Represents a terminal command proposed by the AI that needs user approval.
@@ -217,6 +225,8 @@ pub struct PendingCommand {
     pub action: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payload: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -506,13 +516,18 @@ impl AgentState {
     /// Fresh cancel token for one conversation. Stop cancels only that chat.
     pub fn begin_cancel_token(&self, conversation_id: &str) -> CancellationToken {
         let token = CancellationToken::new();
-        if let Ok(mut map) = self.cancel_tokens.lock() {
-            map.insert(conversation_id.to_string(), token.clone());
-        }
+        self.register_cancel_token(conversation_id, token.clone());
         if let Ok(mut current) = self.cancellation_token.lock() {
             *current = token.clone();
         }
         token
+    }
+
+    /// Store a cancel token without replacing the process-wide current token.
+    pub fn register_cancel_token(&self, conversation_id: &str, token: CancellationToken) {
+        if let Ok(mut map) = self.cancel_tokens.lock() {
+            map.insert(conversation_id.to_string(), token);
+        }
     }
 
     pub fn conversation_cancel_token(&self, conversation_id: &str) -> Option<CancellationToken> {
@@ -528,13 +543,27 @@ impl AgentState {
     }
 
     pub fn set_in_flight_activity_label(&self, label: Option<&str>) {
+        self.set_in_flight_activity_label_for(None, label);
+    }
+
+    pub fn set_in_flight_activity_label_for(&self, conversation_id: Option<&str>, label: Option<&str>) {
         let Ok(mut guard) = self.in_flight.lock() else {
             return;
         };
-        if guard.len() != 1 {
+        let key = conversation_id
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                if guard.len() == 1 {
+                    guard.keys().next().cloned()
+                } else {
+                    None
+                }
+            });
+        let Some(key) = key else {
             return;
-        }
-        if let Some(in_flight) = guard.values_mut().next() {
+        };
+        if let Some(in_flight) = guard.get_mut(&key) {
             in_flight.activity_label = label.map(|s| s.to_string());
         }
     }
@@ -546,7 +575,7 @@ impl AgentState {
         project_path: Option<&str>,
         conversation_id: Option<&str>,
     ) {
-        let (should_save, owner_conv_id, title_snapshot, partial_snapshot) = {
+        let (should_save, owner_conv_id, partial_snapshot) = {
             let mut guard = match self.in_flight.lock() {
                 Ok(g) => g,
                 Err(_) => return,
@@ -589,13 +618,13 @@ impl AgentState {
             (
                 should_save,
                 in_flight.conversation_id.clone(),
-                self.title.lock().ok().and_then(|t| t.clone()),
                 in_flight.partial_content.clone(),
             )
         };
         if !should_save {
             return;
         }
+        let title_snapshot = self.title.lock().ok().and_then(|t| t.clone());
         if let Some(path) = project_path {
             let current_id = self
                 .current_conversation_id
@@ -1010,42 +1039,73 @@ impl AgentState {
     }
 
     /// Clear approval bookkeeping from a previous turn so stale decisions can
-    /// never resolve a new pending item.
+    /// never resolve a new pending item. When `conversation_id` is set, leave
+    /// pending items that belong to another chat.
     pub fn clear_pending_approvals(&self) {
+        self.clear_pending_approvals_for(None);
+    }
+
+    pub fn clear_pending_approvals_for(&self, conversation_id: Option<&str>) {
+        let keep = |owned: &Option<String>| -> bool {
+            match (conversation_id, owned.as_deref()) {
+                (Some(cid), Some(owner)) => owner != cid,
+                (Some(_), None) => self.any_in_flight(),
+                (None, Some(_)) => self.any_in_flight(),
+                (None, None) => false,
+            }
+        };
         if let Ok(mut g) = self.pending_commands.lock() {
-            g.clear();
+            g.retain(|_, cmd| keep(&cmd.conversation_id));
         }
         if let Ok(mut g) = self.command_decisions.lock() {
-            g.clear();
+            if conversation_id.is_none() && !self.any_in_flight() {
+                g.clear();
+            }
         }
         if let Ok(mut g) = self.pending_edits.lock() {
-            g.clear();
+            g.retain(|_, edit| keep(&edit.conversation_id));
         }
         if let Ok(mut g) = self.edit_decisions.lock() {
-            g.clear();
+            if conversation_id.is_none() && !self.any_in_flight() {
+                g.clear();
+            }
         }
         if let Ok(mut g) = self.pending_asks.lock() {
-            g.clear();
+            g.retain(|_, ask| keep(&ask.conversation_id));
         }
         if let Ok(mut g) = self.ask_answers.lock() {
-            g.clear();
+            if conversation_id.is_none() && !self.any_in_flight() {
+                g.clear();
+            }
         }
     }
 
     /// Drop unresolved approval waiters on Stop without wiping Accept/Reject
     /// decisions that already landed (those should still apply).
     pub fn dismiss_unresolved_approvals(&self) {
+        self.dismiss_unresolved_approvals_for(None);
+    }
+
+    pub fn dismiss_unresolved_approvals_for(&self, conversation_id: Option<&str>) {
+        let keep = |owned: &Option<String>| -> bool {
+            match (conversation_id, owned.as_deref()) {
+                (Some(cid), Some(owner)) => owner != cid,
+                (Some(_), None) => self.any_in_flight(),
+                (None, Some(_)) => true,
+                (None, None) => false,
+            }
+        };
         if let Ok(mut g) = self.pending_commands.lock() {
-            g.clear();
+            g.retain(|_, cmd| keep(&cmd.conversation_id));
         }
         if let Ok(mut g) = self.pending_edits.lock() {
-            g.clear();
+            g.retain(|_, edit| keep(&edit.conversation_id));
         }
         if let Ok(mut g) = self.pending_asks.lock() {
-            g.clear();
+            g.retain(|_, ask| keep(&ask.conversation_id));
         }
         if let Ok(mut g) = self.pending_design_picks.lock() {
-            g.clear();
+            g.retain(|_, pick| keep(&pick.conversation_id));
         }
     }
 

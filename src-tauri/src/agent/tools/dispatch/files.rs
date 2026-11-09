@@ -482,6 +482,7 @@ pub(super) async fn gate_edit_approval(
         id: edit_id.clone(),
         path: target.to_string(),
         is_new_file: resolved.is_new_file,
+        conversation_id: ctx.conversation_id.clone(),
     };
     if let Ok(mut pendings) = ctx.agent_state.pending_edits.lock() {
         pendings.insert(edit_id.clone(), pending.clone());

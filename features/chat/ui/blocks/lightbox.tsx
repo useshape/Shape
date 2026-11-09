@@ -10,6 +10,7 @@ import { Icon } from "@/components/ui/icon";
 
 import { SHAPE_OVERLAY_CLASS } from "@/lib/ui/modal-overlay";
 import type { DesignPreviewItem } from "./gallery";
+import { ModelPreview } from "./model-preview";
 
 function resolveSrc(path: string): string {
     if (path.startsWith("data:") || path.startsWith("http") || path.startsWith("asset:")) {
@@ -42,7 +43,7 @@ export function MediaLightbox({
     onClose: () => void;
     src?: string;
     title?: string;
-    kind?: "image" | "html";
+    kind?: "image" | "html" | "model";
     designs?: DesignPreviewItem[];
     images?: { src: string; title?: string }[];
     initialIndex?: number;
@@ -118,6 +119,11 @@ export function MediaLightbox({
                         src={resolved}
                         className="h-[min(80vh,900px)] w-[min(92vw,1200px)] border-0 bg-white"
                         sandbox="allow-scripts"
+                    />
+                ) : kind === "model" ? (
+                    <ModelPreview
+                        src={resolved}
+                        className="h-[min(80vh,720px)] w-[min(92vw,960px)] max-w-none"
                     />
                 ) : (
                     // eslint-disable-next-line @next/next/no-img-element

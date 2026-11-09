@@ -165,6 +165,64 @@ pub(super) fn latest_user_task(ctx: &ToolCtx<'_>) -> String {
         .unwrap_or_default()
 }
 
+/// Cloud spawn skip is for unsolicited whole-request dumps. Honor an explicit
+/// user ask for a thread/subagent, including handing the whole build to one.
+pub(super) fn user_requested_thread(user: &str) -> bool {
+    let t = user.to_ascii_lowercase();
+    if t.contains("subagent") || t.contains("sub-agent") || t.contains("sub agent") {
+        return true;
+    }
+    if !has_thread_word(&t) {
+        return false;
+    }
+    const ASK: &[&str] = &[
+        "use", "using", "make", "making", "spawn", "start", "open", "create", "run",
+        "running", "background", "want", "please", "should", "via",
+    ];
+    ASK.iter().any(|w| has_word(&t, w))
+}
+
+fn has_thread_word(t: &str) -> bool {
+    let bytes = t.as_bytes();
+    let mut i = 0;
+    while i + 6 <= bytes.len() {
+        if bytes[i..].starts_with(b"thread") {
+            let before_ok = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
+            let after = i + 6;
+            let after_ok = after == bytes.len()
+                || bytes[after] == b's'
+                || !bytes[after].is_ascii_alphanumeric();
+            if before_ok && after_ok {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+fn has_word(t: &str, word: &str) -> bool {
+    let bytes = t.as_bytes();
+    let w = word.as_bytes();
+    let mut i = 0;
+    while i + w.len() <= bytes.len() {
+        if bytes[i..].starts_with(w) {
+            let before_ok = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
+            let after = i + w.len();
+            let after_ok = after == bytes.len() || !bytes[after].is_ascii_alphanumeric();
+            if before_ok && after_ok {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+pub(super) fn honor_spawn_skip(user: &str) -> bool {
+    !user_requested_thread(user)
+}
+
 /// Short UI copy for tool errors. Keep fenced file dumps in `tool_result` only —
 /// markdown fences inside `<tool_result>` leak into the chat transcript.
 fn ui_error_message(message: &str) -> String {
@@ -283,5 +341,16 @@ Call read_file for the full content before retrying.";
         assert!(out.ui_chunk.contains("Incomplete SEARCH/REPLACE"));
         assert!(out.ui_chunk.contains("<tool_result>"));
         assert!(out.ui_chunk.contains("</tool_result>"));
+    }
+
+    #[test]
+    fn user_requested_thread_honors_explicit_ask() {
+        assert!(user_requested_thread("make a thread that makes it"));
+        assert!(user_requested_thread("use a subagent to build the whole app"));
+        assert!(user_requested_thread("Please spawn a background thread for this."));
+        assert!(!user_requested_thread("build the whole app from scratch"));
+        assert!(!user_requested_thread("the main thread hangs on startup"));
+        assert!(!honor_spawn_skip("make a thread that makes it"));
+        assert!(honor_spawn_skip("build everything"));
     }
 }

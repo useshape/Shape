@@ -83,6 +83,8 @@ export const SHOWCASE_MARKERS: Record<Chunk["type"], string> = {
         '<generated_svg prompt="a small mark" credits="1" media_id="svg-1" model="mini"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><circle cx="24" cy="24" r="16" fill="#6b7280"/></svg></generated_svg>',
     generated_image: `<generated_image prompt="a gray pixel" credits="1" media_id="img-1" model="klein">${PIXEL}</generated_image>`,
     generated_audio: '<generated_audio prompt="a short tone" media_id="aud-1" model="mini"></generated_audio>',
+    generated_model:
+        '<generated_model media_id="mdl-1" name="sword.glb" format="glb" prompt="low-poly medieval sword"></generated_model>',
     browse_session:
         '<browse_session id="br-1" status="done" url="https://v2.tauri.app" title="Tauri">{"image":"","console":[]}</browse_session>',
     chart: '<chart>{"title":"Turns","points":[{"label":"Mon","value":4},{"label":"Tue","value":7},{"label":"Wed","value":5}]}</chart>',

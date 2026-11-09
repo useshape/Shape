@@ -15,15 +15,10 @@ import { parseMessageContent } from "./md/renderer";
 import type { ComposerTaskItem } from "./composer/activity";
 import { ChatHistoryStepper, useChatTurnActive } from "./shell/history-stepper";
 import { useSyncChatGenerating } from "../lib/generating-chats";
-import { SubagentChatView } from "@/features/agent/subagents/view";
 import {
-    closeSubagent,
     extractSubagentsFromText,
-    getActiveSubagent,
     getSubagents,
-    openSubagent,
     setSubagentParentConversation,
-    subscribeSubagents,
     upsertSubagent,
 } from "@/features/agent/subagents/store";
 
@@ -99,26 +94,21 @@ export default function Chat({
     const talk = isTalkWorkspace(workspaceModeId);
     const talkMark = null;
     const talkName = "Shape";
-    const activeSubagent = React.useSyncExternalStore(subscribeSubagents, getActiveSubagent, getActiveSubagent);
-
     React.useEffect(() => {
         setSubagentParentConversation(session.conversationId);
         return () => setSubagentParentConversation(null);
     }, [session.conversationId]);
 
     React.useEffect(() => {
+        const selectThread = (id: string) => {
+            void session.handleSelectChatTab(id);
+        };
         const onOpen = (e: Event) => {
             const detail = (e as CustomEvent<{ id?: string; parentId?: string }>).detail;
-            if (detail?.parentId && detail.parentId !== session.conversationId) {
-                void session.handleSelectChatTab(detail.parentId);
-            }
-            if (detail?.id) openSubagent(detail.id);
+            if (detail?.id) selectThread(detail.id);
         };
         const onOpenForParent = (e: Event) => {
             const parentId = (e as CustomEvent<{ parentId?: string }>).detail?.parentId;
-            if (parentId && parentId !== session.conversationId && parentId !== session.activeChatTabId) {
-                void session.handleSelectChatTab(parentId);
-            }
             const fromMessages = session.messages
                 .map((m) => extractSubagentsFromText(m.content || "", parentId))
                 .flat();
@@ -134,13 +124,13 @@ export default function Chat({
                     status: first.status,
                     parentId,
                 });
-                openSubagent(first.id);
+                selectThread(first.id);
                 return;
             }
             const liveFirst = parentId
                 ? getSubagents().find((c) => c.parentId === parentId)
                 : getSubagents()[0];
-            if (liveFirst) openSubagent(liveFirst.id);
+            if (liveFirst) selectThread(liveFirst.id);
         };
         window.addEventListener("shape-open-subagent", onOpen as EventListener);
         window.addEventListener("shape-open-subagents-for", onOpenForParent as EventListener);
@@ -148,7 +138,7 @@ export default function Chat({
             window.removeEventListener("shape-open-subagent", onOpen as EventListener);
             window.removeEventListener("shape-open-subagents-for", onOpenForParent as EventListener);
         };
-    }, [session.conversationId, session.handleSelectChatTab, session.messages]);
+    }, [session.handleSelectChatTab, session.messages]);
     useSyncChatGenerating(session.conversationId ?? session.activeChatTabId, session.isLoading);
 
     const taskItems = useMemo((): ComposerTaskItem[] => {
@@ -246,11 +236,12 @@ export default function Chat({
                 ?? session.messages.at(-1)?.timestamp
                 ?? null
             }
-            subagentTitle={activeSubagent?.title ?? null}
-            subagentModel={activeSubagent?.model ?? null}
+            subagentTitle={null}
+            subagentModel={null}
             extractedSubagents={extractedSubagents}
             onCloseSubagent={() => {
-                closeSubagent();
+                const parent = session.openChatTabs.find((tab) => tab.id === session.activeChatTabId)?.parentId;
+                if (parent) void session.handleSelectChatTab(parent);
             }}
         />
     );
@@ -376,13 +367,7 @@ export default function Chat({
     const insetX = embedded ? "px-2" : "px-5 md:px-6";
     const columnWidth = embedded ? "max-w-none" : "max-w-4xl";
 
-    const chatColumn = activeSubagent ? (
-        <div className="relative min-h-0 flex-1">
-            <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
-                <SubagentChatView />
-            </div>
-        </div>
-    ) : (
+    const chatColumn = (
         <>
             <div className={cn("relative min-h-0 flex-1", emptyStage && "hidden")}>
                 {slotIds.map((id) => {

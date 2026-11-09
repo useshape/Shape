@@ -33,6 +33,8 @@ pub const SKILL_EDITS: &str = include_str!("skills/edits.md");
 pub const SKILL_BROWSE: &str = include_str!("skills/browse.md");
 pub const SKILL_PLAN: &str = include_str!("skills/plan.md");
 pub const SKILL_REVIEW: &str = include_str!("skills/review.md");
+pub const SKILL_REVERSE: &str = include_str!("skills/reverse.md");
+pub const SKILL_MODELS: &str = include_str!("skills/models.md");
 
 /// Built-in procedure text. Unknown names return nothing so a model cannot
 /// load an arbitrary file through `load_skill`.
@@ -44,6 +46,8 @@ pub fn skill_body(name: &str) -> Option<&'static str> {
         "browse" => Some(SKILL_BROWSE),
         "plan" => Some(SKILL_PLAN),
         "review" => Some(SKILL_REVIEW),
+        "reverse" => Some(SKILL_REVERSE),
+        "models" => Some(SKILL_MODELS),
         _ => None,
     }
 }

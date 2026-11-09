@@ -111,7 +111,7 @@ export function ChatMessageList({
                         >
                             {showDay && stamp > 0 ? (
                                 <div className="flex justify-center py-2">
-                                    <span className="text-xs text-text-muted">
+                                    <span className="text-xs font-light text-text-muted">
                                         {dayLabel(stamp)}
                                     </span>
                                 </div>

@@ -84,6 +84,17 @@ describe("parseMessageContent", () => {
         expect(edits[0].commandStatus).toBe("applied");
         expect(edits[0].file).toBe("src/a.ts");
     });
+
+    it("parses generated_model tags by media_id without embedding bytes", () => {
+        const chunks = parseMessageContent(
+            '<generated_model media_id="m-9" name="sword.glb" format="glb" prompt="low-poly medieval sword"></generated_model>',
+        );
+        const model = chunks.find((c) => c.type === "generated_model");
+        expect(model?.mediaId).toBe("m-9");
+        expect(model?.file).toBe("sword.glb");
+        expect(model?.mediaPrompt).toContain("medieval sword");
+        expect(model?.content).toBe("");
+    });
 });
 
 describe("dedupeTerminalChunks", () => {

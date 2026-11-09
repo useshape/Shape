@@ -5,6 +5,13 @@ import Image from "next/image";
 import { useProjectState } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import { ChatChromeTabs } from "./chat-tabs";
+import { AGENT_TAB_SIDEBAR_SLOT } from "./chrome";
+import { FileTree } from "@/features/agent/workspace/tree";
+import { AccountMenu, ProfileAvatar } from "./sidebar/menu";
+import { useShapeAuth } from "@/lib/cloud/store";
+import { useGitHubAuth } from "@/lib/github/store";
+import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
+import { Icon } from "@/components/ui/icon";
 import { ChatSearch } from "@/features/chat/ui/shell/chat-search";
 import { AgentOverlayView, type AgentOverlay } from "./overlay";
 import { DevRunHost } from "@/features/terminal/dev-run-host";
@@ -40,6 +47,7 @@ function layoutMinWidth(_sidebarOpen: boolean, workspaceOpen: boolean) {
 export function AgentLayout({ children }: { children: React.ReactNode }) {
     const { project_path, active_file } = useProjectState();
     const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [filesOpen, setFilesOpen] = useState(false);
     const [workspaceOpen, setWorkspaceOpen] = useState(true);
     const [overlay, setOverlay] = useState<AgentOverlay>(null);
     const [workspaceWidth, setWorkspaceWidth] = useState(560);
@@ -71,7 +79,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const onMode = (event: Event) => {
             const id = (event as CustomEvent<{ id?: WorkspaceModeId }>).detail?.id;
-            if (id === "Code" || id === "Chat") setWorkspaceMode(id);
+            if (id === "Code") setWorkspaceMode(id);
         };
         window.addEventListener("shape-set-workspace-mode", onMode as EventListener);
         return () => window.removeEventListener("shape-set-workspace-mode", onMode as EventListener);
@@ -409,6 +417,12 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const mode = useWorkspaceMode();
     const codeWorkspace = mode === "Code";
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
+    const shapeAuth = useShapeAuth();
+    const github = useGitHubAuth();
+    const accountName =
+        (shapeAuth.name && !/^n\/?a$/i.test(shapeAuth.name.trim()) ? shapeAuth.name.trim() : null)
+        ?? (github.loggedIn && github.username ? github.username : null)
+        ?? "Account";
 
     return (
         <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-chrome text-text-primary">
@@ -439,8 +453,46 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 </div>
             ) : null}
 
-            <ChatChromeTabs />
             <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden" data-no-drag>
+                <aside className="flex w-[220px] shrink-0 flex-col bg-chrome">
+                    <div
+                        id={AGENT_TAB_SIDEBAR_SLOT}
+                        className="flex min-h-0 flex-1 flex-col overflow-hidden px-1.5 pt-1"
+                    />
+                    {filesOpen && project_path ? (
+                        <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border-subtle">
+                            <FileTree
+                                projectPath={project_path}
+                                activePath={active_file}
+                                onOpenFile={(path) => openFileTab(path)}
+                            />
+                        </div>
+                    ) : null}
+                    <div className="shrink-0 p-1.5">
+                        <AccountMenu side="top">
+                            <button
+                                type="button"
+                                aria-label={accountName}
+                                className="flex w-full items-center gap-2 rounded-full px-1.5 py-1 text-left hover:bg-panel-hover"
+                            >
+                                <ProfileAvatar
+                                    gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
+                                    shapeUserId={shapeAuth.userId}
+                                    offline={Boolean(shapeAuth.offline)}
+                                    name={accountName}
+                                    size={22}
+                                />
+                                <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                                    {accountName}
+                                </span>
+                                <Icon icon={MoreHorizontal20Regular} className="shrink-0 text-text-muted" />
+                            </button>
+                        </AccountMenu>
+                    </div>
+                </aside>
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <ChatChromeTabs filesOpen={filesOpen} onToggleFiles={() => setFilesOpen((open) => !open)} />
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
                 {chatSearch && codeWorkspace ? (
                     <>
                         <button
@@ -467,6 +519,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                     <PaneGrid />
                 )}
                 <div className="hidden">{children}</div>
+            </div>
+                </div>
             </div>
             <WindowControls
                 isMaximized={isMaximized}

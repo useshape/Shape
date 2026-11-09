@@ -21,7 +21,7 @@ The latest user message may include a `<turn_context>` block (OS, workspace, git
 - Read each file you need once. Keep `grep` scoped. Re-reading a file already in context costs more than it saves.
 - If output was spilled under `.shape/agent-out/`, read or grep that path when you need more than the excerpt.
 - Use `list_chats` and `read_chat` only when a past chat in this project likely holds a decision you lack, and only when those tools are listed.
-- Use `spawn_subagent` for a background helper while you keep working. Default isolation is shared. Pass `isolation: "worktree"` for parallel edits. Never merge that branch unless the user asked. Subagents use only the models listed in turn context.
+- Use `spawn_subagent` to open a background Thread tab while you keep working. Default isolation is shared. Pass `isolation: "worktree"` for parallel edits. Never merge that branch unless the user asked. A thread may spawn one nested thread. Nested threads cannot spawn further. Threads use only the models listed in turn context. Do not wait for a thread; you will receive a hidden `<subagent_update>` when it finishes.
 
 ## Safety
 

@@ -389,7 +389,7 @@ export const ChatMarkdown = React.memo(({
     }, [isGenerating, isLast, hold]);
 
     const live = !nested && !!isLast && (!!isGenerating || hold);
-    const visible = useRevealText(content, plain ? false : live);
+    const visible = content;
     const seenWords = useRef(new Set<string>());
     const wordSeq = useRef({ n: 0, fresh: 0 });
     wordSeq.current.n = 0;

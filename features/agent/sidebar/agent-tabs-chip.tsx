@@ -8,7 +8,6 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import {
     getSubagents,
-    openSubagent,
     subscribeSubagents,
 } from "@/features/agent/subagents/store";
 import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
@@ -66,7 +65,7 @@ export function AgentTabsChip() {
                             key={card.id}
                             type="button"
                             onClick={() => {
-                                openSubagent(card.id);
+                                window.dispatchEvent(new CustomEvent("shape-open-subagent", { detail: { id: card.id } }));
                                 setOpen(false);
                             }}
                             className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-sm font-normal text-text-secondary hover:bg-panel-hover hover:text-text-primary"

@@ -51,6 +51,7 @@ export type BrowserTab = {
     tool?: boolean;
     file?: boolean;
     working?: boolean;
+    threadStatus?: "running" | "done" | "error";
 };
 
 type DragSession = {
@@ -212,6 +213,15 @@ export function BrowserTabStrip({
                             <Slide size={10} className="text-text-muted" />
                         </span>
                     )}
+                    {tab.threadStatus && tab.threadStatus !== "running" ? (
+                        <span
+                            className={cn(
+                                "size-1.5 shrink-0 rounded-full",
+                                tab.threadStatus === "error" ? "bg-error" : "bg-success",
+                            )}
+                            aria-label={tab.threadStatus === "error" ? "Thread failed" : "Thread done"}
+                        />
+                    ) : null}
                     <TabTitle text={tab.title} shimmer={Boolean(tab.working && !tab.active)} />
                     <button
                         type="button"
@@ -299,26 +309,26 @@ export function BrowserTabStrip({
 
     return (
         <div className="flex h-full min-w-0 flex-1 items-center">
-            <div className="relative min-h-0 min-w-0 flex-1 self-stretch">
-            <div
-                ref={rowRef}
-                data-no-drag
-                onWheel={(event) => {
-                    const row = rowRef.current;
-                    if (!row || row.scrollWidth <= row.clientWidth + 8) return;
-                    if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
-                    row.scrollLeft += event.deltaY;
-                }}
-                className="tab-strip-scroll flex h-full w-max min-w-0 max-w-full shrink items-center gap-0.5"
-            >
-                {slots}
-            </div>
-            {fadeLeft ? (
-                <div className="pointer-events-none absolute inset-y-0 start-0 z-10 w-10 bg-linear-to-l from-transparent to-chrome" aria-hidden />
-            ) : null}
-            {fadeRight ? (
-                <div className="pointer-events-none absolute inset-y-0 end-0 z-10 w-10 bg-linear-to-r from-transparent to-chrome" aria-hidden />
-            ) : null}
+            <div className="relative h-full min-w-0 w-fit max-w-full shrink overflow-hidden self-stretch">
+                <div
+                    ref={rowRef}
+                    data-no-drag
+                    onWheel={(event) => {
+                        const row = rowRef.current;
+                        if (!row || row.scrollWidth <= row.clientWidth + 8) return;
+                        if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+                        row.scrollLeft += event.deltaY;
+                    }}
+                    className="tab-strip-scroll flex h-full w-max max-w-full items-center gap-0.5"
+                >
+                    {slots}
+                </div>
+                {fadeLeft ? (
+                    <div className="pointer-events-none absolute inset-y-0 start-0 z-10 w-10 bg-linear-to-l from-transparent to-chrome" aria-hidden />
+                ) : null}
+                {fadeRight ? (
+                    <div className="pointer-events-none absolute inset-y-0 end-0 z-10 w-10 bg-linear-to-r from-transparent to-chrome" aria-hidden />
+                ) : null}
             </div>
             <button
                 type="button"
@@ -329,7 +339,7 @@ export function BrowserTabStrip({
             >
                 <RiAddLine size={16} />
             </button>
-            <div className="h-full min-w-6 flex-1 shrink-0" data-tauri-drag-region />
+            <div className="h-full min-w-6 flex-1" data-tauri-drag-region />
         </div>
     );
 }

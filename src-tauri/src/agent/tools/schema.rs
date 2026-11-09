@@ -32,6 +32,7 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         visit_url(),
         inspect_computer(),
         show_images(),
+        show_map(),
         plugin_list(),
         plugin_search(),
         plugin_tools(),
@@ -77,8 +78,20 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         generate_image(),
         generate_audio(),
         edit_image(),
+        generate_3d_model(),
+        edit_3d_model(),
+        inspect_3d_model(),
+        convert_3d_model(),
         save_media(),
         send_file(),
+        re_catalog(),
+        re_identify(),
+        re_inspect(),
+        re_strings(),
+        re_disassemble(),
+        re_functions(),
+        re_callgraph(),
+        re_extract(),
         ask_user(),
         finish(),
     ]);
@@ -191,6 +204,7 @@ pub struct SteerPacks {
     pub git: bool,
     pub terminal: bool,
     pub media: bool,
+    pub reverse: bool,
     pub hint: String,
 }
 
@@ -204,6 +218,7 @@ impl SteerPacks {
             git: true,
             terminal: true,
             media: true,
+            reverse: true,
             hint: String::new(),
         }
     }
@@ -213,21 +228,34 @@ impl SteerPacks {
         Self {
             workspace: true,
             plugins: true,
-            browse: true,
+            browse: false,
             web: true,
             git: false,
             terminal: true,
-            media: true,
-            hint: "Text like a person. Split a longer answer with a line that is only ---. Never paste tool tags. No markdown. Files and shell stay in the chat folder. Do not touch the open code project. generate_image only when they asked for a picture. edit_image with the media_id when they want a change to one that already exists.".to_string(),
+            media: false,
+            reverse: false,
+            hint: "Text like a person. Split a longer answer with a line that is only ---. Never paste tool tags. No markdown. Files and shell stay in the chat folder. Do not touch the open code project. Call load_tools for media, browse, or reverse packs if you need them.".to_string(),
         }
     }
 }
 
-fn tool_fn_name(tool: &Value) -> &str {
+pub fn tool_fn_name(tool: &Value) -> &str {
     tool.get("function")
         .and_then(|f| f.get("name"))
         .and_then(|n| n.as_str())
         .unwrap_or("")
+}
+
+pub fn strip_spawn_subagent(tools: &mut Vec<Value>) {
+    tools.retain(|tool| tool_fn_name(tool) != "spawn_subagent");
+}
+
+pub fn listed_tool_names(tools: &[Value]) -> Vec<String> {
+    tools
+        .iter()
+        .map(|tool| tool_fn_name(tool).to_string())
+        .filter(|name| !name.is_empty())
+        .collect()
 }
 
 fn steer_pack_for(name: &str) -> Option<&'static str> {
@@ -238,16 +266,19 @@ fn steer_pack_for(name: &str) -> Option<&'static str> {
         | "mcp_call" => Some("workspace"),
         "plugin_search" | "plugin_run" | "plugin_connect" => Some("plugins"),
         "plugin_list" | "plugin_tools" => Some("browse"),
-        "web_search" | "visit_url" => Some("web"),
+        "web_search" | "visit_url" | "show_map" => Some("web"),
         "browse" | "screenshot_page" | "inspect_runtime" => Some("browse"),
         "git_status" | "git_fetch" | "git_log" | "git_stage" | "git_commit" | "git_diff"
         | "git_branches" | "git_create_branch" | "git_switch" | "git_sync" | "git_worktree" => {
             Some("git")
         }
         "run_terminal" | "list_terminals" | "read_terminal" | "write_to_terminal" => Some("terminal"),
-        "generate_svg" | "generate_image" | "generate_audio" | "edit_image" | "save_media" => {
-            Some("media")
-        }
+        "generate_svg" | "generate_image" | "generate_audio" | "edit_image" | "save_media"
+        | "generate_3d_model" | "edit_3d_model" | "inspect_3d_model" | "convert_3d_model"
+        | "inspect_computer" | "show_images" => Some("media"),
+        "send_file" => Some("workspace"),
+        "re_catalog" | "re_identify" | "re_inspect" | "re_strings" | "re_disassemble"
+        | "re_functions" | "re_callgraph" | "re_extract" => Some("reverse"),
         _ => None,
     }
 }
@@ -262,6 +293,7 @@ pub fn apply_steer_packs(tools: Vec<Value>, packs: &SteerPacks) -> Vec<Value> {
         && packs.git
         && packs.terminal
         && packs.media
+        && packs.reverse
     {
         return tools;
     }
@@ -275,6 +307,7 @@ pub fn apply_steer_packs(tools: Vec<Value>, packs: &SteerPacks) -> Vec<Value> {
             Some("git") => packs.git,
             Some("terminal") => packs.terminal,
             Some("media") => packs.media,
+            Some("reverse") => packs.reverse,
             _ => true,
         })
         .collect()
@@ -299,8 +332,19 @@ pub fn apply_talk_tools(tools: Vec<Value>) -> Vec<Value> {
         "edit_image",
         "generate_svg",
         "generate_audio",
+        "generate_3d_model",
+        "edit_3d_model",
+        "inspect_3d_model",
+        "convert_3d_model",
         "save_media",
         "send_file",
+        "re_catalog",
+        "re_identify",
+        "re_inspect",
+        "re_strings",
+        "re_disassemble",
+        "re_functions",
+        "re_callgraph",
         "show_images",
         "inspect_computer",
         "spawn_subagent",
@@ -355,7 +399,11 @@ const MUTATING_TOOLS: &[&str] = &[
     "generate_image",
     "generate_audio",
     "edit_image",
+    "generate_3d_model",
+    "edit_3d_model",
+    "convert_3d_model",
     "save_media",
+    "re_extract",
     "mcp_call",
 ];
 
@@ -402,14 +450,14 @@ pub fn include_adversarial_review(tools: &mut Vec<Value>) {
 fn load_tools() -> Value {
     tool(
         "load_tools",
-        "Load tool packs that are not on this turn yet. Packs: workspace (edit files), terminal, git, browse, web, media, plugins. Already-loaded packs stay loaded. Settings can refuse a pack. Call this before using a tool that was not listed.",
+        "Load tool packs that are not on this turn yet. Packs: workspace (edit files), terminal, git, browse, web, media, reverse, plugins. Already-loaded packs stay loaded. Settings can refuse a pack. Call this before using a tool that was not listed.",
         json!({
             "type": "object",
             "properties": {
                 "packs": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Pack names to add: workspace, terminal, git, browse, web, media, plugins."
+                    "description": "Pack names to add: workspace, terminal, git, browse, web, media, reverse, plugins."
                 }
             },
             "required": ["packs"],
@@ -421,11 +469,11 @@ fn load_tools() -> Value {
 fn load_skill() -> Value {
     tool(
         "load_skill",
-        "Load one short procedure: terminal, git, edits, browse, plan, or review. Use when the turn did not already include it.",
+        "Load one short procedure: terminal, git, edits, browse, plan, review, reverse, or models. Use when the turn did not already include it.",
         json!({
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "terminal, git, edits, browse, plan, or review."}
+                "name": {"type": "string", "description": "terminal, git, edits, browse, plan, review, reverse, or models."}
             },
             "required": ["name"],
             "additionalProperties": false
@@ -1009,12 +1057,12 @@ fn save_plan() -> Value {
 fn spawn_subagent() -> Value {
     tool(
         "spawn_subagent",
-        "Start a background subagent and return immediately so you can keep working. The subagent uses its own prompt and tools, then posts an update when finished — you are not blocked on this call. Default isolation is `shared` (same checkout; concurrent file edits can overwrite each other). Use `worktree` for true parallel coding (separate directory + branch). Never merge their branch yourself. Do not spawn a subagent for the whole user request.",
+        "Open a background Thread tab and return immediately so you can keep working. The thread uses its own prompt and tools, then posts a hidden <subagent_update> when finished — you are not blocked on this call. Default isolation is `shared` (same checkout; concurrent file edits can overwrite each other). Use `worktree` for true parallel coding (separate directory + branch). Never merge their branch yourself. Do not spawn a thread for the whole user request.",
         json!({
             "type": "object",
             "properties": {
                 "title": {"type": "string", "description": "Short card title (e.g. Explore auth)."},
-                "task": {"type": "string", "description": "Concrete task for the subagent. Include goals, constraints, and relevant paths."},
+                "task": {"type": "string", "description": "Concrete task for the thread. Include goals, constraints, and relevant paths."},
                 "isolation": {
                     "type": "string",
                     "enum": ["shared", "worktree"],
@@ -1022,7 +1070,7 @@ fn spawn_subagent() -> Value {
                 },
                 "model": {
                     "type": "string",
-                    "description": "Optional. Must be one of the user's allowed subagent models (see turn context). Disallowed ids, including the parent chat model, are ignored and the user's default is used."
+                    "description": "Optional. Must be one of the user's allowed thread models (see turn context). Disallowed ids, including the parent chat model, are ignored and the user's default is used."
                 }
             },
             "required": ["task"],
@@ -1346,15 +1394,196 @@ fn send_file() -> Value {
     )
 }
 
-fn save_media() -> Value {
+fn generate_3d_model() -> Value {
     tool(
-        "save_media",
-        "Write generated or attached media into the project. Prefer `media_id` from generate_*/edit_image (already on disk). Also accepts attachment name, data: URL, or https URL. ONLY when the user asked to save, move, or use the media as a file. Never ask them to download first.",
+        "generate_3d_model",
+        "Build a 3D model locally (GLB) from a scene spec. Preview appears in chat as an interactive model with a download button. Do not write the project unless they asked — then save_media. Prefer a spec with named parts (box, sphere, cylinder, cone, plane), size, position, rotation degrees, and PBR color. If they asked for a low-poly object and you skip spec, a simple template is used. backend blender only if inspect_computer lookup found blender.",
         json!({
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Project-relative destination, e.g. public/hero.png or src/assets/logo.svg."},
-                "media_id": {"type": "string", "description": "Id returned by generate_svg/generate_image/generate_audio/edit_image."},
+                "prompt": {"type": "string", "description": "What to build. Used for the chat caption and as a template hint."},
+                "spec": {"type": "object", "description": "Scene: {name, parts:[{id, mesh, size[3], position[3], rotation[3], material:{color, metalness, roughness}}]}", "additionalProperties": true},
+                "backend": {"type": "string", "description": "native (default) or blender."}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn edit_3d_model() -> Value {
+    tool(
+        "edit_3d_model",
+        "Edit a prior 3D model by media_id (or project path). Pass ops (scale/move/rotate/recolor on a part id) or a replacement spec. Returns a new media_id with parent_id set. Preview updates in chat. The previous artifact stays.",
+        json!({
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "What changed, for the caption."},
+                "media_id": {"type": "string", "description": "Stashed model id."},
+                "path": {"type": "string", "description": "Project-relative GLB if it is already a file."},
+                "ops": {"type": "array", "items": {"type": "object", "additionalProperties": true}, "description": "[{op, part, by:[x,y,z]|color}] op is scale, move, rotate, or recolor."},
+                "spec": {"type": "object", "additionalProperties": true}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn inspect_3d_model() -> Value {
+    tool(
+        "inspect_3d_model",
+        "Report meshes, materials, part ids, and the stored scene spec for a GLB (media_id or path). Read-only.",
+        json!({
+            "type": "object",
+            "properties": {
+                "media_id": {"type": "string"},
+                "path": {"type": "string"}
+            },
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn convert_3d_model() -> Value {
+    tool(
+        "convert_3d_model",
+        "Convert a stashed or project 3D model. format: glb, gltf, obj, stl. FBX needs Blender. Returns a new media_id. Does not delete the original.",
+        json!({
+            "type": "object",
+            "properties": {
+                "media_id": {"type": "string"},
+                "path": {"type": "string"},
+                "format": {"type": "string", "description": "glb, gltf, obj, or stl."}
+            },
+            "required": ["format"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn re_catalog() -> Value {
+    tool(
+        "re_catalog",
+        "List reverse-engineering tools that are actually available (built-in static analyzers plus optional PATH engines). Call this before a binary task. Native tools never execute the file. For Ghidra-quality decompile, mcp_search for REA if the user installed it.",
+        json!({ "type": "object", "properties": {}, "additionalProperties": false }),
+    )
+}
+
+fn re_path_tool(name: &str, description: &str, extra: Value) -> Value {
+    let mut props = extra;
+    if let Some(obj) = props.get_mut("properties") {
+        if let Some(map) = obj.as_object_mut() {
+            map.insert("path".into(), json!({"type": "string", "description": "Project-relative path to the file."}));
+        }
+    }
+    tool(name, description, props)
+}
+
+fn re_identify() -> Value {
+    re_path_tool(
+        "re_identify",
+        "Identify a file: format, SHA-256, size, entropy, magic. Static. Does not run the file.",
+        json!({ "type": "object", "properties": {}, "required": ["path"], "additionalProperties": false }),
+    )
+}
+
+fn re_inspect() -> Value {
+    re_path_tool(
+        "re_inspect",
+        "Inspect PE/ELF/Mach-O/WASM structure: sections, imports, exports, CLR/cert markers. Static. Does not decompile.",
+        json!({ "type": "object", "properties": {}, "required": ["path"], "additionalProperties": false }),
+    )
+}
+
+fn re_strings() -> Value {
+    re_path_tool(
+        "re_strings",
+        "Extract printable ASCII strings. Static.",
+        json!({
+            "type": "object",
+            "properties": {
+                "min_length": {"type": "integer", "minimum": 4, "maximum": 32}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn re_disassemble() -> Value {
+    re_path_tool(
+        "re_disassemble",
+        "Disassemble x86/x64 at entry or rva. Returns a short gas listing. Not a decompiler. Does not run the file.",
+        json!({
+            "type": "object",
+            "properties": {
+                "rva": {"type": "integer", "description": "Relative virtual address. Default: entry."},
+                "length": {"type": "integer", "description": "Byte window, default 256, max 4096."}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn re_functions() -> Value {
+    re_path_tool(
+        "re_functions",
+        "List exported / dynamic symbols. Static.",
+        json!({ "type": "object", "properties": {}, "required": ["path"], "additionalProperties": false }),
+    )
+}
+
+fn re_callgraph() -> Value {
+    re_path_tool(
+        "re_callgraph",
+        "Static near-call graph from a sample of functions. Incomplete by design.",
+        json!({ "type": "object", "properties": {}, "required": ["path"], "additionalProperties": false }),
+    )
+}
+
+fn re_extract() -> Value {
+    re_path_tool(
+        "re_extract",
+        "Copy a byte range or an uncompressed zip member into dest. Writes a file. Does not execute anything.",
+        json!({
+            "type": "object",
+            "properties": {
+                "dest": {"type": "string", "description": "Project-relative destination."},
+                "offset": {"type": "integer"},
+                "length": {"type": "integer"},
+                "member": {"type": "string", "description": "Stored zip member name."}
+            },
+            "required": ["path", "dest"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn show_map() -> Value {
+    tool(
+        "show_map",
+        "Show places on a map card in chat. Use when the user asks where something is or wants a map of named places.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Place or region to locate."},
+                "places": {"type": "array", "items": {"type": "string"}, "description": "Optional extra place names (max 6)."}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn save_media() -> Value {
+    tool(
+        "save_media",
+        "Write generated or attached media into the project. Prefer `media_id` from generate_*/edit_image/generate_3d_model (already on disk). Also accepts attachment name, data: URL, or https URL. ONLY when the user asked to save, move, or use the media as a file. Never ask them to download first. Does not delete the chat artifact.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative destination, e.g. public/hero.png, src/assets/sword.glb."},
+                "media_id": {"type": "string", "description": "Id returned by generate_svg/generate_image/generate_audio/edit_image/generate_3d_model/edit_3d_model."},
                 "attachment": {"type": "string", "description": "Filename of a user-attached image in this chat."},
                 "url": {"type": "string", "description": "https or data: URL from generation."}
             },
@@ -1692,6 +1921,7 @@ mod tests {
             git: false,
             terminal: false,
             media: false,
+            reverse: false,
             hint: String::new(),
         };
         let names = tool_names(&apply_steer_packs(tools, &packs));
@@ -1710,6 +1940,8 @@ mod tests {
         assert!(!names.contains(&"visit_url".to_string()));
         assert!(!names.contains(&"git_status".to_string()));
         assert!(!names.contains(&"generate_image".to_string()));
+        assert!(!names.contains(&"inspect_computer".to_string()));
+        assert!(!names.contains(&"re_disassemble".to_string()));
     }
 
     #[test]
@@ -1752,6 +1984,7 @@ mod tests {
             git: decision.packs.git,
             terminal: decision.packs.terminal,
             media: decision.packs.media,
+            reverse: decision.packs.reverse,
             hint: String::new(),
         };
         let full = serde_json::to_string(&stable_tools(ModelFamily::OpenAi)).unwrap();
@@ -1797,14 +2030,11 @@ mod tests {
     }
 
     #[test]
-    fn talk_tools_keep_media_and_web() {
+    fn talk_tools_keep_workspace_web_not_media() {
         let names = tool_names(&apply_talk_tools(apply_steer_packs(
             stable_tools(ModelFamily::OpenAi),
             &SteerPacks::talk(),
         )));
-        assert!(names.contains(&"generate_image".to_string()));
-        assert!(names.contains(&"edit_image".to_string()));
-        assert!(names.contains(&"generate_svg".to_string()));
         assert!(names.contains(&"web_search".to_string()));
         assert!(names.contains(&"visit_url".to_string()));
         assert!(names.contains(&"ask_user".to_string()));
@@ -1813,9 +2043,9 @@ mod tests {
         assert!(names.contains(&"run_terminal".to_string()));
         assert!(names.contains(&"apply_patch".to_string()));
         assert!(names.contains(&"create_file".to_string()));
-        assert!(names.contains(&"inspect_computer".to_string()));
-        assert!(names.contains(&"generate_audio".to_string()));
-        assert!(names.contains(&"save_media".to_string()));
+        assert!(!names.contains(&"generate_image".to_string()));
+        assert!(!names.contains(&"inspect_computer".to_string()));
+        assert!(!names.contains(&"re_disassemble".to_string()));
         assert!(!names.contains(&"git_status".to_string()));
         assert!(!names.contains(&"git_commit".to_string()));
     }

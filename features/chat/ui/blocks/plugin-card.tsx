@@ -225,7 +225,7 @@ export function PluginActivityCard({
     const meta = summary.facts.slice(0, 3);
 
     return (
-        <div className={cn("my-1 overflow-hidden squircle-[20px] bg-surface-3", failed && "opacity-80")}>
+        <div className={cn("my-1 overflow-hidden squircle-2xl border border-border", failed && "opacity-80")}>
             <div className="flex items-center gap-3 px-3 py-2.5">
                 <span className="relative shrink-0">
                     <PluginLogo toolkit={toolkit} name={toolkitName} slug={slug} size={28} />

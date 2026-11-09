@@ -10,7 +10,10 @@ static PENDING: LazyLock<Mutex<HashMap<String, Vec<String>>>> =
 static WAKING: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 
 fn is_parent_chat(id: &str) -> bool {
-    !id.is_empty() && !id.starts_with("mw-worker-") && !id.starts_with("sub-run-")
+    !id.is_empty()
+        && !id.starts_with("mw-worker-")
+        && !id.starts_with("sub-run-")
+        && !id.starts_with("thread-")
 }
 
 pub fn set_parent_turn_active(conversation_id: Option<&str>, active: bool) {
@@ -51,7 +54,20 @@ pub fn take_pending(conversation_id: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Queue an update and, if the parent is idle, emit `parent_resume` so the UI starts the next boss turn.
+fn peek_pending(conversation_id: &str) -> Vec<String> {
+    PENDING
+        .lock()
+        .ok()
+        .and_then(|g| g.get(conversation_id).cloned())
+        .unwrap_or_default()
+}
+
+pub fn has_pending(conversation_id: &str) -> bool {
+    !peek_pending(conversation_id).is_empty()
+}
+
+/// Queue an update and, if the parent is idle, nudge the UI. The queue stays
+/// until a parent turn claims it.
 pub fn notify_parent_finished(app: &AppHandle, conversation_id: Option<&str>, text: String) {
     let Some(id) = conversation_id.filter(|s| is_parent_chat(s)) else {
         return;
@@ -70,12 +86,7 @@ pub fn schedule_wake_if_idle(app: &AppHandle, conversation_id: Option<&str>) {
     if parent_turn_active(id) {
         return;
     }
-    let pending_empty = PENDING
-        .lock()
-        .ok()
-        .map(|g| g.get(id).map(|v| v.is_empty()).unwrap_or(true))
-        .unwrap_or(true);
-    if pending_empty {
+    if !has_pending(id) {
         return;
     }
     schedule_wake(app.clone(), id.to_string());
@@ -98,7 +109,7 @@ fn schedule_wake(app: AppHandle, id: String) {
             }
             return;
         }
-        let updates = take_pending(&id);
+        let updates = peek_pending(&id);
         if let Ok(mut waking) = WAKING.lock() {
             waking.remove(&id);
         }
@@ -149,8 +160,10 @@ mod tests {
         reset();
         enqueue_parent_message("mw-worker-1", "x".into());
         enqueue_parent_message("sub-run-9", "y".into());
+        enqueue_parent_message("thread-abc", "z".into());
         assert!(take_pending("mw-worker-1").is_empty());
         assert!(take_pending("sub-run-9").is_empty());
+        assert!(take_pending("thread-abc").is_empty());
     }
 
     #[test]
@@ -162,5 +175,16 @@ mod tests {
         let got = take_pending("boss");
         assert_eq!(got, vec!["one".to_string(), "two".to_string()]);
         assert!(take_pending("boss").is_empty());
+    }
+
+    #[test]
+    fn wake_does_not_claim_the_queue() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        reset();
+        enqueue_parent_message("boss", "one".into());
+        assert_eq!(peek_pending("boss"), vec!["one".to_string()]);
+        assert!(has_pending("boss"));
+        assert_eq!(take_pending("boss"), vec!["one".to_string()]);
+        assert!(!has_pending("boss"));
     }
 }

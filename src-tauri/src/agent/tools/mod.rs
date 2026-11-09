@@ -5,6 +5,8 @@ pub mod files;
 pub mod page_shot;
 pub mod plugins;
 pub mod generate;
+pub mod model3d;
+pub mod reverse;
 pub mod runtime_inspect;
 pub mod schema;
 pub mod search;

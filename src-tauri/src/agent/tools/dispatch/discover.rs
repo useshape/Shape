@@ -564,6 +564,7 @@ pub(super) async fn tool_plugin_run(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         reason: format!("Plugin action on {toolkit}"),
         action: Some("plugin_run".to_string()),
         payload: None,
+        conversation_id: ctx.conversation_id.clone(),
     };
     if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
         pendings.insert(cmd_id.clone(), pending.clone());

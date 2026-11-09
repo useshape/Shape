@@ -65,7 +65,6 @@ export function BrowseWallpaper() {
                     )}
                 />
             ))}
-            <div className="absolute inset-0 bg-editor/45" />
         </div>
     );
 }

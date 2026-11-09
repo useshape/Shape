@@ -19,7 +19,6 @@ import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import type { DesignPreviewItem } from '../blocks/gallery';
 import { GeneratedMediaCard } from '../blocks/generated-media';
 import { PhotoStack } from '../blocks/photo-stack';
-import { setSelectedTalkMediaId } from '@/lib/chat/talk-media';
 import { SentFileCard } from '../blocks/sent-file';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { PersonaReviewPanel } from '../blocks/persona-review';
@@ -124,7 +123,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'plugin_connect' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'plugin_connect' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'generated_model' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
     content?: string;
     file?: string;
     query?: string;
@@ -464,7 +463,7 @@ function unescapeXml(s: string): string {
     };
 
     const parseGeneratedMediaBlock = (
-        type: "generated_svg" | "generated_image" | "generated_audio",
+        type: "generated_svg" | "generated_image" | "generated_audio" | "generated_model",
         tagFull: string,
         content: string,
         isGenerating: boolean,
@@ -473,10 +472,11 @@ function unescapeXml(s: string): string {
         return {
             type,
             content: content.trim(),
+            file: decodeXml(get("name")) || undefined,
             mediaPrompt: get("prompt") || undefined,
             mediaCredits: get("credits") || undefined,
             mediaId: get("media_id") || undefined,
-            mediaModel: get("model") || undefined,
+            mediaModel: get("model") || get("format") || undefined,
             commandId: get("ordinal") || undefined,
             commandStatus: get("failed") === "1" ? "failed" : undefined,
             query: get("prompt") || undefined,
@@ -554,6 +554,7 @@ function unescapeXml(s: string): string {
             { type: 'generated_svg', start: '<recraft_svg', end: '</recraft_svg>' },
             { type: 'generated_image', start: '<generated_image', end: '</generated_image>' },
             { type: 'generated_audio', start: '<generated_audio', end: '</generated_audio>' },
+            { type: 'generated_model', start: '<generated_model', end: '</generated_model>' },
             { type: 'plugin_call', start: '<plugin_call', end: '</plugin_call>' },
             { type: 'plugin_connect', start: '<plugin_connect', end: '</plugin_connect>' },
             { type: 'browse_session', start: '<browse_session', end: '</browse_session>' },
@@ -614,7 +615,11 @@ function unescapeXml(s: string): string {
         }
 
         if (!firstMatch) {
-            const tail = stripOrphanThinkTags(text.slice(currentIndex));
+            let tail = stripOrphanThinkTags(text.slice(currentIndex));
+            const dangling = tail.lastIndexOf("<");
+            if (dangling >= 0 && !tail.slice(dangling).includes(">")) {
+                tail = tail.slice(0, dangling);
+            }
             if (tail) chunks.push({ type: 'text', content: tail });
             break;
         }
@@ -707,8 +712,8 @@ function unescapeXml(s: string): string {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_connect') {
                 chunks.push(parsePluginConnectBlock(tagFull));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio' || firstMatch.type === 'generated_model') {
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio" | "generated_model", tagFull, content, false));
             } else if (firstMatch.type === 'sent_file') {
                 chunks.push(parseSentFileBlock(tagFull, content));
             } else {
@@ -805,9 +810,9 @@ function unescapeXml(s: string): string {
                 chunks.push(parsePluginCallBlock(tagFull, content, true));
             } else if (firstMatch.type === 'plugin_connect') {
                 chunks.push(parsePluginConnectBlock(text.slice(firstMatch.index, contentStartIndex)));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio' || firstMatch.type === 'generated_model') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, true));
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio" | "generated_model", tagFull, content, true));
             } else if (firstMatch.type === 'sent_file') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseSentFileBlock(tagFull, content));
@@ -904,9 +909,9 @@ function unescapeXml(s: string): string {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_connect') {
                 chunks.push(parsePluginConnectBlock(text.slice(firstMatch.index, contentStartIndex)));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio' || firstMatch.type === 'generated_model') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio" | "generated_model", tagFull, content, false));
             } else if (firstMatch.type === 'sent_file') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseSentFileBlock(tagFull, content));
@@ -1090,7 +1095,7 @@ export function MessageRenderer({
     activityLabel,
     isFileEditResolved,
     durationMs,
-    skipSubagentSync,
+    skipSubagentSync = true,
     surface = "code",
     talkName = "Shape",
 }: {
@@ -1112,7 +1117,7 @@ export function MessageRenderer({
     useEffect(() => {
         if (skipSubagentSync) return;
         syncSubagentsFromChunks(chunks, Boolean(isGenerating));
-    }, [chunks, isGenerating, skipSubagentSync]);
+    }, [chunks, isGenerating, skipSubagentSync]); // terminal cards refuse a later running tag inside the store
 
     const contentChunks = useMemo(() => {
         const merged = mergeAdjacentTextChunks(chunks);
@@ -1374,58 +1379,36 @@ export function MessageRenderer({
                 if (next?.kind !== "chunk" || next.chunk.type !== "generated_image") break;
                 group.push(next.chunk);
             }
-            const photos = group
-                .filter((item) => item.content?.trim() && item.commandStatus !== "failed")
-                .map((item) => ({
-                    src: item.content!.trim(),
-                    alt: item.mediaPrompt || item.query,
-                    mediaId: item.mediaId,
-                    model: item.mediaModel,
-                }));
-            if (photos.length === group.length && photos.length > 0) {
-                return (
-                    <PhotoStack
-                        key={`photos-${index}`}
-                        photos={photos}
-                        align="start"
-                        onOpen={(photo) => {
-                            if (surface === "talk" && photo.mediaId) setSelectedTalkMediaId(photo.mediaId);
-                        }}
-                    />
-                );
-            }
+            const ready = group.filter((item) => item.content?.trim() || item.mediaId || item.commandStatus === "failed");
+            if (ready.length === 0) return null;
             return (
-                <div key={`photos-${index}`} className="flex flex-col gap-2">
-                    {group.map((item, offset) => (
+                <div key={`photos-${index}`} className="flex flex-col">
+                    {ready.map((item, offset) => (
                         <GeneratedMediaCard
                             key={`media-${index + offset}`}
                             kind="image"
                             src={item.content}
-                            prompt={item.mediaPrompt || item.query}
-                            credits={item.mediaCredits}
-                            loading={!!item.isGenerating && !item.content?.trim()}
                             mediaId={item.mediaId}
-                            model={item.mediaModel}
+                            name={item.file}
+                            prompt={item.mediaPrompt || item.query}
                             failed={item.commandStatus === "failed"}
-                            selectable={surface === "talk"}
                         />
                     ))}
                 </div>
             );
         }
-        if (chunk.type === 'generated_svg' || chunk.type === 'generated_audio') {
+        if (chunk.type === 'generated_svg' || chunk.type === 'generated_audio' || chunk.type === 'generated_model') {
+            if (!chunk.content?.trim() && !chunk.mediaId && chunk.commandStatus !== "failed") return null;
+            const kind = chunk.type === "generated_svg" ? "svg" : chunk.type === "generated_audio" ? "audio" : "model";
             return (
                 <GeneratedMediaCard
                     key={`media-${index}`}
-                    kind={chunk.type === "generated_svg" ? "svg" : "audio"}
+                    kind={kind}
                     src={chunk.content}
-                    prompt={chunk.mediaPrompt || chunk.query}
-                    credits={chunk.mediaCredits}
-                    loading={!!chunk.isGenerating && !chunk.content?.trim()}
                     mediaId={chunk.mediaId}
-                    model={chunk.mediaModel}
+                    name={chunk.file}
+                    prompt={chunk.mediaPrompt || chunk.query}
                     failed={chunk.commandStatus === "failed"}
-                    selectable={false}
                 />
             );
         }

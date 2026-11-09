@@ -189,7 +189,7 @@ export function dispatchShortcutAction(label: string, key: string): boolean {
             window.dispatchEvent(new CustomEvent("shape-set-workspace-mode", { detail: { id: "Code" } }));
             return true;
         case "Chat Mode":
-            window.dispatchEvent(new CustomEvent("shape-set-workspace-mode", { detail: { id: "Chat" } }));
+            window.dispatchEvent(new CustomEvent("shape-set-workspace-mode", { detail: { id: "Code" } }));
             return true;
         case "Previous Conversation":
             window.dispatchEvent(new CustomEvent("shape-chat-cycle", { detail: { dir: -1 } }));

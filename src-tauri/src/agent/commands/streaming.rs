@@ -23,24 +23,27 @@ pub fn completions_url() -> String {
 #[derive(Debug, Clone)]
 pub enum LlmProvider {
     Shape,
+    OpenRouter,
 }
 
 impl LlmProvider {
     pub fn api_key<'a>(&'a self, shape_token: &'a str) -> &'a str {
         match self {
-            Self::Shape => shape_token,
+            Self::Shape | Self::OpenRouter => shape_token,
         }
     }
 
     pub fn completions_url(&self) -> String {
         match self {
             Self::Shape => completions_url(),
+            Self::OpenRouter => "https://openrouter.ai/api/v1/chat/completions".to_string(),
         }
     }
 
     pub fn label(&self) -> &'static str {
         match self {
             Self::Shape => "Shape",
+            Self::OpenRouter => "OpenRouter",
         }
     }
 }
@@ -63,6 +66,12 @@ pub fn rewrite_model_for_provider(model: &str, provider: &LlmProvider) -> Result
         LlmProvider::Shape => {
             if crate::agent::model_router::is_auto_selection(model) {
                 return Ok(crate::agent::model_router::proxy_model_id(model));
+            }
+            Ok(m)
+        }
+        LlmProvider::OpenRouter => {
+            if crate::agent::model_router::is_auto_selection(model) {
+                return Ok(crate::agent::model_router::MODEL_FAST.to_string());
             }
             Ok(m)
         }
@@ -154,33 +163,23 @@ impl ProxyContext {
 }
 
 pub(crate) fn emit_chat_status(app_handle: &tauri::AppHandle, payload: serde_json::Value) {
-    let mut payload = payload;
-    if payload.get("conversationId").is_none() {
-        if let Some(agent_state) = app_handle.try_state::<crate::agent::models::AgentState>() {
-            if let Ok(guard) = agent_state.in_flight.lock() {
-                if guard.len() == 1 {
-                    if let Some(id) = guard.keys().next() {
-                        if let Some(obj) = payload.as_object_mut() {
-                            obj.insert("conversationId".to_string(), json!(id));
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let conv_id = payload
+        .get("conversationId")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     if let Some(label) = payload
         .get("label")
         .and_then(|v| v.as_str())
         .filter(|s| !s.trim().is_empty())
     {
         if let Some(agent_state) = app_handle.try_state::<crate::agent::models::AgentState>() {
-            agent_state.set_in_flight_activity_label(Some(label));
+            agent_state.set_in_flight_activity_label_for(conv_id.as_deref(), Some(label));
         }
     } else if payload.get("phase").and_then(|v| v.as_str()) == Some("model")
         && payload.get("label").is_none()
     {
         if let Some(agent_state) = app_handle.try_state::<crate::agent::models::AgentState>() {
-            agent_state.set_in_flight_activity_label(None);
+            agent_state.set_in_flight_activity_label_for(conv_id.as_deref(), None);
         }
     }
     let _ = app_handle.emit("chat_status", payload);
@@ -191,7 +190,10 @@ pub(crate) fn emit_stream_token(
     proxy_ctx: &ProxyContext,
     chunk: impl Into<String>,
 ) {
-    let chunk = chunk.into();
+    let chunk = crate::agent::tools::browse::strip_data_urls(&chunk.into());
+    if chunk.is_empty() {
+        return;
+    }
     if let Some(agent_state) = app_handle.try_state::<crate::agent::models::AgentState>() {
         agent_state.append_in_flight(
             &chunk,
@@ -242,6 +244,12 @@ pub(crate) fn shape_proxy_request(
         .post(ctx.provider.completions_url())
         .header("Authorization", format!("Bearer {}", bearer))
         .header("Content-Type", "application/json");
+
+    if matches!(ctx.provider, LlmProvider::OpenRouter) {
+        builder = builder
+            .header("HTTP-Referer", "https://shape.ai")
+            .header("X-Title", "Shape");
+    }
 
     if matches!(ctx.provider, LlmProvider::Shape) {
         builder = builder
@@ -504,7 +512,7 @@ pub async fn stream_chat(
     logging::debug("stream", "SSE stream connected");
     emit_chat_status(
         app_handle,
-        serde_json::json!({ "phase": "model", "label": "Generating" }),
+        serde_json::json!({ "phase": "model", "label": "Generating", "conversationId": proxy_ctx.conversation_id }),
     );
 
     let mut stream = resp.bytes_stream();
@@ -800,6 +808,7 @@ pub async fn stream_chat(
                                 "phase": "tool",
                                 "tool": name,
                                 "label": label,
+                                "conversationId": proxy_ctx.conversation_id,
                             }),
                         );
                     }
@@ -926,6 +935,7 @@ pub async fn stream_chat(
             serde_json::json!({
                 "phase": "model",
                 "label": "Hit output limit — retrying",
+                "conversationId": proxy_ctx.conversation_id,
             }),
         );
     }
@@ -1336,6 +1346,15 @@ mod tests {
         assert_eq!(
             rewrite_model_for_provider("openrouter/auto", &shape).unwrap(),
             "auto"
+        );
+    }
+
+    #[test]
+    fn openrouter_auto_uses_the_fast_model() {
+        let or = LlmProvider::OpenRouter;
+        assert_eq!(
+            rewrite_model_for_provider("auto", &or).unwrap(),
+            crate::agent::model_router::MODEL_FAST
         );
     }
 }

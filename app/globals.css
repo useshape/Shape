@@ -1526,6 +1526,43 @@ body,
   animation: git-generate-shimmer 3.4s linear infinite;
 }
 
+.tab-title-out {
+  animation: tab-title-out 420ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+.tab-title-in {
+  animation: tab-title-in 420ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+@keyframes tab-title-out {
+  from {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+  to {
+    clip-path: inset(0 0 0 100%);
+    opacity: 0;
+  }
+}
+
+@keyframes tab-title-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.4;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-title-out,
+  .tab-title-in {
+    animation: none;
+  }
+}
+
 @keyframes status-wipe-in {
   from {
     clip-path: inset(0 100% 0 0);

@@ -550,20 +550,13 @@ export function ChatInput({
         const max = 220;
         textarea.style.paddingTop = "0px";
         textarea.style.paddingBottom = "0px";
-        textarea.style.lineHeight = "1";
+        textarea.style.lineHeight = "24px";
         textarea.style.height = "auto";
         const content = textarea.scrollHeight;
         const tall = inputValue.includes("\n") || content > 28;
-        if (!tall) {
-            textarea.style.height = "";
-            textarea.style.lineHeight = "1";
-            textarea.style.overflowY = "hidden";
-        } else {
-            const next = Math.min(Math.max(content, 24), max);
-            textarea.style.lineHeight = "24px";
-            textarea.style.height = `${next}px`;
-            textarea.style.overflowY = content > max ? "auto" : "hidden";
-        }
+        const next = Math.min(Math.max(content, 24), max);
+        textarea.style.height = `${next}px`;
+        textarea.style.overflowY = content > max ? "auto" : "hidden";
         textarea.style.overflowX = "hidden";
         setComposerTall(tall);
         revealComposerCaret(textarea);
@@ -876,7 +869,7 @@ export function ChatInput({
                     className={cn(
                         "relative flex w-full flex-col transition-colors p-1.5",
                         "bg-surface-4",
-                        talkSurface && !composerTall && uploadedFiles.length === 0 ? "rounded-full" : "squircle-3xl",
+                        !composerTall && uploadedFiles.length === 0 ? "rounded-full" : "rounded-[22px]",
                         dragOver && "bg-surface-3/80",
                         (needsSignIn || folderLocked) && "cursor-default",
                         folderLocked && "opacity-70",
@@ -1089,7 +1082,7 @@ export function ChatInput({
                                 </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <div className={cn("relative min-w-0 flex-1", composerTall ? "min-h-6" : "flex h-9 items-center")}>
+                        <div className="relative min-w-0 flex-1 py-1.5">
                         {folderLocked && !inputValue ? (
                             <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-medium leading-5 text-text-muted">
                                 Open a folder to start coding.
@@ -1110,10 +1103,7 @@ export function ChatInput({
                         <div
                             ref={mentionOverlayRef}
                             aria-hidden
-                            className={cn(
-                                "pointer-events-none absolute inset-0 z-0 overflow-hidden pl-3 text-sm font-regular text-text-primary",
-                                composerTall ? "whitespace-pre-wrap break-words py-0 leading-6" : "flex items-center whitespace-pre leading-5",
-                            )}
+                            className="pointer-events-none absolute inset-0 z-0 overflow-hidden pl-3 text-sm font-regular leading-6 text-text-primary whitespace-pre-wrap break-words"
                         >
                             {(() => {
                                 const mentionRs = mentionRanges(inputValue);
@@ -1209,10 +1199,7 @@ export function ChatInput({
                                             : COMPOSER_HINTS[0]
                                     }
                                     rows={1}
-                                    className={cn(
-                                        "relative z-[1] box-border block w-full resize-none overflow-x-hidden border-0 bg-transparent p-0 pl-3 text-sm font-medium text-transparent outline-none selection:bg-accent/30 whitespace-pre-wrap break-words",
-                                        composerTall ? "leading-6" : "leading-none",
-                                    )}
+                                    className="relative z-[1] box-border block w-full resize-none overflow-x-hidden border-0 bg-transparent p-0 pl-3 text-sm font-medium leading-6 text-transparent outline-none selection:bg-accent/30 whitespace-pre-wrap break-words"
                                     style={{ caretColor: "var(--text-primary)" }}
                                 />
                             </ContextMenuTrigger>

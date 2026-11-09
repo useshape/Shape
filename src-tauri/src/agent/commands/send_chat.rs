@@ -74,6 +74,7 @@ pub async fn send_chat_message(
     pty_state: tauri::State<'_, PtyState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, AppError> {
+    tokio::task::yield_now().await;
     let review_adversarial_on = review_adversarial_enabled.unwrap_or(false);
     state.set_review_adversarial_enabled(review_adversarial_on);
     let workspace = workspace_mode
@@ -89,10 +90,19 @@ pub async fn send_chat_message(
             .filter(|m| !m.trim().is_empty())
             .unwrap_or_else(|| MODEL_DEFAULT.to_string())
     };
-    let llm_provider = streaming::LlmProvider::Shape;
-    let auth_token = access_token.filter(|t| !t.trim().is_empty()).ok_or_else(|| {
-        AppError::Env("Sign in to Shape to use AI chat.".to_string())
-    })?;
+    let (auth_token, llm_provider) = match access_token.filter(|t| !t.trim().is_empty()) {
+        Some(token) => (token, streaming::LlmProvider::Shape),
+        None => match std::env::var("OPENROUTER_API_KEY") {
+            Ok(key) if !key.trim().is_empty() => {
+                (key.trim().to_string(), streaming::LlmProvider::OpenRouter)
+            }
+            _ => {
+                return Err(AppError::Env(
+                    "Sign in to Shape to use AI chat.".to_string(),
+                ))
+            }
+        },
+    };
     let client = Client::new();
     let current_proj_path = app_state.0.lock()?.project_path.clone();
     let store_path = Some(history::conversation_store(
@@ -232,7 +242,8 @@ pub async fn send_chat_message(
             stats: None,
             model: Some(model_to_use.clone()),
             feedback: None,
-            hidden: false,
+            hidden: message.contains("<subagent_update>")
+                || message.contains("<scheduled_followup"),
         });
     }
 
@@ -260,15 +271,16 @@ pub async fn send_chat_message(
     let _ = models;
 
     crate::agent::subagents::set_policy(&state, subagent_models, subagent_default_model);
+    if message.contains("<subagent_update>") {
+        let _ = crate::agent::parent_resume::take_pending(&owned_conversation_id);
+    }
 
     let turn_id = uuid::Uuid::new_v4().to_string();
     let conversation_id = Some(owned_conversation_id.clone());
     state.reset_turn_meter(&turn_id);
     // Stale approvals from an earlier turn must never resolve this turn's items.
     // Leave them alone when another chat is still generating.
-    if !state.any_in_flight() {
-        state.clear_pending_approvals();
-    }
+    state.clear_pending_approvals_for(Some(&owned_conversation_id));
     let turn_policy = TurnPolicy {
         auto_run_mode: AutoRunMode::from_setting(auto_run_mode.as_deref()),
         require_edit_approval: require_edit_approval.unwrap_or(false),
@@ -462,6 +474,7 @@ pub async fn send_chat_message(
             git: packs.git,
             terminal: packs.terminal,
             media: packs.media,
+            reverse: packs.reverse,
             hint: String::new(),
         };
         let mut notes = String::new();
@@ -585,7 +598,7 @@ pub async fn send_chat_message(
     if super::caption::should_caption(&model_to_use, has_images) {
         streaming::emit_chat_status(
             &app_handle,
-            json!({ "phase": "tool", "label": "Looking at image…" }),
+            json!({ "phase": "tool", "label": "Looking at image…", "conversationId": &owned_conversation_id }),
         );
         let _ = super::caption::caption_history_images(
             &mut api_history,
@@ -771,8 +784,9 @@ pub async fn send_chat_message(
         }
     };
 
-    let mut final_full_response =
-        crate::agent::tools::browse::finish_browse_markup(turn_outcome.response_text).await;
+    let mut final_full_response = crate::agent::tools::browse::scrub_transcript_screenshots(
+        &crate::agent::tools::browse::finish_browse_markup(turn_outcome.response_text).await,
+    );
     if final_full_response.contains("<browse_session") {
         let _ = app_handle.emit(
             "agent-browse",
@@ -947,11 +961,30 @@ pub async fn send_chat_message(
         // Cancelled (Stop / Redo / Restore) — keep any streamed tool/UI transcript so
         // Stop does not wipe the assistant message the user was looking at.
         if !final_full_response.trim().is_empty() {
-            {
-                let mut hist = state.history.lock()?;
+            if still_current {
+                {
+                    let mut hist = state.history.lock()?;
+                    history::replace_or_push_assistant(&mut hist, assistant_message);
+                }
+                let _ = history::save_current_conversation(&state, &turn_store);
+            } else {
+                let mut hist = {
+                    let convs = state.conversations.lock()?;
+                    convs
+                        .get(&turn_store)
+                        .and_then(|list| list.iter().find(|c| c.id == owned_conversation_id))
+                        .map(|c| c.history.clone())
+                        .unwrap_or_default()
+                };
                 history::replace_or_push_assistant(&mut hist, assistant_message);
+                let _ = history::upsert_conversation_snapshot(
+                    &state,
+                    &turn_store,
+                    &owned_conversation_id,
+                    &owned_title,
+                    hist,
+                );
             }
-            let _ = history::save_current_conversation(&state, &turn_store);
         }
         let _ = app_handle.emit(
             "chat_complete",
@@ -978,6 +1011,7 @@ pub async fn send_chat_message(
 
     state.clear_in_flight_if(&turn_id);
     journals::clear_turn_journal(&owned_conversation_id, &turn_id);
+    crate::agent::parent_resume::schedule_wake_if_idle(&app_handle, Some(&owned_conversation_id));
 
     crate::core::ram_debug::snapshot(
         "send_chat_end",

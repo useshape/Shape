@@ -22,7 +22,7 @@ export function PluginConnectCard({
     return (
         <div
             data-plugin-connect=""
-            className="my-1.5 flex w-full max-w-[22rem] items-center gap-3 rounded-2xl bg-surface-3 px-3 py-2.5"
+            className="my-1.5 flex w-full max-w-[25rem] items-center gap-3 squircle-2xl border border-border/10 bg-surface-3 px-3 py-2.5"
         >
             <PluginLogo toolkit={toolkit} name={label} logo={logo} size={32} />
             <div className="min-w-0 flex-1">
@@ -34,7 +34,7 @@ export function PluginConnectCard({
             <button
                 type="button"
                 disabled={busy}
-                className="h-8 shrink-0 rounded-full border border-border-subtle bg-panel px-3 text-sm text-text-primary hover:bg-panel-hover disabled:opacity-50"
+                className="h-8 shrink-0 rounded-full border border-border-subtle bg-accent px-4 text-md text-text-primary hover:bg-panel-hover disabled:opacity-50"
                 onClick={() => {
                     setBusy(true);
                     void startPluginConnect(toolkit)

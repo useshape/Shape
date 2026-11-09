@@ -1,7 +1,16 @@
+export function isThreadConversationId(id: string | null | undefined) {
+    return Boolean(id && (id.startsWith("thread-") || id.startsWith("sub-run-")));
+}
+
 /** A view that is not a real conversation yet. Tokens for the send in progress belong here. */
 export function isPlaceholderView(id: string | null | undefined) {
     if (!id) return true;
-    return id === "__draft__" || id === "__pending__" || id.startsWith("__switching__");
+    return (
+        id === "__draft__"
+        || id === "__pending__"
+        || id === "__new_chat__"
+        || id.startsWith("__switching__")
+    );
 }
 
 /** Whether a live turn should paint into the open thread. A draft only keeps its own pending send. */
@@ -28,6 +37,7 @@ export function resolveLiveTurnKey(
     const named = conversationId?.trim() || "";
     if (named) {
         if (live.has(named)) return named;
+        if (isThreadConversationId(named)) return named;
         if (live.has(pendingKey)) return pendingKey;
         return null;
     }

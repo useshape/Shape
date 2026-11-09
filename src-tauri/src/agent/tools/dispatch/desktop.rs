@@ -85,6 +85,7 @@ async fn approve_capture(query: &str, ctx: &ToolCtx<'_>) -> Option<ToolOutcome> 
         reason: reason.clone(),
         action: Some("capture_window".into()),
         payload: Some(query.to_string()),
+        conversation_id: ctx.conversation_id.clone(),
     };
     if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
         pendings.insert(cmd_id.clone(), pending.clone());

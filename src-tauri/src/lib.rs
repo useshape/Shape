@@ -8,7 +8,7 @@ mod mcp;
 
 use core::state::AppState;
 use domain::terminal::service::PtyState;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Listener, Manager};
 
 fn emit_shape_deep_link(app: &AppHandle, url: &str) {
     if url.contains("mcp/oauth") {
@@ -44,6 +44,29 @@ fn focus_main_window(app: &AppHandle) {
     }
 }
 
+fn prompt_cli_args() -> (Option<String>, Option<String>, Option<String>) {
+    let mut prompt = None;
+    let mut project = None;
+    let mut workspace = None;
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if let Some(value) = arg.strip_prefix("--prompt=") {
+            prompt = Some(value.to_string());
+        } else if let Some(value) = arg.strip_prefix("--project=") {
+            project = Some(value.to_string());
+        } else if let Some(value) = arg.strip_prefix("--workspace=") {
+            workspace = Some(value.to_string());
+        } else if arg == "--prompt" {
+            prompt = args.next();
+        } else if arg == "--project" {
+            project = args.next();
+        } else if arg == "--workspace" {
+            workspace = args.next();
+        }
+    }
+    (prompt, project, workspace)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Release GUI builds have no console; ConPTY needs a hidden one to inherit
@@ -53,11 +76,25 @@ pub fn run() {
     crate::core::ram_debug::install_panic_hook();
     crate::core::ram_debug::init();
 
-    // Load env from src-tauri/ or shape/ (tauri dev cwd varies)
-    let _ = dotenvy::from_filename(".env.local");
-    let _ = dotenvy::from_filename("../.env.local");
-    dotenvy::dotenv().ok();
-    let _ = dotenvy::from_filename("../.env");
+    // Load env from src-tauri/, shape/, website/, or server/ (cwd varies).
+    // dotenvy does not override variables that are already set.
+    for path in [
+        ".env.local",
+        "../.env.local",
+        ".env",
+        "../.env",
+        "../../website/.env.local",
+        "../website/.env.local",
+        "../../website/.env",
+        "../website/.env",
+        "../../server/.env",
+        "../server/.env",
+    ] {
+        let _ = dotenvy::from_filename(path);
+    }
+
+    let (prompt_text, prompt_project, prompt_workspace) = prompt_cli_args();
+    let prompt_mode = prompt_text.is_some();
 
     let mut builder = tauri::Builder::default();
 
@@ -67,7 +104,7 @@ pub fn run() {
     // (its own agent state). Deep links still land in the original instance.
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     {
-        let fresh_window = std::env::args().any(|arg| arg == "--fresh-window");
+        let fresh_window = std::env::args().any(|arg| arg == "--fresh-window") || prompt_mode;
         if fresh_window {
             // Second process: do not register the singleton plugin.
         } else {
@@ -98,7 +135,7 @@ pub fn run() {
         .manage(crate::core::workspace_trust::WorkspaceTrustState::new())
         .manage(commands::preview_render::PreviewCaptureState::default())
         .manage(commands::design_proxy::DesignProxyState::default())
-        .setup(|app| {
+        .setup(move |app| {
             #[cfg(desktop)]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -118,10 +155,13 @@ pub fn run() {
             crate::core::windows_notifications::init();
             crate::core::mic::allow_microphone(app.handle());
             crate::core::webview_recovery::install(app.handle());
-            if let Some(window) = app.get_webview_window("main") {
-                present_window(&window);
+            if !prompt_mode {
+                if let Some(window) = app.get_webview_window("main") {
+                    present_window(&window);
+                }
             }
             // Initialize menu
+            if !prompt_mode {
             commands::ipc::shortcuts::setup_menu(app.handle())?;
             if let Some(icon) = app.default_window_icon() {
                 let _ = tauri::tray::TrayIconBuilder::with_id("shape")
@@ -145,6 +185,7 @@ pub fn run() {
             app.on_menu_event(|app, event| {
                 commands::ipc::shortcuts::handle_menu_event(app, event.id().0.as_str());
             });
+            }
 
             {
                 let log_dir = crate::core::ram_debug::shape_log_dir();
@@ -163,6 +204,110 @@ pub fn run() {
                         ])
                         .build(),
                 );
+            }
+
+            if let Some(prompt) = prompt_text.clone() {
+                for event_name in [
+                    "chat_token",
+                    "chat_status",
+                    "chat_complete",
+                    "agent-command-pending",
+                    "agent-terminal-stream",
+                    "agent-browse",
+                    "agent-edit-pending",
+                    "agent-subagent",
+                ] {
+                    let name = event_name;
+                    let _ = app.listen(event_name, move |event| {
+                        let raw = event.payload();
+                        let payload = if raw.len() > 8_000 {
+                            serde_json::Value::String(format!(
+                                "{}… [{} chars]",
+                                raw.chars().take(400).collect::<String>(),
+                                raw.len()
+                            ))
+                        } else {
+                            serde_json::from_str::<serde_json::Value>(raw)
+                                .unwrap_or_else(|_| serde_json::Value::String(raw.to_string()))
+                        };
+                        println!(
+                            "{}",
+                            serde_json::json!({ "event": name, "payload": payload })
+                        );
+                    });
+                }
+                if let Some(path) = prompt_project.clone() {
+                    if let Ok(mut state) = app.state::<AppState>().0.lock() {
+                        state.project_path = Some(path.clone());
+                    }
+                    app.state::<crate::core::workspace_trust::WorkspaceTrustState>()
+                        .set_trusted(&path, true);
+                }
+                let handle = app.handle().clone();
+                let workspace = prompt_workspace.clone().unwrap_or_else(|| {
+                    if prompt_project.is_some() {
+                        "Code".into()
+                    } else {
+                        "Chat".into()
+                    }
+                });
+                tauri::async_runtime::spawn(async move {
+                    let result = crate::agent::commands::send_chat::send_chat_message(
+                        prompt,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        Some(workspace),
+                        None,
+                        None,
+                        None,
+                        Some(true),
+                        Some(true),
+                        Some(true),
+                        None,
+                        None,
+                        None,
+                        None,
+                        handle.state(),
+                        handle.state(),
+                        handle.state(),
+                        handle.state(),
+                        handle.state(),
+                        handle.clone(),
+                    )
+                    .await;
+                    match result {
+                        Ok(text) => {
+                            println!(
+                                "{}",
+                                serde_json::json!({ "event": "result", "payload": text })
+                            );
+                            handle.exit(0);
+                        }
+                        Err(err) => {
+                            eprintln!("{err}");
+                            handle.exit(1);
+                        }
+                    }
+                });
             }
             Ok(())
         })
@@ -354,6 +499,7 @@ pub fn run() {
             agent::commands::approvals::stop_chat_message,
             agent::tools::browse::agent_browse_stop,
             agent::tools::browse::list_browse_wallpapers,
+            agent::media_stash::read_media,
             agent::commands::conversation::set_conversation_archived,
             core::mic::dictation_start,
             core::mic::dictation_stop,

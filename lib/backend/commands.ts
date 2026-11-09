@@ -120,6 +120,17 @@ export const commands = {
     },
     saveFileBytes: (path: string, bytes: number[]) =>
         invokeCommand<void>("save_file_bytes", { path, bytes }),
+    readMedia: (id: string) =>
+        invokeCommand<{
+            id: string;
+            mime: string;
+            kind: string;
+            path: string;
+            name: string | null;
+            prompt: string | null;
+            parentId: string | null;
+            bytes: number[];
+        }>("read_media", { id }),
     markFileDirty: (path: string, dirty: boolean) => invokeCommand("mark_file_dirty", { path, dirty }),
     reorderFiles: (files: FileInfo[]) => invokeCommand("reorder_files", { files }),
     getRustDeps: (projectPath: string) => invokeCommand<[string, string][]>("get_rust_deps", { projectPath }),

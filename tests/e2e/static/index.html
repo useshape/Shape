@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shape 3D viewer fixture</title>
+    <style>
+      html, body { margin: 0; background: #111; }
+      #host { width: 640px; height: 480px; }
+      canvas { display: block; width: 640px; height: 480px; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/node_modules/three/build/three.module.js",
+          "three/addons/": "/node_modules/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="host"></div>
+    <button id="download">Download</button>
+    <script type="module">
+      import * as THREE from "three";
+      import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+      const canvasProbe = document.createElement("canvas");
+      const gl = canvasProbe.getContext("webgl2") || canvasProbe.getContext("webgl");
+      window.__shapeWebgl = Boolean(gl);
+      if (!gl) {
+        document.body.dataset.skip = "webgl";
+      } else {
+        const host = document.getElementById("host");
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setSize(640, 480);
+        renderer.domElement.setAttribute("data-model-canvas", "1");
+        host.appendChild(renderer.domElement);
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x141414);
+        const camera = new THREE.PerspectiveCamera(45, 640 / 480, 0.01, 100);
+        camera.position.set(2, 1.5, 2);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
+        const key = new THREE.DirectionalLight(0xffffff, 1.2);
+        key.position.set(2, 4, 2);
+        scene.add(key);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        const publish = () => {
+          window.__shapeModelCamera = {
+            azimuth: controls.getAzimuthalAngle(),
+            polar: controls.getPolarAngle(),
+            distance: controls.getDistance(),
+          };
+        };
+        const loader = new GLTFLoader();
+        const glb = await loader.loadAsync("/tests/e2e/fixtures/cube.glb");
+        scene.add(glb.scene);
+        const box = new THREE.Box3().setFromObject(glb.scene);
+        const size = box.getSize(new THREE.Vector3()).length() || 1;
+        glb.scene.position.sub(box.getCenter(new THREE.Vector3()));
+        camera.position.set(size * 0.7, size * 0.5, size * 0.7);
+        controls.update();
+        publish();
+        const draw = () => {
+          controls.update();
+          renderer.render(scene, camera);
+          requestAnimationFrame(draw);
+        };
+        draw();
+        renderer.domElement.addEventListener("pointerup", publish);
+        renderer.domElement.addEventListener("wheel", publish, { passive: true });
+        document.getElementById("download").addEventListener("click", async () => {
+          const res = await fetch("/tests/e2e/fixtures/cube.glb");
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "cube.glb";
+          a.click();
+        });
+      }
+    </script>
+  </body>
+</html>

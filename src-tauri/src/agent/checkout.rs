@@ -83,12 +83,10 @@ fn add_worktree(repo: &str, slug: &str) -> Result<Checkout, String> {
     if !root.join(".git").exists() && !root.join(".git").is_file() {
         return Err("not a git repository".to_string());
     }
-    let millis = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().simple().to_string();
+    let unique: String = unique.chars().take(8).collect();
     let slug = sanitize_slug(slug);
-    let branch = format!("shape/{slug}-{millis}");
+    let branch = format!("shape/{slug}-{unique}");
     let folder = root
         .file_name()
         .and_then(|n| n.to_str())

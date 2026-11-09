@@ -533,6 +533,7 @@ pub(super) async fn run_git_commit_with_approval(
         reason: "Creates a git commit with your currently staged changes.".to_string(),
         action: Some("git_commit".to_string()),
         payload: Some(message.to_string()),
+        conversation_id: ctx.conversation_id.clone(),
     };
 
     if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
@@ -612,6 +613,7 @@ pub(super) async fn run_with_approval(command: &str, reason: &str, ctx: &ToolCtx
         reason: reason.to_string(),
         action: None,
         payload: None,
+        conversation_id: ctx.conversation_id.clone(),
     };
 
     if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {

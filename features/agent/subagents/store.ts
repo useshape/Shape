@@ -156,6 +156,10 @@ function parseReadsFromActivity(activity: string): SubagentRead[] {
 
 export function upsertSubagent(next: Omit<SubagentCard, "updatedAt"> & { updatedAt?: number }) {
     const existing = cards.find((c) => c.id === next.id);
+    const terminal = existing?.status === "done" || existing?.status === "error";
+    if (terminal && (next.status === "running" || next.status === "pending")) {
+        return;
+    }
     const activity = next.activity || existing?.activity || "Working…";
     const card: SubagentCard = {
         ...existing,
@@ -280,6 +284,9 @@ export function syncSubagentsFromChunks(
                       ? "running"
                       : "done";
         const existing = cards.find((c) => c.id === id);
+        if (existing && (existing.status === "done" || existing.status === "error") && (status === "running" || status === "pending")) {
+            continue;
+        }
         upsertSubagent({
             id,
             title: chunk.query || chunk.file || existing?.title || "Subagent",

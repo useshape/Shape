@@ -66,7 +66,6 @@ import {
 import {
     applySubagentEvent,
     getSubagents,
-    openSubagent,
     subscribeSubagents,
     type SubagentCard,
 } from "@/features/agent/subagents/store";
@@ -506,8 +505,7 @@ function ChatRow({
                             type="button"
                             onClick={() => {
                                 clearChatUnread(id);
-                                window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id } }));
-                                openSubagent(card.id);
+                                window.dispatchEvent(new CustomEvent("shape-open-subagent", { detail: { id: card.id, parentId: id } }));
                             }}
                             className={cn(
                                 "flex h-8 items-center gap-2 pr-2 pl-7 text-left text-sm text-text-secondary",
@@ -615,13 +613,18 @@ export function ChatList({
     }, []);
 
     useEffect(() => {
+        let disposed = false;
         let unlisten: (() => void) | undefined;
         void listen("agent-subagent", (event) => {
             applySubagentEvent((event.payload ?? {}) as Parameters<typeof applySubagentEvent>[0]);
         }).then((fn) => {
-            unlisten = fn;
+            if (disposed) fn();
+            else unlisten = fn;
         });
-        return () => unlisten?.();
+        return () => {
+            disposed = true;
+            unlisten?.();
+        };
     }, []);
 
     const persistSort = useCallback((next: ChatSort) => {
@@ -707,7 +710,7 @@ export function ChatList({
         const live = chats.filter((c) => {
             if (c.archived) return false;
             const lane = chatMark(c.id);
-            const assigned = lane?.mode ?? (isTalkWorkspace(mode) ? "Chat" : "Code");
+            const assigned = lane?.mode ?? "Code";
             return assigned === mode;
         });
         const sorted = [...live];

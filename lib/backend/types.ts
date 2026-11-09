@@ -275,7 +275,8 @@ export interface Conversation {
     timestamp: number;
     /** Hidden from the sidebar; still opens from the command palette. */
     archived?: boolean;
-    kind?: "chat" | "multiwork";
+    kind?: "chat" | "multiwork" | "thread";
+    parent_id?: string | null;
 }
 
 export interface BrowserPickedElement {

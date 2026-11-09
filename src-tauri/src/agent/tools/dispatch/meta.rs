@@ -630,6 +630,7 @@ pub(super) async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>)
             PendingDesignPick {
                 id: pick_id.clone(),
                 concepts: catalog.clone(),
+                conversation_id: ctx.conversation_id.clone(),
             },
         );
     }
@@ -907,6 +908,7 @@ pub(super) async fn tool_ask_user(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcom
     let pending = PendingAsk {
         id: ask_id.clone(),
         questions_json: questions.to_string(),
+        conversation_id: ctx.conversation_id.clone(),
     };
     if let Ok(mut pendings) = ctx.agent_state.pending_asks.lock() {
         pendings.insert(ask_id.clone(), pending);

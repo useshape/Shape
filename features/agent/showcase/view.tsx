@@ -1,7 +1,7 @@
 "use client";
 
 import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
-import { ApprovalCard } from "@/features/chat/ui/blocks/approval";
+import { ApprovalCard, ApprovalCode } from "@/features/chat/ui/blocks/approval";
 import { GeneratedMediaCard } from "@/features/chat/ui/blocks/generated-media";
 import { SentFileCard } from "@/features/chat/ui/blocks/sent-file";
 import { MessageRenderer } from "@/features/chat/ui/md/renderer";
@@ -29,7 +29,9 @@ export function ComponentShowcase() {
                             onSkip={() => {}}
                             onAccept={() => {}}
                         >
-                            <pre className="px-3 pb-1 font-mono text-xs text-text-secondary">bun run test -- tests/features/showcase.test.ts</pre>
+                            <ApprovalCode className="text-xs text-text-secondary">
+                                bun run test -- tests/features/showcase.test.ts
+                            </ApprovalCode>
                         </ApprovalCard>
                         <SentFileCard
                             name="brief.pdf"
@@ -41,8 +43,6 @@ export function ComponentShowcase() {
                             kind="image"
                             src={PIXEL}
                             prompt="a gray pixel"
-                            mediaId="showcase-img"
-                            model="klein"
                         />
                     </section>
                 </div>

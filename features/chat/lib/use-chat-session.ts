@@ -4,7 +4,7 @@ import React from "react";
 import { listen } from "@tauri-apps/api/event";
 import { commands, Conversation, useProjectState } from "@/lib/backend";
 import { useChatStream } from "./chat-stream-store";
-import { NEW_CHAT_TAB_ID, isEphemeralChatTabId, type ChatTab } from "../ui/shell/tabs";
+import { NEW_CHAT_TAB_ID, isEphemeralChatTabId, isThreadTabId, placeThreadTab, type ChatTab } from "../ui/shell/tabs";
 import { openChatHistoryMenu } from "../ui/shell/history";
 import { parseMessageContent, type Chunk } from "../ui/md/renderer";
 import {
@@ -39,6 +39,7 @@ import {
 import { messageLengthBucket } from "@/lib/telemetry/sanitize";
 import { chatMark, clearNextChat, ensureDraftForCurrentMode, laneFor, lastLaneChat, sealNextChat } from "@/lib/sidebar/chat-lanes";
 import { isPlaceholderView } from "./live-turn-key";
+import { hasGeneratingChats } from "./generating-chats";
 import { getWorkspaceMode, isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
 import { conversationStorePath } from "@/lib/chat/conversation-store";
 import { getSelectedTalkMediaId } from "@/lib/chat/talk-media";
@@ -221,7 +222,7 @@ export function useChatSession() {
     const syncOpenTabs = React.useCallback((
         convId: string | null,
         title: string,
-        opts?: { activate?: boolean },
+        opts?: { activate?: boolean; parentId?: string },
     ) => {
         const activate = opts?.activate !== false;
         if (!convId) {
@@ -244,10 +245,24 @@ export function useChatSession() {
             const existing = withoutDraft.find((tab) => tab.id === convId);
             if (existing) {
                 return withoutDraft.map((tab) =>
-                    tab.id === convId ? { ...tab, title: title || tab.title } : tab,
+                    tab.id === convId
+                        ? {
+                            ...tab,
+                            title: title || tab.title,
+                            parentId: opts?.parentId ?? tab.parentId,
+                        }
+                        : tab,
                 );
             }
-            return [...withoutDraft, { id: convId, title: title || "Chat" }];
+            const nextTab: ChatTab = {
+                id: convId,
+                title: title || (isThreadTabId(convId) ? "Thread" : "Chat"),
+                parentId: opts?.parentId,
+            };
+            if (opts?.parentId || isThreadTabId(convId)) {
+                return placeThreadTab(withoutDraft, nextTab);
+            }
+            return [...withoutDraft, nextTab];
         });
     }, []);
 
@@ -279,7 +294,7 @@ export function useChatSession() {
 
         void (async () => {
             const mode = getWorkspaceMode();
-            const laneFallback = isTalkWorkspace(mode) ? "Chat" : "Code";
+            const laneFallback = "Code" as const;
             const persisted = readPersistedChatTabs(storePath);
             const remembered = lastLaneChat(mode);
             let loadedId: string | null = null;
@@ -665,6 +680,13 @@ export function useChatSession() {
     const isLoadingRef = React.useRef(false);
     React.useEffect(() => {
         isLoadingRef.current = isLoading;
+        if (isLoading) return;
+        const cid = conversationIdRef.current;
+        if (!cid) return;
+        const queued = pendingResumeRef.current.get(cid);
+        if (!queued) return;
+        pendingResumeRef.current.delete(cid);
+        void handleSendMessageRef.current(queued);
     }, [isLoading]);
 
     const activeChatTabIdRef = React.useRef(activeChatTabId);
@@ -680,6 +702,14 @@ export function useChatSession() {
             const title = await commands.getChatTitle();
             const convId = await commands.getCurrentConversationId();
             setRecentConvs(convs);
+            for (const conv of convs) {
+                if (conv.kind === "thread" || isThreadTabId(conv.id)) {
+                    syncOpenTabs(conv.id, conv.title || "Thread", {
+                        activate: false,
+                        parentId: conv.parent_id ?? undefined,
+                    });
+                }
+            }
             setChatTitle(title);
             setConversationId(convId);
             setCurrentConversationId(convId);
@@ -691,6 +721,7 @@ export function useChatSession() {
     }, [storePath, workspaceModeId, syncOpenTabs]);
 
     const conversationIdRef = React.useRef(conversationId);
+    const pendingResumeRef = React.useRef(new Map<string, string>());
     React.useEffect(() => {
         conversationIdRef.current = conversationId;
     }, [conversationId]);
@@ -701,14 +732,13 @@ export function useChatSession() {
         if (!title) return;
         void commands.renameConversation(conversationId, title).then(() => {
             setChatTitle(title);
-            window.dispatchEvent(new CustomEvent("shape-chat-refresh"));
+            window.dispatchEvent(new CustomEvent("shape-chats-changed"));
         }).catch(() => {});
     }, [conversationId]);
 
     const refreshHistory = React.useCallback(
         async (reloadConversation = false) => {
             if (isLoadingRef.current && !reloadConversation) {
-                await syncFromBackend();
                 await refreshMetadata();
                 return;
             }
@@ -1090,7 +1120,7 @@ export function useChatSession() {
             if (loop) delete (window as unknown as { __shapeLoopWorker?: unknown }).__shapeLoopWorker;
             const talkName =
                 loop?.name
-                || (workspace === "Chat" ? "Shape" : isTalkWorkspace(workspace) ? chatTitle : undefined);
+                || (isTalkWorkspace(workspace) ? chatTitle : undefined);
             await commands.sendChatMessage(
                 messageWithWorkflows,
                 modelToSend,
@@ -1503,20 +1533,11 @@ export function useChatSession() {
                 const cid = event.payload?.conversationId?.trim();
                 const message = event.payload?.message;
                 if (!cid || !message) return;
-                void (async () => {
-                    if (conversationIdRef.current !== cid) {
-                        try {
-                            await commands.loadConversation(cid);
-                            setConversationId(cid);
-                            setCurrentConversationId(cid);
-                            setActiveChatTabId(cid);
-                        } catch {
-                            return;
-                        }
-                    }
-                    if (isLoadingRef.current) return;
-                    await handleSendMessageRef.current(message);
-                })();
+                pendingResumeRef.current.set(cid, message);
+                if (conversationIdRef.current !== cid) return;
+                if (isLoadingRef.current) return;
+                pendingResumeRef.current.delete(cid);
+                void handleSendMessageRef.current(message);
             }),
         );
 
@@ -1542,6 +1563,26 @@ export function useChatSession() {
                         await handleSendMessageRef.current(`<scheduled_followup>${reason}</scheduled_followup>`);
                     })();
                 }, seconds * 1000);
+            }),
+        );
+
+        register(
+            listen<{
+                id?: string;
+                title?: string;
+                conversationId?: string;
+                threadId?: string;
+                status?: string;
+            }>("agent-subagent", (event) => {
+                const payload = event.payload ?? {};
+                const threadId = (payload.threadId || payload.id || "").trim();
+                const parentId = payload.conversationId?.trim();
+                const title = payload.title?.trim();
+                if (!threadId || !isThreadTabId(threadId)) return;
+                syncOpenTabs(threadId, title || "Thread", { activate: false, parentId });
+                window.dispatchEvent(new CustomEvent("shape-dock-open", {
+                    detail: { id: threadId, title: title || "Thread" },
+                }));
             }),
         );
 
@@ -1587,8 +1628,10 @@ export function useChatSession() {
             if (!isIncognitoChat()) void captureTelemetry("chat_new");
             clearAllDesignPreviewSessions();
             setSendError(null);
-            setMessages([]);
-            setContextSummarized(false);
+            if (!isLoadingRef.current) {
+                setMessages([]);
+                setContextSummarized(false);
+            }
             void import("@/features/agent/subagents/store").then(({ resetSubagentsForParent }) => {
                 resetSubagentsForParent(conversationIdRef.current);
             });
@@ -1611,7 +1654,7 @@ export function useChatSession() {
                 });
                 setActiveChatTabId(NEW_CHAT_TAB_ID);
             }
-            await refreshHistory(true);
+            if (!isLoadingRef.current && !hasGeneratingChats()) await refreshHistory(true);
         } catch (err) {
             console.error("Failed to start new chat:", err);
         }
@@ -1640,7 +1683,18 @@ export function useChatSession() {
             await purgeIncognitoConversation(tabId);
             await setIncognitoChat(false);
         }
-        const remaining = openChatTabs.filter((tab) => tab.id !== tabId);
+        const childIds = isThreadTabId(tabId)
+            ? []
+            : openChatTabs.filter((tab) => tab.parentId === tabId).map((tab) => tab.id);
+        try {
+            await commands.stopChatMessage(tabId);
+            for (const child of childIds) {
+                await commands.stopChatMessage(child);
+            }
+        } catch {
+            /* already idle */
+        }
+        const remaining = openChatTabs.filter((tab) => tab.id !== tabId && !childIds.includes(tab.id));
         if (remaining.length === 0) {
             setOpenChatTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]);
             setActiveChatTabId(NEW_CHAT_TAB_ID);
@@ -1744,6 +1798,11 @@ export function useChatSession() {
                 }
                 scrollInstantRef.current = true;
                 setMessages(history);
+                const queued = pendingResumeRef.current.get(id);
+                if (queued && !isLoadingRef.current) {
+                    pendingResumeRef.current.delete(id);
+                    void handleSendMessageRef.current(queued);
+                }
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 if (!message.includes("Conversation not found")) {

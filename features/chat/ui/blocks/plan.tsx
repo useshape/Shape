@@ -46,7 +46,7 @@ export function PlanningBlock({ steps, completedCount, totalCount, isGenerating 
           : displaySteps.filter((s) => s.status === "done").slice(-2);
 
     return (
-        <div className="my-1 w-full overflow-hidden squircle-2xl bg-surface-4">
+        <div className="my-1 w-full overflow-hidden squircle-2xl border border-border">
             <button
                 type="button"
                 onClick={() => totalCount > 1 && setIsOpen((open) => !open)}

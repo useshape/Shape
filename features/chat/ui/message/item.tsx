@@ -392,7 +392,10 @@ function ChatMessageItemInner({
         [isUser, userParts?.text, content],
     );
 
-    if (role === "user" && content.trim().startsWith("<scheduled_followup")) {
+    if (
+        role === "user"
+        && (content.trim().startsWith("<scheduled_followup") || content.trim().startsWith("<subagent_update"))
+    ) {
         return null;
     }
 

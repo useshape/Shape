@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { useWorkspaceMode } from "@/lib/ui/workspace-mode";
 
 export const AGENT_TABS_SLOT = "shape-agent-tabs";
+export const AGENT_TAB_SIDEBAR_SLOT = "shape-agent-tab-sidebar";
 export const AGENT_CHROME_ACTIONS_SLOT = "shape-agent-chrome-actions";
 export const AGENT_SIDEBAR_BACK_SLOT = "shape-agent-sidebar-back";
 export const AGENT_SIDEBAR_HISTORY_SLOT = "shape-agent-sidebar-history";

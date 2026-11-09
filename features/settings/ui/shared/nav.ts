@@ -77,6 +77,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: "Features",
         children: [
             { id: "terminal", label: "Terminal", icon: WindowConsole20Regular, targetId: "settings-terminal" },
+            { id: "workspace-layout", label: "Layout", icon: Desktop20Regular, targetId: "settings-workspace-layout" },
             { id: "git", label: "Git", icon: BranchCompare24Regular, targetId: "settings-git" },
         ],
     },

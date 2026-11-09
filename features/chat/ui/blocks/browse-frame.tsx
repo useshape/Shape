@@ -1,20 +1,14 @@
 "use client";
 
-import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
-
-
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-
-
 import { cn } from "@/lib/utils";
-import { commands } from "@/lib/backend";
 import { useBrowseFrame, type BrowseFrame } from "@/features/agent/browser/session";
 
-const PAGE_W = 1280;
-const PAGE_H = 720;
+const PAGE_W = 1920;
+const PAGE_H = 1080;
 
 function fitPage(width: number, height: number) {
     const scale = Math.min(width / PAGE_W, height / PAGE_H);
@@ -158,29 +152,15 @@ export function BrowseChatCard({
         status: (mirror?.status || (savedStatus === "error" ? "error" : "stopped")) as BrowseFrame["status"],
         error: mirror?.error || "",
     };
-    const controlling = frame.status === "controlling" || frame.status === "loading";
     const lines = (mirror?.console?.length ? mirror.console : consoleLines) || [];
     const [consoleOpen, setConsoleOpen] = useState(false);
 
     if (!frame.image.trim()) return null;
 
     return (
-        <div className="w-full max-w-[300px]">
-            <div className="relative">
-                <BrowseStage frame={frame} natural className="overflow-hidden rounded-lg border border-border-subtle shadow-md/60" />
-                {controlling ? (
-                    <button
-                        type="button"
-                        aria-label="Stop the agent browser"
-                        className="absolute right-2 top-2 z-20 flex size-6 items-center justify-center rounded-md bg-surface-1/90 text-text-primary"
-                        onClick={() => {
-                            void commands.agentBrowseStop();
-                            void commands.stopChatMessage();
-                        }}
-                    >
-                        <Icon icon={Dismiss20Regular} />
-                    </button>
-                ) : null}
+        <div className="w-full">
+            <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border-subtle shadow-md/60">
+                <BrowseStage frame={frame} fill className="h-full w-full" />
                 {lines.length ? (
                     <button
                         type="button"

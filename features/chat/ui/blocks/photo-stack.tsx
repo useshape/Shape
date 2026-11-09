@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { getSelectedTalkMediaId, subscribeTalkMedia } from "@/lib/chat/talk-media";
-import { RefineBar } from "./generated-media";
 import { MediaLightbox } from "./lightbox";
 
 export type StackPhoto = {
@@ -29,9 +27,7 @@ export function PhotoStack({
 }) {
     const items = photos.filter((photo) => photo.src.trim());
     const [viewer, setViewer] = useState<number | null>(null);
-    const selected = useSyncExternalStore(subscribeTalkMedia, getSelectedTalkMediaId, () => null);
     if (items.length === 0) return null;
-    const picked = items.find((photo) => photo.mediaId && photo.mediaId === selected);
 
     const open = (index: number) => {
         setViewer(index);
@@ -63,11 +59,6 @@ export function PhotoStack({
                     </div>
                 )}
             </div>
-            {picked ? (
-                <div className="mt-1 w-full max-w-[280px] overflow-hidden rounded-xl border border-border-subtle bg-surface-3">
-                    <RefineBar kind="image" mediaId={picked.mediaId} prompt={picked.alt} model={picked.model} />
-                </div>
-            ) : null}
             <MediaLightbox
                 open={viewer != null}
                 onClose={() => setViewer(null)}
