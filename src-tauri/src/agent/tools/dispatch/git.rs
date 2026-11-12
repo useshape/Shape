@@ -44,6 +44,9 @@ pub(super) fn tool_git_status(ctx: &ToolCtx<'_>) -> ToolOutcome {
 }
 
 pub(super) fn tool_git_fetch(ctx: &ToolCtx<'_>) -> ToolOutcome {
+    if is_read_only_mode(ctx.mode) {
+        return blocked_outcome("git_fetch", "Fetching remotes is not allowed in Ask or Plan mode.");
+    }
     let _ = ctx.emit_ui_token(git_ui_chunk("fetch", "running", "Fetching from remotes…"));
     match git::git_fetch(ctx.project_path.to_string()) {
         Ok(()) => {

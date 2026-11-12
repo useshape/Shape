@@ -35,7 +35,14 @@ fn resolve_git_executable() -> Result<PathBuf, String> {
         }
     }
 
-    Err("Git executable not found. Install Git for Windows or ensure git is on PATH.".to_string())
+    if cfg!(windows) {
+        Err("Git executable not found. Install Git for Windows or ensure git is on PATH.".to_string())
+    } else {
+        Err(
+            "Git executable not found. Install git (Xcode Command Line Tools or Homebrew) or ensure git is on PATH."
+                .to_string(),
+        )
+    }
 }
 
 fn known_git_paths() -> Vec<PathBuf> {
@@ -157,6 +164,17 @@ mod tests {
     fn allows_program_files_git() {
         assert!(!is_workspace_planted_path(Path::new(
             "C:/Program Files/Git/cmd/git.exe"
+        )));
+    }
+
+    #[test]
+    fn allows_unix_system_git() {
+        assert!(!is_workspace_planted_path(Path::new("/usr/bin/git")));
+        assert!(!is_workspace_planted_path(Path::new(
+            "/opt/homebrew/bin/git"
+        )));
+        assert!(is_workspace_planted_path(Path::new(
+            "/Users/ada/proj/node_modules/.bin/git"
         )));
     }
 }

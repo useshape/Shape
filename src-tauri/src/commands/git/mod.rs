@@ -907,59 +907,73 @@ pub fn git_init(path: String) -> Result<(), AppError> {
     Ok(())
 }
 
+fn push_branch_name(result: &mut Vec<String>, seen: &mut HashSet<String>, name: &str) {
+    let name = name.trim();
+    if name.is_empty() {
+        return;
+    }
+    if seen.insert(name.to_string()) {
+        result.push(name.to_string());
+    }
+}
+
+fn repo_has_uncommitted_changes(repo: &Repository) -> bool {
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .exclude_submodules(true)
+        .include_ignored(false);
+    match repo.statuses(Some(&mut opts)) {
+        Ok(statuses) => statuses.iter().any(|entry| {
+            let status = entry.status();
+            !status.is_empty() && !status.is_ignored()
+        }),
+        Err(_) => false,
+    }
+}
+
 pub fn git_branches(path: String) -> Result<Vec<String>, AppError> {
     let mut result = Vec::new();
     let mut seen = HashSet::new();
-    if let Ok(mut cmd) = git_cmd() {
-        if let Ok(output) = cmd
-            .args([
-                "-C",
-                &path,
-                "for-each-ref",
-                "--sort=-committerdate",
-                "--format=%(refname:short)",
-                "--count=80",
-                "refs/heads",
-            ])
-            .output()
-        {
-            if output.status.success() {
-                for line in String::from_utf8_lossy(&output.stdout).lines() {
-                    let name = line.trim();
-                    if name.is_empty() {
-                        continue;
-                    }
-                    if seen.insert(name.to_string()) {
-                        result.push(name.to_string());
+
+    if let Ok(repo) = open_git_repo(&path) {
+        if let Ok(head) = repo.head() {
+            if let Some(name) = head.shorthand() {
+                push_branch_name(&mut result, &mut seen, name);
+            }
+        }
+        if let Ok(locals) = repo.branches(Some(git2::BranchType::Local)) {
+            for b in locals {
+                if result.len() >= 80 {
+                    break;
+                }
+                if let Ok((branch, _)) = b {
+                    if let Ok(Some(name)) = branch.name() {
+                        push_branch_name(&mut result, &mut seen, name);
                     }
                 }
             }
         }
     }
-    if !result.is_empty() {
-        return Ok(result);
-    }
 
-    let repo = open_git_repo(&path)?;
-    if let Ok(head) = repo.head() {
-        if let Some(name) = head.shorthand() {
-            result.push(name.to_string());
-            seen.insert(name.to_string());
-        }
-    }
-    let locals = repo
-        .branches(Some(git2::BranchType::Local))
-        .map_err(AppError::Git)?;
-    for b in locals {
-        if result.len() >= 80 {
-            break;
-        }
-        let (branch, _) = b.map_err(AppError::Git)?;
-        if let Ok(Some(name)) = branch.name() {
-            if seen.insert(name.to_string()) {
-                result.push(name.to_string());
+    if let Ok(mut cmd) = git_cmd() {
+        if let Ok(output) = cmd
+            .args(["-C", &path, "for-each-ref", "--sort=-committerdate", "--format=%(refname:short)", "refs/heads"])
+            .output()
+        {
+            if output.status.success() {
+                for line in String::from_utf8_lossy(&output.stdout).lines() {
+                    if result.len() >= 80 {
+                        break;
+                    }
+                    push_branch_name(&mut result, &mut seen, line);
+                }
             }
         }
+    }
+
+    if result.is_empty() {
+        return Err(AppError::Message("No git branches found in this folder.".into()));
     }
     Ok(result)
 }
@@ -1038,12 +1052,27 @@ pub fn git_delete_branch(repo_path: String, branch_name: String) -> Result<(), A
 }
 
 pub fn git_switch_branch(repo_path: String, branch_name: String) -> Result<(), AppError> {
-    let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
+    let repo = open_git_repo(&repo_path)?;
+    if repo_has_uncommitted_changes(&repo) {
+        let mut probe = git2::build::CheckoutBuilder::new();
+        probe.safe();
+        let (object, _) = repo
+            .revparse_ext(&branch_name)
+            .map_err(|e| AppError::Git(e))?;
+        if repo.checkout_tree(&object, Some(&mut probe)).is_err() {
+            return Err(AppError::Message(
+                "Uncommitted changes would be overwritten. Commit, stash, or discard them first."
+                    .into(),
+            ));
+        }
+    }
     let (object, reference) = repo
         .revparse_ext(&branch_name)
         .map_err(|e| AppError::Git(e))?;
 
-    repo.checkout_tree(&object, None)
+    let mut checkout = git2::build::CheckoutBuilder::new();
+    checkout.safe();
+    repo.checkout_tree(&object, Some(&mut checkout))
         .map_err(checkout_conflict_err)?;
 
     match reference {

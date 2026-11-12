@@ -17,6 +17,78 @@ use super::common::{
 };
 use super::{SideEffect, ToolCtx, ToolOutcome};
 
+pub(super) async fn tool_adversarial_review(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    if !ctx.agent_state.review_adversarial_enabled() {
+        return blocked_outcome(
+            "adversarial_review",
+            "Adversarial review is turned off in settings.",
+        );
+    }
+    let focus = args
+        .get("focus")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let mut implementer = ctx
+        .conversation_id
+        .as_deref()
+        .and_then(|id| {
+            ctx.agent_state
+                .in_flight
+                .lock()
+                .ok()
+                .and_then(|g| g.get(id).map(|f| f.partial_content.clone()))
+        })
+        .unwrap_or_default();
+    if implementer.trim().is_empty() {
+        if let Ok(history) = ctx.agent_state.history.lock() {
+            implementer = history
+                .iter()
+                .rev()
+                .find(|m| m.role == "assistant")
+                .map(|m| m.content.clone())
+                .unwrap_or_default();
+        }
+    }
+    if !focus.is_empty() {
+        implementer = format!("Review focus: {focus}\n\n{implementer}");
+    }
+    if implementer.trim().is_empty() {
+        return error_outcome(
+            "adversarial_review",
+            "There is nothing to review yet. Make the edits first, then call this when the user asks for a review.",
+        );
+    }
+    let proxy = streaming::ProxyContext::new("review")
+        .with_turn(ctx.turn_id.clone(), ctx.conversation_id.clone())
+        .with_project_path(Some(ctx.project_path.to_string()));
+    match crate::agent::commands::adversarial_review::run_adversarial_review(
+        ctx.client,
+        ctx.api_key,
+        &implementer,
+        ctx.project_path,
+        &proxy,
+        ctx.app_handle,
+        &ctx.cancel,
+    )
+    .await
+    {
+        Ok(review) => {
+            let summary = review
+                .synthesis
+                .clone()
+                .unwrap_or_else(|| "Review finished.".to_string());
+            ToolOutcome {
+                tool_result: summary,
+                ui_chunk: review.markup,
+                side_effect: None,
+            }
+        }
+        Err(e) => error_outcome("adversarial_review", &e.to_string()),
+    }
+}
+
 pub(super) async fn tool_mcp_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     let Some(mcp_state) = ctx.mcp_state else {
         return error_outcome("mcp_search", "MCP is not configured.");
@@ -558,6 +630,7 @@ pub(super) async fn tool_render_design_previews(args: &Value, ctx: &ToolCtx<'_>)
             PendingDesignPick {
                 id: pick_id.clone(),
                 concepts: catalog.clone(),
+                conversation_id: ctx.conversation_id.clone(),
             },
         );
     }
@@ -835,6 +908,7 @@ pub(super) async fn tool_ask_user(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcom
     let pending = PendingAsk {
         id: ask_id.clone(),
         questions_json: questions.to_string(),
+        conversation_id: ctx.conversation_id.clone(),
     };
     if let Ok(mut pendings) = ctx.agent_state.pending_asks.lock() {
         pendings.insert(ask_id.clone(), pending);
@@ -886,6 +960,35 @@ pub(super) async fn tool_ask_user(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcom
                 side_effect: None,
             }
         }
+    }
+}
+
+pub(super) fn tool_schedule_followup(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let seconds = args
+        .get("seconds")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(60)
+        .clamp(20, 900);
+    let reason = args
+        .get("reason")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Follow up on the earlier request.")
+        .trim()
+        .to_string();
+    let _ = ctx.app_handle.emit(
+        "chat_followup",
+        json!({
+            "conversationId": ctx.conversation_id,
+            "seconds": seconds,
+            "reason": reason,
+        }),
+    );
+    ToolOutcome {
+        tool_result: format!(
+            "Follow-up scheduled in {seconds}s. Call finish now. Do not wait in this turn."
+        ),
+        ui_chunk: String::new(),
+        side_effect: None,
     }
 }
 

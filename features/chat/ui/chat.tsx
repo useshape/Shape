@@ -1,17 +1,18 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useChatSession } from "../lib/use-chat-session";
+import { groupChatMessages } from "../lib/chat-session-utils";
+import { publishChatCrumb } from "../lib/chat-crumb";
 import { ChatTitlebar, resolveChatCrumbTitle } from "./shell/titlebar";
 import { ChatInput } from "./composer/input";
 import { ChatMessageList } from "./message/list";
 import { ChatErrorDialog } from "./blocks/error";
 import { ChatEmptyState } from "./shell/empty";
+import { isTalkWorkspace, useWorkspaceMode } from "@/lib/ui/workspace-mode";
 import { parseMessageContent } from "./md/renderer";
 import type { ComposerTaskItem } from "./composer/activity";
-import { AGENT_TABS_SLOT } from "@/features/agent/chrome";
 import { ChatHistoryStepper, useChatTurnActive } from "./shell/history-stepper";
 import { useSyncChatGenerating } from "../lib/generating-chats";
 import { SubagentChatView } from "@/features/agent/subagents/view";
@@ -22,6 +23,7 @@ import {
     getSubagents,
     openSubagent,
     setSubagentParentConversation,
+    subagentDisplayTitle,
     subscribeSubagents,
     upsertSubagent,
 } from "@/features/agent/subagents/store";
@@ -35,60 +37,117 @@ function stickyPromptText(content: string): string {
     return `${cleaned.slice(0, 117)}…`;
 }
 
+import type { ChatMessage } from "@/lib/backend";
+
+const KeptThread = React.memo(function KeptThread({
+    messages,
+    isLoading,
+    activityLabel,
+    messagesEndRef,
+    handlers,
+    surface,
+    talkMark,
+    talkName,
+}: {
+    messages: ChatMessage[];
+    isLoading: boolean;
+    activityLabel: string | null;
+    messagesEndRef: React.RefObject<HTMLDivElement | null>;
+    handlers: React.RefObject<{
+        redo: (index: number) => void;
+        restore: (index: number) => void;
+        fork?: (index: number) => void;
+        resolved: (file: string, replacement?: string) => boolean;
+    }>;
+    surface: "code" | "talk";
+    talkMark: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
+    talkName: string;
+}) {
+    const groups = useMemo(() => groupChatMessages(messages), [messages]);
+    return (
+        <ChatMessageList
+            messageGroups={groups}
+            messages={messages}
+            isLoading={isLoading}
+            activityLabel={activityLabel}
+            messagesEndRef={messagesEndRef}
+            onRedo={(index) => handlers.current.redo(index)}
+            onRestore={(index) => handlers.current.restore(index)}
+            onFork={handlers.current.fork ? (index) => handlers.current.fork?.(index) : undefined}
+            isFileEditResolved={(file, replacement) => handlers.current.resolved(file, replacement)}
+            surface={surface}
+            talkMark={talkMark}
+            talkName={talkName}
+        />
+    );
+}, (prev, next) => prev.messages === next.messages && prev.isLoading === next.isLoading && prev.activityLabel === next.activityLabel);
+
 export default function Chat({
     className,
     embedded,
+    showTitlebar = true,
 }: {
     className?: string;
     embedded?: boolean;
+    showTitlebar?: boolean;
     /** @deprecated unused in shell */
     onClose?: () => void;
     sidebarSide?: "left" | "right";
     embedWindowControls?: React.ReactNode;
 }) {
     const session = useChatSession();
-    const activeSubagent = React.useSyncExternalStore(subscribeSubagents, getActiveSubagent, getActiveSubagent);
-
+    const workspaceModeId = useWorkspaceMode();
+    const talk = isTalkWorkspace(workspaceModeId);
+    const talkMark = null;
+    const talkName = "Shape";
     React.useEffect(() => {
         setSubagentParentConversation(session.conversationId);
         return () => setSubagentParentConversation(null);
     }, [session.conversationId]);
 
     React.useEffect(() => {
+        const selectThread = (id: string) => {
+            openSubagent(id);
+        };
         const onOpen = (e: Event) => {
             const detail = (e as CustomEvent<{ id?: string; parentId?: string }>).detail;
-            if (detail?.parentId && detail.parentId !== session.conversationId) {
-                void session.handleSelectChatTab(detail.parentId);
-            }
-            if (detail?.id) openSubagent(detail.id);
+            if (!detail?.id) return;
+            void (async () => {
+                if (detail.parentId && detail.parentId !== session.conversationId && detail.parentId !== session.activeChatTabId) {
+                    await session.handleSelectChatTab(detail.parentId);
+                }
+                selectThread(detail.id!);
+            })();
         };
         const onOpenForParent = (e: Event) => {
             const parentId = (e as CustomEvent<{ parentId?: string }>).detail?.parentId;
-            if (parentId && parentId !== session.conversationId && parentId !== session.activeChatTabId) {
-                void session.handleSelectChatTab(parentId);
-            }
             const fromMessages = session.messages
                 .map((m) => extractSubagentsFromText(m.content || "", parentId))
                 .flat();
             const first = fromMessages[0];
-            if (first) {
-                upsertSubagent({
-                    id: first.id,
-                    title: first.title,
-                    task: first.task,
-                    model: first.model,
-                    transcript: first.transcript,
-                    activity: first.task || "Working…",
-                    status: first.status,
-                    parentId,
-                });
-                openSubagent(first.id);
-                return;
-            }
-            const liveFirst = parentId
-                ? getSubagents().find((c) => c.parentId === parentId)
-                : getSubagents()[0];
-            if (liveFirst) openSubagent(liveFirst.id);
+            void (async () => {
+                if (parentId && parentId !== session.conversationId && parentId !== session.activeChatTabId) {
+                    await session.handleSelectChatTab(parentId);
+                }
+                if (first) {
+                    upsertSubagent({
+                        id: first.id,
+                        title: first.title,
+                        task: first.task,
+                        model: first.model,
+                        transcript: first.transcript,
+                        activity: first.task || "Working…",
+                        status: first.status,
+                        parentId,
+                    });
+                    selectThread(first.id);
+                    return;
+                }
+                const liveFirst = parentId
+                    ? getSubagents().find((c) => c.parentId === parentId)
+                    : getSubagents()[0];
+                if (liveFirst) selectThread(liveFirst.id);
+            })();
         };
         window.addEventListener("shape-open-subagent", onOpen as EventListener);
         window.addEventListener("shape-open-subagents-for", onOpenForParent as EventListener);
@@ -96,25 +155,8 @@ export default function Chat({
             window.removeEventListener("shape-open-subagent", onOpen as EventListener);
             window.removeEventListener("shape-open-subagents-for", onOpenForParent as EventListener);
         };
-    }, [session.conversationId, session.handleSelectChatTab, session.messages]);
+    }, [session.handleSelectChatTab, session.messages, session.conversationId, session.activeChatTabId]);
     useSyncChatGenerating(session.conversationId ?? session.activeChatTabId, session.isLoading);
-    const [tabsSlot, setTabsSlot] = React.useState<HTMLElement | null>(null);
-    React.useEffect(() => {
-        const find = () => document.getElementById(AGENT_TABS_SLOT);
-        setTabsSlot(find());
-        const timer = window.setInterval(() => {
-            const el = find();
-            if (el) {
-                setTabsSlot(el);
-                window.clearInterval(timer);
-            }
-        }, 50);
-        const stop = window.setTimeout(() => window.clearInterval(timer), 2000);
-        return () => {
-            window.clearInterval(timer);
-            window.clearTimeout(stop);
-        };
-    }, []);
 
     const taskItems = useMemo((): ComposerTaskItem[] => {
         const lastAssistant = [...session.messages].reverse().find((m) => m.role === "assistant");
@@ -194,26 +236,33 @@ export default function Chat({
         messages: session.messages,
     });
 
+    React.useEffect(() => {
+        publishChatCrumb({
+            id: session.conversationId ?? session.activeChatTabId,
+            title: crumbTitle,
+        });
+    }, [crumbTitle, session.conversationId, session.activeChatTabId]);
+
+    const activeThread = React.useSyncExternalStore(subscribeSubagents, getActiveSubagent, getActiveSubagent);
+    const parentChatId = session.conversationId ?? session.activeChatTabId;
+    const viewingThread = activeThread && (!activeThread.parentId || activeThread.parentId === parentChatId)
+        ? activeThread
+        : null;
+
     const titlebar = (
         <ChatTitlebar
             title={crumbTitle}
-            conversationId={session.conversationId ?? session.activeChatTabId}
+            conversationId={parentChatId}
             recentIds={(session.recentConvs ?? []).map((c) => c.id)}
             timestamp={
                 conv?.timestamp
                 ?? session.messages.at(-1)?.timestamp
                 ?? null
             }
-            subagentTitle={activeSubagent?.title ?? null}
-            subagentModel={activeSubagent?.model ?? null}
+            subagentTitle={viewingThread ? subagentDisplayTitle(viewingThread) : null}
+            subagentModel={viewingThread?.model}
             extractedSubagents={extractedSubagents}
-            onCloseSubagent={() => {
-                closeSubagent();
-            }}
-            onSelect={(id) => {
-                closeSubagent();
-                void session.handleSelectChatTab(id);
-            }}
+            onCloseSubagent={() => closeSubagent()}
         />
     );
 
@@ -225,7 +274,7 @@ export default function Chat({
     );
 
     const isEmpty = session.messages.length === 0;
-    const emptyStage = isEmpty && !embedded;
+    const emptyStage = isEmpty && !embedded && !talk;
     const emptyStageRef = React.useRef<HTMLDivElement>(null);
     const emptyStackRef = React.useRef<HTMLDivElement>(null);
     const [emptyTop, setEmptyTop] = React.useState(0);
@@ -268,6 +317,30 @@ export default function Chat({
         [session.messageGroups],
     );
 
+    const snaps = React.useRef(new Map<string, typeof session.messages>());
+    const slotOrder = React.useRef<string[]>([]);
+    const dormantEnd = React.useRef<HTMLDivElement>(null);
+    const threadHandlers = React.useRef({
+        redo: session.handleRedo,
+        restore: session.handleRestore,
+        fork: session.handleFork,
+        resolved: session.isEditResolved,
+    });
+    threadHandlers.current = {
+        redo: session.handleRedo,
+        restore: session.handleRestore,
+        fork: session.handleFork,
+        resolved: session.isEditResolved,
+    };
+    const activeKey = session.conversationId;
+    if (activeKey && session.messages.length > 0) {
+        snaps.current.set(activeKey, session.messages);
+        if (!slotOrder.current.includes(activeKey)) {
+            slotOrder.current = [...slotOrder.current, activeKey].slice(-4);
+        }
+    }
+    const slotIds = slotOrder.current.filter((id) => (snaps.current.get(id)?.length ?? 0) > 0);
+
     const composer = (
         <ChatInput
             inputValue={session.inputValue}
@@ -287,9 +360,9 @@ export default function Chat({
             setSelectedModel={session.setSelectedModel}
             selectedWorkerModels={session.selectedWorkerModels}
             setSelectedWorkerModels={session.setSelectedWorkerModels}
-            hideModeSelect={false}
-            selectedMode={session.selectedMode}
-            setSelectedMode={session.setSelectedMode}
+            talkSurface={talk}
+            talkName={talkName}
+            talkMark={talkMark}
             reasoningEffort={session.reasoningEffort}
             setReasoningEffort={session.setReasoningEffort}
             pendingEdits={session.pendingEdits}
@@ -307,85 +380,64 @@ export default function Chat({
                 void session.handleNewChat();
             }}
             variant={embedded || !isEmpty ? "default" : "empty"}
+            folderLocked={workspaceModeId === "Code" && !session.project_path}
         />
     );
 
     const insetX = embedded ? "px-2" : "px-5 md:px-6";
     const columnWidth = embedded ? "max-w-none" : "max-w-4xl";
 
-    const chatColumn = activeSubagent ? (
-        <div className="relative min-h-0 flex-1">
-            <div className="absolute inset-0 z-0 overflow-y-auto px-5 no-scrollbar select-text md:px-6">
-                <SubagentChatView />
-            </div>
-        </div>
-    ) : emptyStage ? (
-        <div
-            ref={emptyStageRef}
-            className={cn("relative flex min-h-0 flex-1 flex-col items-center overflow-hidden", insetX)}
-        >
-            <div
-                ref={emptyStackRef}
-                className={cn("relative flex w-full shrink-0 flex-col items-center gap-5", columnWidth)}
-                style={{
-                    marginTop: emptyTop,
-                    transition: emptyTopMotion.current
-                        ? "margin-top 920ms cubic-bezier(0.22, 1, 0.36, 1)"
-                        : "none",
-                }}
-            >
-                <ChatEmptyState
-                    onSelectMode={(mode) => {
-                        session.setSelectedMode(mode);
-                        window.dispatchEvent(new CustomEvent("shape-chat-focus-input"));
-                    }}
-                />
-                <div className="w-full">
-                    {composer}
-                </div>
-            </div>
-        </div>
-    ) : (
+    const chatColumn = (
         <>
-            <div className="relative min-h-0 flex-1">
-                <div
-                    ref={session.scrollContainerRef}
-                    onScroll={session.handleScroll}
-                    onKeyDown={(e) => {
-                        if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "a") return;
-                        const target = e.target as HTMLElement | null;
-                        if (target?.closest("textarea, input, [contenteditable='true']")) return;
-                        e.preventDefault();
-                        const root = e.currentTarget;
-                        const range = document.createRange();
-                        range.selectNodeContents(root);
-                        const sel = window.getSelection();
-                        sel?.removeAllRanges();
-                        sel?.addRange(range);
-                    }}
-                    className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto no-scrollbar select-text", insetX)}
-                >
-                    <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-16 pt-5" : "pb-80 pt-12")}>
-                        <ChatMessageList
-                            messageGroups={session.messageGroups}
-                            messages={session.messages}
-                            isLoading={session.isLoading}
-                            activityLabel={session.activityLabel}
-                            messagesEndRef={session.messagesEndRef}
-                            onRedo={session.handleRedo}
-                            onRestore={session.handleRestore}
-                            onFork={session.handleFork}
-                            isFileEditResolved={session.isEditResolved}
-                            activeChatTabId={session.activeChatTabId}
-                            fullWidthBubbles={false}
-                        />
-                    </div>
-                </div>
+            <div className={cn("relative min-h-0 flex-1", emptyStage && "hidden")}>
+                {slotIds.map((id) => {
+                    const live = id === activeKey;
+                    const slotMessages = live ? session.messages : snaps.current.get(id) ?? [];
+                    return (
+                        <div
+                            key={id}
+                            hidden={!live}
+                            ref={live ? session.scrollContainerRef : undefined}
+                            data-chat-scroll={live ? "" : undefined}
+                            onScroll={live ? session.handleScroll : undefined}
+                            onKeyDown={live ? (e) => {
+                                if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "a") return;
+                                const target = e.target as HTMLElement | null;
+                                if (target?.closest("textarea, input, [contenteditable='true']")) return;
+                                e.preventDefault();
+                                const root = e.currentTarget;
+                                const range = document.createRange();
+                                range.selectNodeContents(root);
+                                const sel = window.getSelection();
+                                sel?.removeAllRanges();
+                                sel?.addRange(range);
+                            } : undefined}
+                            className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto overflow-x-clip no-scrollbar select-text", insetX)}
+                        >
+                            <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-16 pt-5" : "pb-80 pt-12")}>
+                                {live && viewingThread ? (
+                                    <SubagentChatView />
+                                ) : (
+                                    <KeptThread
+                                        messages={slotMessages}
+                                        isLoading={live && session.isLoading}
+                                        activityLabel={live ? session.activityLabel : null}
+                                        messagesEndRef={live ? session.messagesEndRef : dormantEnd}
+                                        handlers={threadHandlers}
+                                        surface={talk ? "talk" : "code"}
+                                        talkMark={talkMark}
+                                        talkName={talkName}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
                 <div
                     className="pointer-events-none absolute inset-x-0 top-0 z-20 h-20 bg-linear-to-b from-panel to-transparent"
                     aria-hidden
                 />
-                {turnCount >= 2 && !embedded ? (
+                {turnCount >= 2 && !embedded && !emptyStage ? (
                     <div className="pointer-events-none absolute inset-y-0 right-1 z-10 hidden w-9 py-6 md:flex lg:right-3">
                         <div className="pointer-events-auto flex h-full w-full items-stretch justify-end">
                             <ChatHistoryStepper
@@ -400,21 +452,44 @@ export default function Chat({
                 ) : null}
             </div>
 
-            <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
-                <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
+            {emptyStage ? (
+                <div
+                    ref={emptyStageRef}
+                    className={cn("relative flex min-h-0 flex-1 flex-col items-center overflow-hidden", insetX)}
+                >
                     <div
-                        className="pointer-events-none absolute inset-x-0 bottom-full h-20 bg-linear-to-t from-panel to-transparent"
-                        aria-hidden
-                    />
-                    {composer}
+                        ref={emptyStackRef}
+                        className={cn("relative z-10 flex w-full shrink-0 flex-col items-center gap-4", columnWidth)}
+                        style={{
+                            marginTop: emptyTop,
+                            transition: emptyTopMotion.current
+                                ? "margin-top 920ms cubic-bezier(0.22, 1, 0.36, 1)"
+                                : "none",
+                        }}
+                    >
+                        <ChatEmptyState />
+                        <div className="w-full">
+                            {composer}
+                        </div>
+                    </div>
                 </div>
-            </div>
+            ) : viewingThread ? null : (
+                <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
+                    <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
+                        <div
+                            className="pointer-events-none absolute inset-x-0 bottom-full h-20 bg-linear-to-t from-panel to-transparent"
+                            aria-hidden
+                        />
+                        {composer}
+                    </div>
+                </div>
+            )}
         </>
     );
 
     return (
         <div className={cn("flex h-full w-full flex-col overflow-hidden font-sans", className)}>
-            {embedded ? null : tabsSlot ? createPortal(titlebar, tabsSlot) : null}
+            {embedded || !showTitlebar ? null : titlebar}
 
             <div
                 className={cn(

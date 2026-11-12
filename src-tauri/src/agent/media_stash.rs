@@ -9,7 +9,15 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 static INDEX: LazyLock<Mutex<HashMap<String, MediaEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+    LazyLock::new(|| Mutex::new(load_index()));
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StashMeta {
+    pub model: Option<String>,
+    pub parent_id: Option<String>,
+    pub batch_id: Option<String>,
+    pub ordinal: Option<u32>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaEntry {
@@ -20,10 +28,50 @@ pub struct MediaEntry {
     pub prompt: Option<String>,
     pub conversation_id: Option<String>,
     pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ordinal: Option<u32>,
 }
 
 fn app_data_dir() -> Option<PathBuf> {
+    if let Ok(custom) = std::env::var("SHAPE_MEDIA_DIR") {
+        let trimmed = custom.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
     dirs::data_local_dir().map(|d| d.join("Shape").join("media"))
+}
+
+fn index_path() -> Option<PathBuf> {
+    app_data_dir().map(|d| d.join("index.json"))
+}
+
+fn load_index() -> HashMap<String, MediaEntry> {
+    let Some(path) = index_path() else {
+        return HashMap::new();
+    };
+    let Ok(raw) = fs::read_to_string(path) else {
+        return HashMap::new();
+    };
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+fn persist_index(map: &HashMap<String, MediaEntry>) {
+    let Some(path) = index_path() else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(raw) = serde_json::to_string_pretty(map) {
+        let _ = fs::write(path, raw);
+    }
 }
 
 fn ensure_dir(conversation_id: Option<&str>) -> Result<PathBuf, String> {
@@ -52,6 +100,16 @@ fn ext_for(mime: &str, kind: &str) -> &'static str {
         "wav"
     } else if kind == "audio" {
         "mp3"
+    } else if m.contains("gltf-binary") || kind == "model" || kind == "glb" {
+        "glb"
+    } else if m.contains("gltf") || kind == "gltf" {
+        "gltf"
+    } else if kind == "obj" || m.ends_with("/obj") {
+        "obj"
+    } else if kind == "stl" || m.contains("stl") {
+        "stl"
+    } else if kind == "fbx" {
+        "fbx"
     } else {
         "bin"
     }
@@ -64,6 +122,18 @@ pub fn stash_bytes(
     conversation_id: Option<&str>,
     prompt: Option<&str>,
     name: Option<&str>,
+) -> Result<MediaEntry, String> {
+    stash_bytes_meta(bytes, mime, kind, conversation_id, prompt, name, StashMeta::default())
+}
+
+pub fn stash_bytes_meta(
+    bytes: &[u8],
+    mime: &str,
+    kind: &str,
+    conversation_id: Option<&str>,
+    prompt: Option<&str>,
+    name: Option<&str>,
+    meta: StashMeta,
 ) -> Result<MediaEntry, String> {
     let dir = ensure_dir(conversation_id)?;
     let id = Uuid::new_v4().to_string();
@@ -78,9 +148,14 @@ pub fn stash_bytes(
         prompt: prompt.map(|s| s.to_string()),
         conversation_id: conversation_id.map(|s| s.to_string()),
         name: name.map(|s| s.to_string()),
+        model: meta.model,
+        parent_id: meta.parent_id,
+        batch_id: meta.batch_id,
+        ordinal: meta.ordinal,
     };
     if let Ok(mut guard) = INDEX.lock() {
         guard.insert(id, entry.clone());
+        persist_index(&guard);
     }
     Ok(entry)
 }
@@ -103,6 +178,42 @@ pub fn get(id: &str) -> Option<MediaEntry> {
 pub fn read_bytes(id: &str) -> Result<Vec<u8>, String> {
     let entry = get(id).ok_or_else(|| format!("Unknown media_id '{id}'."))?;
     fs::read(&entry.path).map_err(|e| e.to_string())
+}
+
+pub fn list_for_conversation(conversation_id: &str) -> Vec<MediaEntry> {
+    let Ok(guard) = INDEX.lock() else {
+        return Vec::new();
+    };
+    let mut rows: Vec<_> = guard
+        .values()
+        .filter(|e| e.conversation_id.as_deref() == Some(conversation_id))
+        .cloned()
+        .collect();
+    rows.sort_by(|a, b| a.id.cmp(&b.id));
+    rows
+}
+
+pub fn ledger_for_conversation(conversation_id: &str) -> String {
+    let rows = list_for_conversation(conversation_id);
+    if rows.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec!["Media in this conversation:".to_string()];
+    for (i, row) in rows.iter().enumerate() {
+        let ordinal = row.ordinal.unwrap_or((i + 1) as u32);
+        let prompt = row.prompt.as_deref().unwrap_or("").replace('\n', " ");
+        let parent = row
+            .parent_id
+            .as_deref()
+            .map(|p| format!(" parent={p}"))
+            .unwrap_or_default();
+        let model = row.model.as_deref().unwrap_or("-");
+        lines.push(format!(
+            "{ordinal}. media_id={} kind={} model={model}{parent} \"{prompt}\"",
+            row.id, row.kind
+        ));
+    }
+    lines.join("\n")
 }
 
 pub fn find_by_name(name: &str) -> Option<MediaEntry> {
@@ -144,4 +255,88 @@ pub fn decode_data_url(data_url: &str) -> Result<(String, Vec<u8>), String> {
         .decode(b64.trim())
         .map_err(|e| e.to_string())?;
     Ok((mime, bytes))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaPayload {
+    pub id: String,
+    pub mime: String,
+    pub kind: String,
+    pub path: String,
+    pub name: Option<String>,
+    pub prompt: Option<String>,
+    pub parent_id: Option<String>,
+    pub bytes: Vec<u8>,
+}
+
+pub fn payload(id: &str) -> Result<MediaPayload, String> {
+    let entry = get(id).ok_or_else(|| format!("Unknown media_id '{id}'."))?;
+    let bytes = fs::read(&entry.path).map_err(|e| e.to_string())?;
+    Ok(MediaPayload {
+        id: entry.id,
+        mime: entry.mime,
+        kind: entry.kind,
+        path: entry.path,
+        name: entry.name,
+        prompt: entry.prompt,
+        parent_id: entry.parent_id,
+        bytes,
+    })
+}
+
+#[tauri::command]
+pub fn read_media(id: String) -> Result<MediaPayload, String> {
+    payload(&id)
+}
+
+#[cfg(test)]
+pub fn reset_index_for_tests() {
+    if let Ok(mut guard) = INDEX.lock() {
+        *guard = load_index();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn stashes_glb_with_model_extension_and_ledger() {
+        let _g = LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("shape-media-test-{}", Uuid::new_v4()));
+        let _ = fs::create_dir_all(&dir);
+        std::env::set_var("SHAPE_MEDIA_DIR", &dir);
+        reset_index_for_tests();
+        let bytes = b"glTF\x02\x00\x00\x00";
+        let entry = stash_bytes_meta(
+            bytes,
+            "model/gltf-binary",
+            "model",
+            Some("conv-1"),
+            Some("low-poly sword"),
+            Some("sword.glb"),
+            StashMeta {
+                parent_id: Some("parent-9".into()),
+                ordinal: Some(1),
+                ..StashMeta::default()
+            },
+        )
+        .unwrap();
+        assert!(entry.path.ends_with(".glb"), "{}", entry.path);
+        assert_eq!(entry.kind, "model");
+        let ledger = ledger_for_conversation("conv-1");
+        assert!(ledger.contains("Media in this conversation"));
+        assert!(ledger.contains(&entry.id));
+        assert!(ledger.contains("kind=model"));
+        let loaded = payload(&entry.id).unwrap();
+        assert_eq!(loaded.bytes, bytes);
+        assert_eq!(loaded.parent_id.as_deref(), Some("parent-9"));
+        let _ = fs::remove_dir_all(&dir);
+        std::env::remove_var("SHAPE_MEDIA_DIR");
+        reset_index_for_tests();
+    }
 }

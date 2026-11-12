@@ -79,7 +79,7 @@ export interface GitBranchGraph {
 }
 
 export interface TerminalShellProfile {
-    id: "powershell" | "pwsh" | "cmd" | "gitbash" | "wsl";
+    id: "powershell" | "pwsh" | "cmd" | "gitbash" | "wsl" | "zsh" | "bash";
     label: string;
     path: string;
 }
@@ -275,7 +275,8 @@ export interface Conversation {
     timestamp: number;
     /** Hidden from the sidebar; still opens from the command palette. */
     archived?: boolean;
-    kind?: "chat" | "multiwork";
+    kind?: "chat" | "multiwork" | "thread";
+    parent_id?: string | null;
 }
 
 export interface BrowserTab {
@@ -337,6 +338,7 @@ export interface ChatGenerationState {
     isGenerating: boolean;
     turnId?: string | null;
     conversationId?: string | null;
+    conversationIds?: string[];
     partialContent?: string | null;
     activityLabel?: string | null;
 }

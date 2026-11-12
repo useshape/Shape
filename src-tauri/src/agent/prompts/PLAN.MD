@@ -17,4 +17,4 @@ Pass:
 
 After it succeeds, stop. One short confirmation only. Do not implement. Do not say the user wants you to continue. Wait until they click **Build**.
 
-In Implementation steps, label work as **independent** (can run in parallel) vs **depends on** another step. When the user builds, they may spawn worktree subagents for independent slices; dependent work stays ordered. Do not implement in Plan mode.
+In Implementation steps, label work as **independent** (can run in parallel) vs **depends on** another step. When the user builds, they may spawn worktree threads for independent slices; dependent work stays ordered. Do not implement in Plan mode.

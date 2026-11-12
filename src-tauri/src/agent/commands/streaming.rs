@@ -23,24 +23,27 @@ pub fn completions_url() -> String {
 #[derive(Debug, Clone)]
 pub enum LlmProvider {
     Shape,
+    OpenRouter,
 }
 
 impl LlmProvider {
     pub fn api_key<'a>(&'a self, shape_token: &'a str) -> &'a str {
         match self {
-            Self::Shape => shape_token,
+            Self::Shape | Self::OpenRouter => shape_token,
         }
     }
 
     pub fn completions_url(&self) -> String {
         match self {
             Self::Shape => completions_url(),
+            Self::OpenRouter => "https://openrouter.ai/api/v1/chat/completions".to_string(),
         }
     }
 
     pub fn label(&self) -> &'static str {
         match self {
             Self::Shape => "Shape",
+            Self::OpenRouter => "OpenRouter",
         }
     }
 }
@@ -63,6 +66,12 @@ pub fn rewrite_model_for_provider(model: &str, provider: &LlmProvider) -> Result
         LlmProvider::Shape => {
             if crate::agent::model_router::is_auto_selection(model) {
                 return Ok(crate::agent::model_router::proxy_model_id(model));
+            }
+            Ok(m)
+        }
+        LlmProvider::OpenRouter => {
+            if crate::agent::model_router::is_auto_selection(model) {
+                return Ok(crate::agent::model_router::MODEL_FAST.to_string());
             }
             Ok(m)
         }
@@ -154,19 +163,23 @@ impl ProxyContext {
 }
 
 pub(crate) fn emit_chat_status(app_handle: &tauri::AppHandle, payload: serde_json::Value) {
+    let conv_id = payload
+        .get("conversationId")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     if let Some(label) = payload
         .get("label")
         .and_then(|v| v.as_str())
         .filter(|s| !s.trim().is_empty())
     {
         if let Some(agent_state) = app_handle.try_state::<crate::agent::models::AgentState>() {
-            agent_state.set_in_flight_activity_label(Some(label));
+            agent_state.set_in_flight_activity_label_for(conv_id.as_deref(), Some(label));
         }
     } else if payload.get("phase").and_then(|v| v.as_str()) == Some("model")
         && payload.get("label").is_none()
     {
         if let Some(agent_state) = app_handle.try_state::<crate::agent::models::AgentState>() {
-            agent_state.set_in_flight_activity_label(None);
+            agent_state.set_in_flight_activity_label_for(conv_id.as_deref(), None);
         }
     }
     let _ = app_handle.emit("chat_status", payload);
@@ -177,7 +190,10 @@ pub(crate) fn emit_stream_token(
     proxy_ctx: &ProxyContext,
     chunk: impl Into<String>,
 ) {
-    let chunk = chunk.into();
+    let chunk = crate::agent::tools::browse::strip_data_urls(&chunk.into());
+    if chunk.is_empty() {
+        return;
+    }
     if let Some(agent_state) = app_handle.try_state::<crate::agent::models::AgentState>() {
         agent_state.append_in_flight(
             &chunk,
@@ -228,6 +244,12 @@ pub(crate) fn shape_proxy_request(
         .post(ctx.provider.completions_url())
         .header("Authorization", format!("Bearer {}", bearer))
         .header("Content-Type", "application/json");
+
+    if matches!(ctx.provider, LlmProvider::OpenRouter) {
+        builder = builder
+            .header("HTTP-Referer", "https://shape.ai")
+            .header("X-Title", "Shape");
+    }
 
     if matches!(ctx.provider, LlmProvider::Shape) {
         builder = builder
@@ -299,6 +321,8 @@ pub struct StreamOutcome {
     pub token_count: usize,
     pub input_tokens: usize,
     pub output_tokens: usize,
+    /// Tokens served from the provider prompt cache, when the response reports them.
+    pub cached_tokens: usize,
     /// True when any reasoning/thinking tokens were streamed this completion.
     pub had_reasoning: bool,
     /// Accumulated reasoning text (OpenRouter `reasoning` / `reasoning_content`).
@@ -440,6 +464,7 @@ pub async fn stream_chat(
                 token_count: 0,
                 input_tokens: 0,
                 output_tokens: 0,
+                cached_tokens: 0,
                 had_reasoning: false,
                 reasoning: None,
                 reasoning_details: None,
@@ -487,7 +512,7 @@ pub async fn stream_chat(
     logging::debug("stream", "SSE stream connected");
     emit_chat_status(
         app_handle,
-        serde_json::json!({ "phase": "model", "label": "Generating" }),
+        serde_json::json!({ "phase": "model", "label": "Generating", "conversationId": proxy_ctx.conversation_id }),
     );
 
     let mut stream = resp.bytes_stream();
@@ -497,6 +522,7 @@ pub async fn stream_chat(
     let mut last_emit = Instant::now();
     let mut token_count: usize = 0;
     let mut input_tokens: usize = 0;
+    let mut cached_tokens: usize = 0;
     let mut output_tokens: usize = 0;
     let mut in_thinking = false;
     let mut had_reasoning = false;
@@ -528,6 +554,7 @@ pub async fn stream_chat(
                     token_count,
                     input_tokens,
                     output_tokens,
+                    cached_tokens,
                     had_reasoning,
                     reasoning: nonempty_string(reasoning_acc.clone()),
                     reasoning_details: nonempty_details(&reasoning_details_acc),
@@ -548,6 +575,7 @@ pub async fn stream_chat(
                 token_count,
                 input_tokens,
                 output_tokens,
+                cached_tokens,
                 had_reasoning,
                 reasoning: nonempty_string(reasoning_acc.clone()),
                 reasoning_details: nonempty_details(&reasoning_details_acc),
@@ -591,6 +619,7 @@ pub async fn stream_chat(
                     token_count,
                     input_tokens,
                     output_tokens,
+                    cached_tokens,
                     had_reasoning,
                     reasoning: nonempty_string(reasoning_acc.clone()),
                     reasoning_details: nonempty_details(&reasoning_details_acc),
@@ -636,6 +665,15 @@ pub async fn stream_chat(
                 }
                 if let Some(completion) = usage.get("completion_tokens").and_then(|v| v.as_u64()) {
                     output_tokens = completion as usize;
+                }
+                let cached = usage
+                    .get("prompt_tokens_details")
+                    .and_then(|d| d.get("cached_tokens"))
+                    .and_then(|v| v.as_u64())
+                    .or_else(|| usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()))
+                    .or_else(|| usage.get("cached_tokens").and_then(|v| v.as_u64()));
+                if let Some(cached) = cached {
+                    cached_tokens = cached as usize;
                 }
             }
 
@@ -770,6 +808,7 @@ pub async fn stream_chat(
                                 "phase": "tool",
                                 "tool": name,
                                 "label": label,
+                                "conversationId": proxy_ctx.conversation_id,
                             }),
                         );
                     }
@@ -873,10 +912,11 @@ pub async fn stream_chat(
     logging::info(
         "stream",
         &format!(
-            "Stream complete. {} chunks, {} in / {} out tokens, {} chars, {} tool_calls",
+            "Stream complete. {} chunks, {} in / {} out tokens, {} cached, {} chars, {} tool_calls",
             token_count,
             final_input,
             final_output,
+            cached_tokens,
             content.len(),
             tool_calls.len()
         ),
@@ -895,6 +935,7 @@ pub async fn stream_chat(
             serde_json::json!({
                 "phase": "model",
                 "label": "Hit output limit — retrying",
+                "conversationId": proxy_ctx.conversation_id,
             }),
         );
     }
@@ -906,6 +947,7 @@ pub async fn stream_chat(
         token_count,
         input_tokens: final_input,
         output_tokens: final_output,
+        cached_tokens,
         had_reasoning,
         reasoning: nonempty_string(reasoning_acc),
         reasoning_details: nonempty_details(&reasoning_details_acc),
@@ -968,6 +1010,9 @@ pub async fn stream_chat_with_retry(
         "stream",
         "Empty response received, retrying once before bailing",
     );
+    // A retry is a new attempt. Reusing the billed request id is a 409.
+    let mut retry_ctx = proxy_ctx.clone();
+    retry_ctx.refresh_request_id();
     let second = stream_chat(
         client,
         api_key,
@@ -976,7 +1021,7 @@ pub async fn stream_chat_with_retry(
         app_handle,
         token,
         model,
-        proxy_ctx,
+        &retry_ctx,
     )
     .await?;
     Ok(second)
@@ -1028,6 +1073,18 @@ fn completion_message_text(json: &Value) -> String {
             return trimmed.to_string();
         }
     }
+    // Some models spend the completion on reasoning and leave content empty.
+    // A short reasoning line is still a usable title or commit subject.
+    let message = &json["choices"][0]["message"];
+    let reasoning = message
+        .get("reasoning")
+        .and_then(|v| v.as_str())
+        .or_else(|| message.get("reasoning_content").and_then(|v| v.as_str()));
+    if let Some(line) = reasoning.and_then(|text| text.lines().map(str::trim).find(|line| !line.is_empty())) {
+        if line.chars().count() <= 80 {
+            return line.to_string();
+        }
+    }
     String::new()
 }
 
@@ -1065,7 +1122,7 @@ pub async fn complete_chat_cancellable(
     let mut body = json!({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": if proxy_ctx.feature == "title" { 80 } else { 30 },
+        "max_tokens": if proxy_ctx.feature == "title" { 160 } else { 30 },
     });
     // Title calls are a few words. Leaving reasoning on spends the whole budget
     // before any title text is written, and the chat keeps the chopped placeholder.
@@ -1209,7 +1266,7 @@ pub async fn complete_chat_with_max_tokens(
     });
     if matches!(
         proxy_ctx.feature.as_str(),
-        "commit" | "title" | "file-edit" | "caption"
+        "commit" | "title" | "file-edit" | "caption" | "review"
     ) {
         body["reasoning"] = json!({ "enabled": false, "exclude": true });
     }
@@ -1301,6 +1358,15 @@ mod tests {
         assert_eq!(
             rewrite_model_for_provider("openrouter/auto", &shape).unwrap(),
             "auto"
+        );
+    }
+
+    #[test]
+    fn openrouter_auto_uses_the_fast_model() {
+        let or = LlmProvider::OpenRouter;
+        assert_eq!(
+            rewrite_model_for_provider("auto", &or).unwrap(),
+            crate::agent::model_router::MODEL_FAST
         );
     }
 }

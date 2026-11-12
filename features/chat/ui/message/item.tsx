@@ -11,7 +11,7 @@ import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more
 import React from "react";
 import { cn } from "@/lib/utils";
 import { toTimestampMs } from "@/lib/ui/timestamp";
-import { MessageRenderer, parseMessageContent, extractWebSearchResults } from "../md/renderer";
+import { MessageRenderer, parseMessageContent } from "../md/renderer";
 import { Icon } from "@/components/ui/icon";
 
 
@@ -40,16 +40,19 @@ import { mentionRanges, mentionDisplayLabel } from "@/lib/chat/mentions";
 import { slashCommandRanges } from "@/lib/chat/workflows";
 import { useSettings } from "@/lib/settings";
 import { openProjectFile } from "@/lib/window/open-project-file";
-import { WebSourcesMenu } from "../blocks/search";
 import { Button } from "@/components/ui/button";
 import { UserMessageCard } from "./bubble";
 import { ContextChip, MentionChipIcon, WorkflowChipIcon } from "./context-chip";
-import { GeneratingIndicator } from "../blocks/generating";
+import { AgentStatus, GeneratingIndicator } from "../blocks/generating";
+import { ShapeAutoIcon } from "@/lib/ui/provider-icon";
+import { WorkerMark } from "@/features/agent/sidebar/worker-mark";
 import { isAutoModelId } from "@/lib/chat/usage-display";
 import { commands } from "@/lib/backend/commands";
 import { parseUserAttachments } from "../../lib/user-attachments";
 import type { ParsedUserAttachment } from "../../lib/user-attachments";
 import { MessageAttachmentPill } from "../composer/attachments";
+import { PhotoStack } from "../blocks/photo-stack";
+import { isLooseTalkBubble, talkSegments } from "../../lib/talk-segments";
 import { ContextWindowMenu, hasContextWindowData } from "./context-window";
 import {
     AlertDialog,
@@ -79,19 +82,12 @@ type ChatMessageItemProps = {
     onFork?: (index: number) => void;
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
     fullWidthBubbles?: boolean;
+    surface?: "code" | "talk";
+    talkMark?: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
+    talkName?: string;
 };
 
 function SentAttachment({ att }: { att: ParsedUserAttachment }) {
-    if (att.kind === "image" && att.dataUrl) {
-        return (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-                src={att.dataUrl}
-                alt={att.name}
-                className="max-h-44 max-w-56 rounded-lg border border-border-subtle object-contain"
-            />
-        );
-    }
     return <MessageAttachmentPill name={att.name} />;
 }
 
@@ -281,6 +277,22 @@ function parseForkedFrom(content: string): { id: string; title: string; rest: st
     return { id, title, rest: content.slice(match[0].length) };
 }
 
+function recvTalkRadius(prevText: boolean, nextText: boolean): string {
+    if (!prevText && !nextText) return "rounded-[1.15rem]";
+    if (!prevText && nextText) return "rounded-[1.15rem] rounded-bl-[0.35rem]";
+    if (prevText && nextText) return "rounded-[1.15rem] rounded-tl-[0.35rem] rounded-bl-[0.35rem]";
+    return "rounded-[1.15rem] rounded-tl-[0.35rem]";
+}
+
+function talkProseVisible(raw: string): boolean {
+    const text = raw
+        .replace(/<([a-z][\w:-]*)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    return text.length > 0;
+}
+
 function ChatMessageItemInner({
     role,
     content,
@@ -295,7 +307,11 @@ function ChatMessageItemInner({
     onRestore,
     onFork,
     isFileEditResolved,
+    surface = "code",
+    talkMark = null,
+    talkName = "Shape",
 }: ChatMessageItemProps) {
+    const talk = surface === "talk";
     const [expanded, setExpanded] = React.useState(false);
     const [forkOpen, setForkOpen] = React.useState(false);
     const [menuOpen, setMenuOpen] = React.useState(false);
@@ -376,11 +392,12 @@ function ChatMessageItemInner({
         [isUser, userParts?.text, content],
     );
 
-    const webSources = React.useMemo(
-        () => (!isUser ? extractWebSearchResults(content) : []),
-        [isUser, content],
-    );
-
+    if (
+        role === "user"
+        && (content.trim().startsWith("<scheduled_followup") || content.trim().startsWith("<subagent_update"))
+    ) {
+        return null;
+    }
 
     if (role === "user" && userParts) {
         const displayText = continueAction?.action
@@ -396,9 +413,38 @@ function ChatMessageItemInner({
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
             >
-                <div className="group flex w-full min-w-0 items-start">
-                    <div className="flex w-full min-w-0 flex-col gap-1">
-                        <UserMessageCard>
+                <div className="group flex w-full min-w-0 items-end justify-end gap-1">
+                    <div className="flex shrink-0 items-center gap-0.5 select-none opacity-0 transition-opacity group-hover:opacity-100">
+                            <MessageSentTime timestamp={timestamp} />
+                            <Tooltip content="Copy Message" side="top">
+                                <Button variant="ghost" size="icon" onClick={handleCopy}>
+                                    <Icon icon={Clipboard20Regular} className="icon-md" />
+                                </Button>
+                            </Tooltip>
+                            <Tooltip content="Restore to this checkpoint" side="top">
+                                <Button variant="ghost" size="icon" onClick={() => onRestore?.(index)}>
+                                    <Icon icon={ArrowShuffle24Regular} className="icon-md" />
+                                </Button>
+                            </Tooltip>
+                    </div>
+                    <div className="flex w-fit max-w-[min(100%,32rem)] min-w-0 flex-col items-end gap-1.5">
+                        {userParts.attachments.some((att) => att.kind === "image" && att.dataUrl) ? (
+                            <PhotoStack
+                                align="end"
+                                photos={userParts.attachments
+                                    .filter((att) => att.kind === "image" && att.dataUrl)
+                                    .map((att) => ({ src: att.dataUrl!, alt: att.name }))}
+                            />
+                        ) : null}
+                        {userParts.attachments.some((att) => att.kind !== "image") ? (
+                            <div className="flex flex-wrap justify-end gap-1.5">
+                                {userParts.attachments.filter((att) => att.kind !== "image").map((att, i) => (
+                                    <SentAttachment key={`${att.name}-file-${i}`} att={att} />
+                                ))}
+                            </div>
+                        ) : null}
+                        {displayText.trim() ? (
+                        <UserMessageCard className="w-full">
                             <div
                                 role={isLong ? "button" : undefined}
                                 tabIndex={isLong ? 0 : undefined}
@@ -412,32 +458,13 @@ function ChatMessageItemInner({
                                 className={cn(isLong && "cursor-pointer")}
                             >
                                 <div ref={bodyRef} className="min-w-0 wrap-break-word select-text">
-                                    {userParts.attachments.length > 0 && (
-                                        <div className="mb-2 flex flex-wrap items-end gap-1.5">
-                                            {userParts.attachments.map((att, i) => (
-                                                <SentAttachment key={`${att.name}-${i}`} att={att} />
-                                            ))}
-                                        </div>
-                                    )}
                                     <div className={cn(isLong && !expanded && "chat-message-fade-clamp")}>
                                         <MentionRichText text={displayText} />
                                     </div>
                                 </div>
                             </div>
                         </UserMessageCard>
-                        <div className="flex w-fit items-center gap-0.5 self-end select-none opacity-0 transition-opacity group-hover:opacity-100">
-                            <MessageSentTime timestamp={timestamp} />
-                            <Tooltip content="Copy Message" side="top">
-                                <Button variant="ghost" size="icon" onClick={handleCopy}>
-                                    <Icon icon={Clipboard20Regular} className="icon-md" />
-                                </Button>
-                            </Tooltip>
-                            <Tooltip content="Restore to this checkpoint" side="top">
-                                <Button variant="ghost" size="icon" onClick={() => onRestore?.(index)}>
-                                    <Icon icon={ArrowShuffle24Regular} className="icon-md" />
-                                </Button>
-                            </Tooltip>
-                        </div>
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -486,16 +513,74 @@ function ChatMessageItemInner({
         <ContextMenu>
         <ContextMenuTrigger asChild>
         <div
-            className="group/msg group relative z-10 mb-2 flex w-full select-text flex-col gap-1"
+            className={cn(
+                "group/msg group relative z-10 mb-2 flex min-w-0 select-text flex-col items-start gap-1 overflow-visible",
+                talk ? "w-fit max-w-[min(100%,38rem)]" : "w-full",
+            )}
             tabIndex={0}
             onKeyDown={handleKeyDown}
         >
-            <div className="flex min-w-0 flex-col gap-1 pr-6">
-                <div ref={bodyRef} className="min-w-0 select-text overflow-visible chat-text text-text-primary">
-                    {showTypingOnly ? (
-                        <GeneratingIndicator label="Thinking" />
+            <div className="flex min-w-0 w-full flex-col items-start gap-1 overflow-visible">
+                <div ref={bodyRef} className="min-w-0 w-full select-text overflow-visible chat-text text-text-primary">
+                    {talk ? (
+                        <div className="flex max-w-[min(100%,38rem)] items-end gap-2">
+                            <span className="mb-1">
+                            {talkMark ? (
+                                <WorkerMark
+                                    shape={talkMark.shape}
+                                    color={talkMark.color}
+                                    size={32}
+                                    live={!!isGenerating}
+                                    mood={isGenerating ? (activityLabel ? "working" : "typing") : "idle"}
+                                />
+                            ) : (
+                                <ShapeAutoIcon size={28} className="text-text-muted" />
+                            )}
+                            </span>
+                            <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+                                {showTypingOnly || (isGenerating && !talkProseVisible(renderContent)) ? (
+                                    <AgentStatus />
+                                ) : (
+                                    talkSegments(renderContent).map((bubble, i, all) => {
+                                        const loose = isLooseTalkBubble(bubble);
+                                        const prevText = i > 0 && !isLooseTalkBubble(all[i - 1]!);
+                                        const nextText = i < all.length - 1 && !isLooseTalkBubble(all[i + 1]!);
+                                        return (
+                                        <div
+                                            key={`talk-${i}`}
+                                            className={cn(
+                                                "w-fit max-w-full",
+                                                loose
+                                                    ? ""
+                                                    : cn(
+                                                        "bg-surface-4 px-3.5 py-2",
+                                                        recvTalkRadius(prevText, nextText),
+                                                        prevText || nextText ? "mb-0.5" : "",
+                                                    ),
+                                            )}
+                                        >
+                                            <MessageRenderer
+                                                content={bubble}
+                                                isGenerating={isGenerating && i === all.length - 1}
+                                                activityLabel={i === all.length - 1 ? activityLabel : null}
+                                                isFileEditResolved={isFileEditResolved}
+                                                durationMs={stats?.timeMs}
+                                                surface="talk"
+                                                talkName={talkName}
+                                            />
+                                        </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    ) : showTypingOnly ? (
+                        <GeneratingIndicator
+                            label="Thinking"
+                            model={shownStats?.usedAuto || isAutoModelId(shownModel) ? undefined : shownModel}
+                        />
                     ) : (
-                        <div className="chat-markdown prose-compact max-w-none min-w-0 wrap-break-word select-text">
+                        <div className="chat-markdown prose-compact w-fit max-w-full min-w-0 wrap-break-word select-text overflow-visible">
                             {renamed ? (
                                 <div className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-xs text-text-muted">
                                     <Icon icon={Edit20Regular} className="size-3.5 shrink-0" />
@@ -532,13 +617,12 @@ function ChatMessageItemInner({
                 </div>
             </div>
             {!isGenerating && (
-                <div className="flex w-fit items-center gap-0.5 self-start select-none">
+                <div className="flex w-fit items-center gap-0.5 select-none opacity-0 transition-opacity group-hover/msg:opacity-100">
                     <Tooltip content="Copy Message" side="bottom">
                         <Button variant="ghost" size="icon" onClick={handleCopy}>
                             <Icon icon={Clipboard20Regular} />
                         </Button>
                     </Tooltip>
-                    {role === "assistant" ? <WebSourcesMenu results={webSources} /> : null}
                     {role === "assistant" ? (
                     <DropdownMenu
                     open={menuOpen}

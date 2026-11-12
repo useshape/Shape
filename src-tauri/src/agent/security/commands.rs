@@ -14,9 +14,11 @@ const SAFE_COMMANDS: &[&str] = &[
 
 /// Command prefixes that are always blocked (destructive).
 const BLOCKED_PATTERNS: &[&str] = &[
-    "rm -rf /", "rm -rf ~", "rm -rf .", "del /s /q",
+    "rm -rf /", "rm -rf ~", "rm -rf .", "rm -rf /users", "rm -rf /system", "rm -rf /library",
+    "rm -rf /applications", "rm -rf /volumes",
+    "del /s /q",
     "rmdir /s /q", "rd /s /q",
-    "format", "mkfs",
+    "format", "mkfs", "format-volume", "clear-disk", "diskpart", "bcdedit",
     "shutdown", "reboot", "halt", "poweroff",
     "chmod 777", "chown root",
     "reg delete", "reg add",
@@ -29,7 +31,8 @@ const BLOCKED_PATTERNS: &[&str] = &[
     "taskkill /im node.exe", "taskkill /im node",
     "killall node", "pkill node", "pkill -f node",
     "Stop-Process -Name app", "taskkill /im app.exe",
-    "killall Shape", "pkill Shape",
+    "killall Shape", "pkill Shape", "killall shape", "pkill shape",
+    "osascript -e", "launchctl bootout", "launchctl unload",
     // CVE-2026-26268 class: agent must not plant or retarget git hooks.
     ".git/hooks", ".git\\hooks",
     "git config core.hookspath", "git config --global core.hookspath",
@@ -133,6 +136,12 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
         };
     }
 
+    if let Some(reason) = obfuscated_execution(&cmd_lower) {
+        return CommandSafety::Blocked {
+            reason: reason.to_string(),
+        };
+    }
+
     // Require approval for shell operators (chaining, redirection, substitution).
     if has_shell_metacharacters(&cmd_lower) {
         return CommandSafety::NeedsApproval {
@@ -202,6 +211,54 @@ pub fn check_command_safety(command: &str) -> CommandSafety {
     CommandSafety::NeedsApproval {
         reason: "Unrecognized command. Please review before executing.".to_string(),
     }
+}
+
+/// Encoded or download-and-execute forms. Blocked in every auto-run mode.
+/// Native Windows has no OS sandbox around the agent shell (same constraint Claude Code
+/// documents), so these cannot be relaxed by a setting.
+pub fn obfuscated_execution(cmd_lower: &str) -> Option<&'static str> {
+    let ps = cmd_lower.contains("powershell") || cmd_lower.contains("pwsh");
+    if ps && (cmd_lower.contains("-encodedcommand") || cmd_lower.contains("-enc")) {
+        return Some("Encoded PowerShell is blocked. Run the command in plain text.");
+    }
+    let token_hit = cmd_lower.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_')).any(|tok| {
+        tok == "iex" || tok == "invoke-expression"
+    });
+    if token_hit {
+        return Some("invoke-expression is blocked. Run the command in plain text.");
+    }
+    if cmd_lower.contains("certutil") && (cmd_lower.contains("-urlcache") || cmd_lower.contains("-decode")) {
+        return Some("certutil download or decode is blocked.");
+    }
+    if cmd_lower.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_')).any(|tok| tok == "bitsadmin") {
+        return Some("bitsadmin is blocked.");
+    }
+    None
+}
+
+/// Interpreters, shell redirects, and command wrappers can write outside the project
+/// and bypass the file tools. The cloud gate must not auto-run these. The user still
+/// approves them, unless they explicitly chose run-everything.
+pub fn requires_explicit_user_approval(command: &str) -> bool {
+    let cmd = command.to_lowercase();
+    cmd.contains("python -c")
+        || cmd.contains("python3 -c")
+        || cmd.contains("powershell -command")
+        || cmd.contains("powershell.exe -command")
+        || cmd.contains("pwsh -command")
+        || cmd.contains("set-content")
+        || cmd.contains("out-file")
+        || cmd.contains("add-content")
+        || cmd.contains(" > ")
+        || cmd.contains(" >> ")
+        || cmd.contains("sed -i")
+        || cmd.contains("cmd /c")
+        || cmd.contains("cmd.exe /c")
+        || cmd.contains("cmd /k")
+        || cmd.contains("bash -c")
+        || cmd.contains("zsh -c")
+        || cmd.contains("sh -c")
+        || cmd.contains("osascript")
 }
 
 fn kills_host_runtime(cmd_lower: &str) -> bool {
@@ -283,6 +340,111 @@ fn has_output_redirect_flag(rest: &str) -> bool {
         }
     }
     flush(&mut token)
+}
+
+/// Final gate before a command is spawned. `Blocked` is never turned into a prompt.
+/// Approval and auto-run cannot relax these checks.
+pub fn authorize_command(
+    command: &str,
+    workspace: &str,
+    network: crate::agent::models::NetworkPolicy,
+) -> CommandSafety {
+    let base = check_command_safety(command);
+    if matches!(base, CommandSafety::Blocked { .. }) {
+        return base;
+    }
+    if let Some(reason) = escapes_workspace(command, workspace) {
+        return CommandSafety::Blocked { reason };
+    }
+    if is_network_command(command) {
+        return match network {
+            crate::agent::models::NetworkPolicy::Off => CommandSafety::Blocked {
+                reason: "Network commands are turned off in settings.".to_string(),
+            },
+            crate::agent::models::NetworkPolicy::Ask => {
+                if matches!(base, CommandSafety::NeedsApproval { .. }) {
+                    base
+                } else {
+                    CommandSafety::NeedsApproval {
+                        reason: "Network commands ask before they run.".to_string(),
+                    }
+                }
+            }
+        };
+    }
+    base
+}
+
+fn is_network_command(command: &str) -> bool {
+    let cmd = command.to_lowercase();
+    const MARKERS: &[&str] = &[
+        "curl", "wget", "invoke-webrequest", "invoke-restmethod", "iwr ", "irm ",
+    ];
+    MARKERS.iter().any(|m| cmd.contains(m))
+}
+
+fn escapes_workspace(command: &str, workspace: &str) -> Option<String> {
+    let lower = command.to_lowercase();
+    const SECRET: &[&str] = &[
+        ".ssh", ".aws", ".gnupg", ".azure", ".kube", "credentials.json",
+        "id_rsa", ".env",
+    ];
+    if SECRET.iter().any(|s| lower.contains(s)) && !lower.contains(".env.example") {
+        return Some("Commands that touch credentials or secret files are blocked.".to_string());
+    }
+    const SYSTEM: &[&str] = &[
+        "c:\\windows", "c:/windows", "/windows/system32", "c:\\program files",
+        "c:/program files", "/etc/", "/usr/", "/bin/", "/sbin/", "/system/",
+        "/system/library", "/library/keychains", "/library/", "/applications/",
+        "/private/etc", "/private/var",
+    ];
+    let mutating = lower.contains("remove-item")
+        || lower.contains("rm ")
+        || lower.contains("del ")
+        || lower.contains("rmdir")
+        || lower.contains("set-content")
+        || lower.contains("out-file")
+        || lower.contains("move-item")
+        || lower.contains("mv ")
+        || lower.contains("ri ");
+    if mutating && SYSTEM.iter().any(|s| lower.contains(s)) {
+        return Some("Commands that change system directories are blocked.".to_string());
+    }
+    if mutating && (lower.contains("rm -rf /") || lower.contains("remove-item") && (lower.contains(" -recurse") || lower.contains(" -r"))) {
+        if lower.contains(":\\")
+            || lower.contains("~/")
+            || lower.contains("$home")
+            || lower.contains("c:\\")
+            || lower.contains("/users/")
+            || lower.contains("/system/")
+            || lower.contains("/library/")
+            || lower.contains("/applications/")
+            || lower.contains("/volumes/")
+        {
+            return Some("Recursive deletes outside a single workspace file are blocked.".to_string());
+        }
+    }
+    let workspace_norm = workspace.replace('\\', "/").to_lowercase();
+    if mutating && !workspace_norm.is_empty() {
+        for token in command.split_whitespace() {
+            let token = token.trim_matches(|c| c == '"' || c == '\'' || c == ',');
+            let norm = token.replace('\\', "/");
+            let looks_abs = norm.contains(":\\")
+                || norm.starts_with('/')
+                || norm.starts_with("~/")
+                || token.contains(":\\");
+            if !looks_abs {
+                continue;
+            }
+            let token_lower = norm.to_lowercase();
+            if !token_lower.contains(&workspace_norm) && token_lower.len() > 2 {
+                return Some(format!(
+                    "Command targets {token}, which is outside the workspace. That cannot be approved."
+                ));
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -453,6 +615,58 @@ mod tests {
     }
 
     #[test]
+    fn encoded_powershell_stays_blocked_in_run_everything() {
+        use crate::agent::models::AutoRunMode;
+        let cmd = "powershell -encodedcommand ZQBjAGgAbwA=";
+        let base = check_command_safety(cmd);
+        assert!(matches!(base, CommandSafety::Blocked { .. }));
+        assert!(matches!(
+            apply_auto_run_mode(base, cmd, AutoRunMode::Always, true),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(obfuscated_execution("powershell.exe -enc abc").is_some());
+        assert!(obfuscated_execution("python script.py").is_none());
+    }
+
+    #[test]
+    fn interpreter_one_liners_need_the_user_not_just_a_classifier() {
+        assert!(requires_explicit_user_approval("python -c \"print(1)\""));
+        assert!(requires_explicit_user_approval("Set-Content out.txt hi"));
+        assert!(requires_explicit_user_approval("bash -c 'echo hi'"));
+        assert!(requires_explicit_user_approval("zsh -c 'echo hi'"));
+        assert!(!requires_explicit_user_approval("python script.py"));
+        assert!(!requires_explicit_user_approval("npm test"));
+    }
+
+    #[test]
+    fn unix_destructive_commands_stay_blocked() {
+        assert!(matches!(
+            check_command_safety("rm -rf /Users/ada"),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("killall Shape"),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(matches!(
+            check_command_safety("osascript -e 'tell app \"Finder\" to quit'"),
+            CommandSafety::Blocked { .. }
+        ));
+        let dir = std::env::temp_dir().join(format!("shape-auth-unix-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let workspace = dir.to_string_lossy().to_string();
+        assert!(matches!(
+            authorize_command("rm -rf /Users/ada/.ssh", &workspace, crate::agent::models::NetworkPolicy::Ask),
+            CommandSafety::Blocked { .. }
+        ));
+        assert!(matches!(
+            authorize_command("cat ~/.ssh/id_rsa", &workspace, crate::agent::models::NetworkPolicy::Ask),
+            CommandSafety::Blocked { .. }
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn test_cargo_check_needs_approval() {
         assert!(matches!(
             check_command_safety("cargo check"),
@@ -511,5 +725,32 @@ mod tests {
         assert!(is_destructive_git("git clean -fd"));
         assert!(!is_destructive_git("git checkout -b feature/x"));
         assert!(!is_destructive_git("git status"));
+    }
+
+    #[test]
+    fn authorize_blocks_escape_even_if_the_user_would_approve() {
+        use crate::agent::models::{AutoRunMode, NetworkPolicy};
+        let dir = std::env::temp_dir().join(format!("shape-auth-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let workspace = dir.to_string_lossy().to_string();
+
+        let drive = authorize_command("Remove-Item -Recurse C:\\Windows\\System32", &workspace, NetworkPolicy::Ask);
+        assert!(matches!(drive, CommandSafety::Blocked { .. }));
+        let always = apply_auto_run_mode(drive, "Remove-Item -Recurse C:\\Windows\\System32", AutoRunMode::Always, false);
+        assert!(matches!(always, CommandSafety::Blocked { .. }));
+
+        let secret = authorize_command("Get-Content .ssh\\id_rsa", &workspace, NetworkPolicy::Ask);
+        assert!(matches!(secret, CommandSafety::Blocked { .. }));
+
+        let outside = authorize_command("del D:\\notes.txt", &workspace, NetworkPolicy::Ask);
+        assert!(matches!(outside, CommandSafety::Blocked { .. }));
+
+        let net = authorize_command("curl https://example.com", &workspace, NetworkPolicy::Off);
+        assert!(matches!(net, CommandSafety::Blocked { .. }));
+
+        let local = authorize_command("cargo test", &workspace, NetworkPolicy::Ask);
+        assert!(!matches!(local, CommandSafety::Blocked { .. }));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

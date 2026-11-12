@@ -150,10 +150,7 @@ export function AiSettingsPanel({
         defaultIds,
     );
     const visibleModels = getVisibleModels(allModels, enabledModels);
-    const subagentModels = sanitizeSubagentModels(
-        a.subagentModels,
-        allModels.map((m) => m.id),
-    );
+    const subagentModels = sanitizeSubagentModels(a.subagentModels, allModels);
     const subagentDefaultModel = resolveSubagentDefaultModel(a.subagentDefaultModel, subagentModels);
     const visibleSubagentModels = allModels.filter((m) => isSubagentModelEnabled(m.id, subagentModels));
     const featuredIds = React.useMemo(() => {
@@ -239,7 +236,7 @@ export function AiSettingsPanel({
         let next = enabled
             ? subagentModels.includes(modelId) ? subagentModels : [...subagentModels, modelId]
             : subagentModels.filter((id) => id !== modelId);
-        next = sanitizeSubagentModels(next, allModels.map((m) => m.id));
+        next = sanitizeSubagentModels(next, allModels);
         const nextDefault = resolveSubagentDefaultModel(subagentDefaultModel, next);
         updateSettingSection("ai", { subagentModels: next, subagentDefaultModel: nextDefault });
     };

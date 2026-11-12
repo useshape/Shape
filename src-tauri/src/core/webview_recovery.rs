@@ -2,10 +2,17 @@
 
 #[cfg(windows)]
 pub fn install(app: &tauri::AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
     use tauri::{Emitter, Manager};
     use webview2_com::NavigationCompletedEventHandler;
 
+    static INSTALLED: AtomicBool = AtomicBool::new(false);
+    if INSTALLED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
     let Some(window) = app.get_webview_window("main") else {
+        INSTALLED.store(false, Ordering::SeqCst);
         return;
     };
     let handle = app.clone();

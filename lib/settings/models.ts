@@ -1,4 +1,4 @@
-/** Model display shape. Catalog data is fetched from the website at runtime. */
+/** Model display shape. The list itself comes from the API catalog. */
 export interface ModelInfo {
     id: string;
     name: string;
@@ -11,69 +11,35 @@ export interface ModelInfo {
     releaseDate: string;
     tags?: { label: string }[];
     tier?: "flagship" | "balanced" | "fast";
+    minTier?: string;
     viaApi?: boolean;
 }
 
-const AUTO_MODEL: ModelInfo = {
-    id: "auto",
-    name: "Auto",
-    description: "Picks a model for the task.",
-    provider: "Auto",
-    inputCost: 0,
-    cachedInputCost: 0,
-    outputCost: 0,
-    contextWindow: "200K",
-    releaseDate: "Rolling",
-};
-
-export function isApiModel(model: { id: string; viaApi?: boolean }): boolean {
-    if (model.id === "auto" || model.id === "openrouter/auto") return false;
+export function isApiModel(model: { viaApi?: boolean }): boolean {
     return Boolean(model.viaApi);
 }
 
 export function resolveChatModels(catalog: ModelInfo[]): ModelInfo[] {
     const byId = new Map<string, ModelInfo>();
-    const add = (model: ModelInfo) => {
-        if (!byId.has(model.id)) byId.set(model.id, model);
-    };
-
-    add(catalog.find((m) => m.id === "auto") ?? AUTO_MODEL);
-
     for (const model of catalog) {
         if (model.id === "auto" || model.id === "openrouter/auto") continue;
-        add(model);
+        if (!byId.has(model.id)) byId.set(model.id, model);
     }
-
     return [...byId.values()];
 }
 
-function isAutoId(id: string): boolean {
+function isLegacyAuto(id: string): boolean {
     return id === "auto" || id === "openrouter/auto";
 }
 
-/** Drop catalog ids that no longer exist. Empty means “all models”. */
-export function sanitizeEnabledModels(
-    enabled: string[],
-    catalogIds: string[],
-    _defaults: string[] = [],
-): string[] {
+/** Drop catalog ids that no longer exist. Empty means every model. */
+export function sanitizeEnabledModels(enabled: string[], catalogIds: string[], _defaults: string[] = []): string[] {
     if (enabled.length === 0) return [];
     const known = new Set(catalogIds);
-    const kept = enabled.filter((id) => isAutoId(id) || known.has(id));
-    const keptReal = kept.filter((id) => !isAutoId(id));
-    if (keptReal.length === 0) return [];
-    const catalogReal = catalogIds.filter((id) => !isAutoId(id));
-    if (catalogReal.length > 0 && catalogReal.every((id) => keptReal.includes(id))) return [];
+    const kept = enabled.filter((id) => known.has(id) && !isLegacyAuto(id));
+    if (kept.length === 0) return [];
+    if (catalogIds.length > 0 && catalogIds.every((id) => kept.includes(id))) return [];
     return kept;
-}
-
-export function getModelsByProvider(models: ModelInfo[]): Record<string, ModelInfo[]> {
-    const grouped: Record<string, ModelInfo[]> = {};
-    for (const m of models) {
-        if (!grouped[m.provider]) grouped[m.provider] = [];
-        grouped[m.provider].push(m);
-    }
-    return grouped;
 }
 
 export function isModelEnabled(modelId: string, enabledModels: string[]): boolean {
@@ -83,62 +49,54 @@ export function isModelEnabled(modelId: string, enabledModels: string[]): boolea
 
 export function getVisibleModels(allModels: ModelInfo[], enabledModels: string[]): ModelInfo[] {
     return allModels.filter(
-        (m) => m.id === "auto" || isModelEnabled(m.id, enabledModels),
+        (model) => isIncludedModel(model) || isModelEnabled(model.id, enabledModels),
     );
 }
 
-/** Subagents never inherit the parent chat model. Empty / unknown → Auto only. */
-export const DEFAULT_SUBAGENT_MODELS = ["auto"];
+export function isIncludedModel(model: { minTier?: string; provider?: string }): boolean {
+    return model.minTier === "free" || model.provider === "Free Models";
+}
 
-export function sanitizeSubagentModels(enabled: string[] | undefined, catalogIds: string[]): string[] {
-    const known = new Set(catalogIds);
+export function sanitizeSubagentModels(
+    enabled: string[] | undefined,
+    catalog: Array<{ id: string; minTier?: string; provider?: string }>,
+): string[] {
+    const known = new Set(catalog.map((model) => model.id));
     const kept: string[] = [];
     const seen = new Set<string>();
     for (const raw of enabled ?? []) {
-        const id = isAutoId(raw) ? "auto" : raw;
-        if (seen.has(id)) continue;
-        if (!isAutoId(id) && !known.has(id)) continue;
-        seen.add(id);
-        kept.push(id);
+        if (isLegacyAuto(raw) || seen.has(raw) || !known.has(raw)) continue;
+        seen.add(raw);
+        kept.push(raw);
     }
-    return kept.length > 0 ? kept : [...DEFAULT_SUBAGENT_MODELS];
+    if (kept.length > 0) return kept;
+    return catalog.filter(isIncludedModel).map((model) => model.id);
 }
 
 export function isSubagentModelEnabled(modelId: string, enabled: string[]): boolean {
-    const list = enabled.length === 0 ? DEFAULT_SUBAGENT_MODELS : enabled;
-    if (isAutoId(modelId)) return list.some((id) => isAutoId(id));
-    return list.includes(modelId);
+    return enabled.includes(modelId);
 }
 
 export function resolveSubagentDefaultModel(defaultModel: string | undefined, allowed: string[]): string {
-    const list = allowed.length === 0 ? DEFAULT_SUBAGENT_MODELS : allowed;
-    const wanted = defaultModel && isAutoId(defaultModel) ? "auto" : defaultModel;
-    if (wanted && isSubagentModelEnabled(wanted, list)) return wanted;
-    return list.includes("auto") ? "auto" : list[0] ?? "auto";
+    if (defaultModel && !isLegacyAuto(defaultModel) && allowed.includes(defaultModel)) return defaultModel;
+    return allowed[0] ?? "";
 }
 
-/**
- * Drop paid ids when the user cannot bill them (free plan, or paid plan with 0 credits).
- * Auto always remains so a nested agent cannot spend credits the parent no longer has.
- */
 export function subagentModelsForSend(
     enabled: string[] | undefined,
-    catalogIds: string[],
+    catalog: Array<{ id: string; minTier?: string; provider?: string }>,
     opts: {
         creditsRemaining: number;
         modelAllowed: (id: string) => boolean;
         defaultModel?: string;
     },
 ): { models: string[]; defaultModel: string } {
-    const allowed = sanitizeSubagentModels(enabled, catalogIds);
-    const canBillPaid = opts.creditsRemaining > 0;
-    const models = allowed.filter((id) => {
-        if (isAutoId(id)) return true;
-        return canBillPaid && opts.modelAllowed(id);
-    });
-    const next = models.length > 0 ? models : [...DEFAULT_SUBAGENT_MODELS];
+    const allowed = sanitizeSubagentModels(enabled, catalog);
+    const included = new Set(catalog.filter(isIncludedModel).map((model) => model.id));
+    const canBill = opts.creditsRemaining > 0;
+    const models = allowed.filter((id) => included.has(id) || (canBill && opts.modelAllowed(id)));
     return {
-        models: next,
-        defaultModel: resolveSubagentDefaultModel(opts.defaultModel, next),
+        models,
+        defaultModel: resolveSubagentDefaultModel(opts.defaultModel, models),
     };
 }

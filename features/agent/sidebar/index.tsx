@@ -13,7 +13,6 @@ import { openSettingsWindow } from "@/lib/window/open-settings";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { ChatList } from "./chats";
 import { AccountMenu, ProfileAvatar } from "./menu";
-import { ChatUsageButton } from "@/features/chat/ui/composer/usage";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { SidebarToggleBtn, AGENT_SIDEBAR_BACK_SLOT } from "../chrome";
@@ -109,14 +108,6 @@ export function AgentSidebar({
         );
     };
 
-    const items: { label: string; icon: IconGlyph; onClick: () => void; active?: boolean }[] = [
-        {
-            label: "Settings",
-            icon: Settings20Regular,
-            onClick: () => void openSettingsWindow(),
-        },
-    ];
-
     const newChat = () => {
         window.dispatchEvent(new Event("shape-chat-new"));
         window.dispatchEvent(new Event("shape-chat-focus-input"));
@@ -146,6 +137,7 @@ export function AgentSidebar({
                                 "relative z-20 flex h-titlebar shrink-0 items-center",
                                 expanded ? "justify-between pl-3 pr-2" : "justify-center px-1.5",
                             )}
+                            data-chrome-leading="true"
                         >
                             <SidebarToggleBtn
                                 open={expanded}
@@ -167,15 +159,16 @@ export function AgentSidebar({
                         <div
                             className={cn(
                                 "relative z-20 flex h-titlebar shrink-0 items-center gap-1",
-                                expanded ? "justify-between pl-3 pr-2" : "justify-center px-1.5",
+                                expanded ? "justify-between pl-2 pr-2" : "justify-center px-1.5",
                             )}
+                            data-chrome-leading="true"
                         >
                             {expanded ? (
                                 <AccountMenu>
                                     <button
                                         type="button"
                                         aria-label="Account"
-                                        className="flex items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-panel-hover"
+                                        className="flex items-center gap-2 squircle-2xl px-1 py-0.5 text-left hover:bg-panel-hover"
                                     >
                                         <ProfileAvatar
                                             gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
@@ -199,40 +192,12 @@ export function AgentSidebar({
                             />
                         </div>
 
-                        <nav
-                            className={cn(
-                                "flex shrink-0 gap-0.5",
-                                expanded ? "flex-col px-2" : "flex-col items-center px-1.5",
-                            )}
-                        >
-                            {expanded ? (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={newChat}
-                                    className="flex h-9 w-full items-center justify-start gap-2 px-1.5! text-left"
-                                >
-                                    <Icon icon={Compose20Regular} className="shrink-0 text-text-muted" />
-                                    <span className="min-w-0 flex-1 truncate">New Chat</span>
-                                </Button>
-                            ) : (
-                                <>
-                                    <NavItem label="New Chat" icon={Compose20Regular} onClick={newChat} collapsed />
-                                    <NavItem label="Command Palette" icon={Search20Regular} onClick={onSearch} collapsed />
-                                </>
-                            )}
-                            {items.map((item) => (
-                                <NavItem
-                                    key={item.label}
-                                    label={item.label}
-                                    icon={item.icon}
-                                    onClick={item.onClick}
-                                    collapsed={!expanded}
-                                    active={item.active}
-                                />
-                            ))}
-                        </nav>
+                        {expanded ? null : (
+                            <nav className="flex shrink-0 flex-col items-center gap-0.5 px-1.5">
+                                <NavItem label="New Chat" icon={Compose20Regular} onClick={newChat} collapsed />
+                                <NavItem label="Command Palette" icon={Search20Regular} onClick={onSearch} collapsed />
+                            </nav>
+                        )}
 
                         {expanded ? (
                             <ChatList
@@ -267,24 +232,19 @@ export function AgentSidebar({
                                     Connect GitHub
                                 </Button>
                             ) : null}
-                            <div className="flex items-center gap-0.5 px-1 pb-0.5">
-                                <ChatUsageButton />
-                            </div>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void openSettingsWindow()}
+                                className="flex h-9 w-full items-center justify-start gap-2 px-1.5! text-left"
+                            >
+                                <Icon icon={Settings20Regular} className="shrink-0 text-text-muted" />
+                                <span className="min-w-0 flex-1 truncate">Settings</span>
+                            </Button>
                         </>
                     ) : (
-                        <div className="flex flex-col items-center gap-1">
-                            <ChatUsageButton compact />
-                            <Tooltip content="Settings" side="right" delayDuration={80}>
-                                <button
-                                    type="button"
-                                    onClick={() => void openSettingsWindow()}
-                                    className="flex size-9 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
-                                    aria-label="Settings"
-                                >
-                                    <Icon icon={Settings20Regular} />
-                                </button>
-                            </Tooltip>
-                        </div>
+                        <NavItem label="Settings" icon={Settings20Regular} onClick={() => void openSettingsWindow()} collapsed />
                     )}
                 </div>
             </div>

@@ -9,7 +9,7 @@ export type AutoSaveSetting = "off" | "afterDelay" | "onFocusChange";
 export type LineNumbersSetting = "on" | "off" | "relative";
 export type RenderWhitespaceSetting = "none" | "selection" | "all";
 export type CursorStyleSetting = "line" | "block" | "underline";
-export type DefaultShellSetting = "auto" | "powershell" | "cmd" | "git-bash";
+export type DefaultShellSetting = "auto" | "powershell" | "cmd" | "git-bash" | "zsh" | "bash";
 export type UpdateChannel = "stable" | "nightly";
 
 /** Map legacy channel names onto Nightly. Anything else stays Stable. */
@@ -130,6 +130,12 @@ export interface ShapeSettings {
          * Off by default — memories are never injected into every prompt.
          */
         chatMemoryEnabled: boolean;
+        computerUse?: boolean;
+        shellAutomation?: boolean;
+        browseEnabled?: boolean;
+        networkCommands?: string;
+        commandTimeoutSec?: number;
+        allowCapabilityUpgrade?: boolean;
     };
     files: {
         exclude: string;
@@ -517,17 +523,19 @@ function mergeSettings(base: ShapeSettings, patch: Partial<ShapeSettings>): Shap
     };
 }
 
-export function resolveDefaultTerminalShell(): "powershell" | "cmd" | "gitbash" {
+export function resolveDefaultTerminalShell(): "powershell" | "cmd" | "gitbash" | "zsh" | "bash" {
     const shell = getSettings().terminal.defaultShell;
     if (shell === "cmd") return "cmd";
     if (shell === "git-bash") return "gitbash";
     if (shell === "powershell") return "powershell";
+    if (shell === "zsh") return "zsh";
+    if (shell === "bash") return "bash";
     if (typeof navigator !== "undefined") {
         const platform = navigator.platform?.toLowerCase() ?? "";
         const userAgent = navigator.userAgent?.toLowerCase() ?? "";
-        if (platform.includes("win") || userAgent.includes("windows")) {
-            return "powershell";
-        }
+        if (platform.includes("mac") || userAgent.includes("mac os")) return "zsh";
+        if (platform.includes("linux") || userAgent.includes("linux")) return "bash";
+        if (platform.includes("win") || userAgent.includes("windows")) return "powershell";
     }
     return "powershell";
 }

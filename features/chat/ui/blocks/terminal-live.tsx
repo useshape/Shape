@@ -34,7 +34,7 @@ import { commands } from "@/lib/backend/commands";
 import { useSettings, updateSettingSection, type AutoRunModeSetting } from "@/lib/settings";
 import type { Chunk } from "../md/renderer";
 import { ActionLine, splitActionLabel } from "./action-line";
-import { ApprovalCard } from "./approval";
+import { ApprovalCard, ApprovalCode } from "./approval";
 
 const OUTPUT_CAP = 16_000;
 
@@ -417,10 +417,10 @@ export function CommandApprovalCard({
             acceptLabel="Run"
             footerLeft={<AutoRunModePicker disabled={isProcessing} />}
         >
-            <div className="max-h-[96px] min-h-[48px] overflow-y-auto px-3 pb-2 font-mono text-sm text-text-primary whitespace-pre-wrap break-words custom-scrollbar">
+            <ApprovalCode className="max-h-[96px] min-h-[48px] overflow-y-auto">
                 <span className="select-none text-text-disabled">$ </span>
                 {command}
-            </div>
+            </ApprovalCode>
         </ApprovalCard>
     );
 }

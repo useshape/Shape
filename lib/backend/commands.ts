@@ -521,6 +521,13 @@ export const commands = {
             pluginApprovals?: Record<string, string>;
             pluginDisabledActions?: Record<string, string[]>;
             pluginAutoAllow?: string[];
+            computerUse?: boolean;
+            shellAutomation?: boolean;
+            browseEnabled?: boolean;
+            networkCommands?: string;
+            commandTimeoutSec?: number;
+            allowCapabilityUpgrade?: boolean;
+            maxContextLines?: number;
         },
         reasoningEffort?: string,
         serviceTier?: string | null,
@@ -530,6 +537,10 @@ export const commands = {
         /** Models subagents may use (user settings). Never inherit the parent chat model. */
         subagentModels?: string[],
         subagentDefaultModel?: string,
+        workspaceMode?: string,
+        workerName?: string | null,
+        workerJob?: string | null,
+        selectedMediaId?: string | null,
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -546,6 +557,13 @@ export const commands = {
             pluginApprovals: executionPolicy?.pluginApprovals ?? null,
             pluginDisabledActions: executionPolicy?.pluginDisabledActions ?? null,
             pluginAutoAllow: executionPolicy?.pluginAutoAllow ?? null,
+            computerUse: executionPolicy?.computerUse ?? null,
+            shellAutomation: executionPolicy?.shellAutomation ?? null,
+            browseEnabled: executionPolicy?.browseEnabled ?? null,
+            networkCommands: executionPolicy?.networkCommands ?? null,
+            commandTimeoutSec: executionPolicy?.commandTimeoutSec ?? null,
+            allowCapabilityUpgrade: executionPolicy?.allowCapabilityUpgrade ?? null,
+            maxContextLines: executionPolicy?.maxContextLines ?? null,
             reasoningEffort: reasoningEffort ?? null,
             serviceTier: serviceTier ?? null,
             displayMessage: displayMessage ?? null,
@@ -553,6 +571,10 @@ export const commands = {
             conversationKind: conversationKind ?? null,
             subagentModels: subagentModels ?? null,
             subagentDefaultModel: subagentDefaultModel ?? null,
+            workspaceMode: workspaceMode ?? null,
+            workerName: workerName ?? null,
+            workerJob: workerJob ?? null,
+            selectedMediaId: selectedMediaId ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;
@@ -674,15 +696,36 @@ export const commands = {
         invokeCommand<{ changed: boolean; file: string | null; content: string | null }>(
             "redo_design_source_patch",
         ),
-    stopChatMessage: () => invokeCommand<void>("stop_chat_message"),
-    getChatHistory: () => invokeCommand<ChatMessage[]>("get_chat_history"),
+    stopChatMessage: (conversationId?: string | null) =>
+        invokeCommand<void>("stop_chat_message", { conversationId: conversationId ?? null }),
+    readMedia: (id: string) =>
+        invokeCommand<{
+            bytes: number[];
+            mime?: string;
+            name?: string;
+            prompt?: string | null;
+            kind?: string;
+            path?: string;
+        }>("read_media", { id }),
+    flushChatHistory: () => invokeCommand<void>("flush_chat_history"),
+    getChatHistory: (limit?: number) =>
+        invokeCommand<ChatMessage[]>("get_chat_history", limit == null ? {} : { limit }),
     getChatGenerationState: () =>
         invokeCommand<ChatGenerationState>("get_chat_generation_state"),
     getChatTitle: () => invokeCommand<string>("get_chat_title"),
     getCurrentConversationId: () => invokeCommand<string | null>("get_current_conversation_id"),
-    getConversations: (projectPath?: string) => invokeCommand<Conversation[]>("get_conversations", { projectPath: projectPath ?? null }),
+    getConversations: (projectPath?: string, all?: boolean) =>
+        invokeCommand<Conversation[]>("get_conversations", {
+            projectPath: projectPath ?? null,
+            all: all ?? null,
+        }),
+    getConversation: (id: string, projectPath?: string | null) =>
+        invokeCommand<Conversation>("get_conversation", { id, projectPath: projectPath ?? null }),
     clearChatHistory: () => invokeCommand<void>("clear_chat_history"),
-    newChat: () => invokeCommand<void>("new_chat"),
+    newChat: (storePath?: string | null) =>
+        invokeCommand<void>("new_chat", { storePath: storePath ?? null }),
+    focusConversation: (id: string, projectPath?: string | null) =>
+        invokeCommand<void>("focus_conversation", { id, projectPath: projectPath ?? null }),
     setChatIncognito: (enabled: boolean) =>
         invokeCommand<void>("set_chat_incognito", { enabled }),
     getChatIncognito: () => invokeCommand<boolean>("get_chat_incognito"),
