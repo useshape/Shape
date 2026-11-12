@@ -77,14 +77,15 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
             <div
                 data-dropdown-search={fade ? "" : undefined}
                 className={cn(
-                    "relative flex min-w-0 items-center border-b border-border -mx-1.5 mb-1",
+                    "relative flex min-w-0 items-center",
+                    fade && "border-b border-border -mx-1.5 mb-1",
                     !borderless && "h-chrome",
                     className,
                 )}
             >
                 <Icon
                     icon={Search20Regular}
-                    className="pointer-events-none absolute left-2.5 mb-0.5 z-10 pr-0.5 text-input-placeholder!"
+                    className="pointer-events-none absolute left-2.5 z-10 pr-0.5 text-input-placeholder!"
                 />
                 <input
                     {...props}
@@ -100,7 +101,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                         onChange?.(e);
                     }}
                     className={cn(
-                        "h-full w-full min-w-0 text-sm font-medium text-text-primary outline-none",
+                        "h-full w-full min-w-0 text-sm font-normal text-text-primary outline-none",
                         "placeholder:text-input-placeholder",
                         "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                         "disabled:cursor-not-allowed disabled:opacity-50",

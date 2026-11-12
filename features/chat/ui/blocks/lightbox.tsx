@@ -10,6 +10,7 @@ import { Icon } from "@/components/ui/icon";
 
 import { SHAPE_OVERLAY_CLASS } from "@/lib/ui/modal-overlay";
 import type { DesignPreviewItem } from "./gallery";
+import { ModelPreview } from "./model-preview";
 
 function resolveSrc(path: string): string {
     if (path.startsWith("data:") || path.startsWith("http") || path.startsWith("asset:")) {
@@ -35,45 +36,57 @@ export function MediaLightbox({
     title,
     kind = "image",
     designs,
+    images,
     initialIndex = 0,
 }: {
     open: boolean;
     onClose: () => void;
     src?: string;
     title?: string;
-    kind?: "image" | "html";
+    kind?: "image" | "html" | "model";
     designs?: DesignPreviewItem[];
+    images?: { src: string; title?: string }[];
     initialIndex?: number;
 }) {
     const [index, setIndex] = React.useState(initialIndex);
 
+    const gallerySize = designs?.length || images?.length || 0;
+
     React.useEffect(() => {
         if (open) setIndex(initialIndex);
-    }, [open, initialIndex, designs]);
+    }, [open, initialIndex, gallerySize]);
 
     React.useEffect(() => {
         if (!open) return;
         const onKey = (e: KeyboardEvent) => {
             if (e.key === "Escape") onClose();
+            if (e.key === "ArrowRight" && gallerySize > 1) {
+                setIndex((current) => (current + 1) % gallerySize);
+            }
+            if (e.key === "ArrowLeft" && gallerySize > 1) {
+                setIndex((current) => (current - 1 + gallerySize) % gallerySize);
+            }
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [open, onClose]);
+    }, [open, onClose, gallerySize]);
 
     if (!open) return null;
 
     const design = designs?.[index];
+    const galleryImage = !design ? images?.[index] : undefined;
+    const rawSrc = design ? "" : galleryImage?.src || src || "";
     const resolved = design
         ? resolveSrc(design.path)
-        : src
-          ? src.startsWith("data:") || src.startsWith("http") || src.startsWith("asset:")
-              ? src
-              : convertFileSrc(src)
+        : rawSrc
+          ? rawSrc.startsWith("data:") || rawSrc.startsWith("http") || rawSrc.startsWith("asset:")
+              ? rawSrc
+              : convertFileSrc(rawSrc)
           : "";
     if (!resolved) return null;
 
     const showHtml = design ? isHtml(design) : kind === "html";
-    const label = design?.name || title || "Preview";
+    const label = design?.name || galleryImage?.title || title || "Preview";
 
     return (
         <div
@@ -107,10 +120,15 @@ export function MediaLightbox({
                         className="h-[min(80vh,900px)] w-[min(92vw,1200px)] border-0 bg-white"
                         sandbox="allow-scripts"
                     />
+                ) : kind === "model" ? (
+                    <ModelPreview
+                        src={resolved}
+                        className="h-[min(80vh,720px)] w-[min(92vw,960px)] max-w-none"
+                    />
                 ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                        key={design?.id || resolved}
+                        key={`${index}-${design?.id || resolved}`}
                         src={resolved}
                         alt={label}
                         className="max-h-[80vh] max-w-[92vw] object-contain"
@@ -125,13 +143,13 @@ export function MediaLightbox({
                 </p>
             ) : null}
 
-            {designs && designs.length > 1 ? (
+            {gallerySize > 1 ? (
                 <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
-                    {designs.map((item, i) => (
+                    {Array.from({ length: gallerySize }, (_, i) => (
                         <button
-                            key={item.id}
+                            key={designs?.[i]?.id || images?.[i]?.src || i}
                             type="button"
-                            aria-label={`Show ${item.name}`}
+                            aria-label={`Show photo ${i + 1}`}
                             aria-current={i === index}
                             className={cn(
                                 "size-2 rounded-full transition-colors",

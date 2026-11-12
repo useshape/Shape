@@ -40,6 +40,15 @@ export function getActiveSubagent(): SubagentCard | null {
     return cards.find((c) => c.id === activeId) ?? null;
 }
 
+export function subagentDisplayTitle(card: { title?: string; task?: string }): string {
+    const title = card.title?.trim() || "";
+    if (title && !/^subagent$/i.test(title)) return title;
+    const task = (card.task || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (!task) return "Thread";
+    const line = task.split(/[.!?]/)[0]?.trim() || task;
+    return line.length > 48 ? `${line.slice(0, 48).trimEnd()}…` : line;
+}
+
 export function openSubagent(id: string) {
     if (!id) return;
     activeId = id;
@@ -98,11 +107,11 @@ export function extractSubagentsFromText(text: string, parentId?: string): Array
     };
     for (const m of text.matchAll(/<subagent_ref\b([^>]*)\/>/gi)) {
         const tag = m[1] || "";
-        push(attr(tag, "id"), attr(tag, "agent") || "Subagent", attr(tag, "task"), attr(tag, "model") || undefined, undefined, attr(tag, "status"));
+        push(attr(tag, "id"), attr(tag, "agent") || attr(tag, "title") || attr(tag, "task"), attr(tag, "task"), attr(tag, "model") || undefined, undefined, attr(tag, "status"));
     }
     for (const m of text.matchAll(/<subagent\b([^>]*)>([\s\S]*?)<\/subagent>/gi)) {
         const tag = m[1] || "";
-        push(attr(tag, "id"), attr(tag, "agent") || attr(tag, "name") || "Subagent", attr(tag, "task"), attr(tag, "model") || undefined, (m[2] || "").trim(), attr(tag, "status"));
+        push(attr(tag, "id"), attr(tag, "agent") || attr(tag, "name") || attr(tag, "title") || attr(tag, "task"), attr(tag, "task"), attr(tag, "model") || undefined, (m[2] || "").trim(), attr(tag, "status"));
     }
     return out;
 }
@@ -222,7 +231,8 @@ export function applySubagentEvent(payload: {
     conversationId?: string;
 }) {
     if (!payload.id) return;
-    const raw = (payload.status || "running").toLowerCase();
+    const existing = cards.find((card) => card.id === payload.id);
+    const raw = (payload.status || existing?.status || "running").toLowerCase();
     const status: SubagentStatus =
         raw === "error" || raw === "failed"
             ? "error"
@@ -231,19 +241,26 @@ export function applySubagentEvent(payload: {
               : raw === "pending"
                 ? "pending"
                 : "running";
+    const named = payload.title?.trim() || "";
+    const title = named && !/^subagent$/i.test(named)
+        ? named
+        : subagentDisplayTitle({
+            title: existing?.title,
+            task: payload.task || existing?.task,
+        });
     upsertSubagent({
         id: payload.id,
-        title: payload.title || "Subagent",
-        activity: payload.activity || "Working…",
+        title,
+        activity: payload.activity || existing?.activity || "Working…",
         status,
-        model: payload.model,
-        task: payload.task,
-        transcript: payload.transcript,
+        model: payload.model || existing?.model,
+        task: payload.task || existing?.task,
+        transcript: payload.transcript || existing?.transcript,
         phase: payload.phase,
         reads: payload.reads,
         tokens: payload.tokens,
         truncated: payload.truncated,
-        parentId: payload.conversationId,
+        parentId: payload.conversationId || existing?.parentId,
     });
 }
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * After `tauri build`, produce clean Windows release asset names:
- *   Shape-<arch>-setup.exe  (NSIS installer)
- *   Shape-<arch>.zip        (portable: exe + sidecar files)
+ * After `tauri build`, produce clean release asset names:
+ *   Windows: Shape-<arch>-setup.exe + Shape-<arch>.zip
+ *   macOS:   Shape-macos-<arch>.dmg + Shape-macos-<arch>.app.tar.gz (+ .sig)
  *
- * Usage (from repo root, after a Windows build):
- *   node scripts/release/assets.mjs --arch x86_64
- *   node scripts/release/assets.mjs --arch aarch64 --out-dir dist/release
+ * Usage (from repo root, after a platform build):
+ *   node scripts/release/assets.mjs --os windows --arch x86_64
+ *   node scripts/release/assets.mjs --os macos --arch aarch64 --out-dir dist/release
  */
 import { execSync } from "node:child_process";
 import {
@@ -23,23 +23,35 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const ARCH_TARGETS = {
-    x86_64: null,
-    aarch64: "aarch64-pc-windows-msvc",
+    windows: {
+        x86_64: null,
+        aarch64: "aarch64-pc-windows-msvc",
+    },
+    macos: {
+        x86_64: "x86_64-apple-darwin",
+        aarch64: "aarch64-apple-darwin",
+    },
 };
 
 function parseArgs(argv) {
-    const out = { outDir: join(root, "dist", "release"), arch: "x86_64" };
+    const out = { outDir: join(root, "dist", "release"), arch: "x86_64", os: "windows" };
     for (let i = 0; i < argv.length; i++) {
         if (argv[i] === "--out-dir") out.outDir = argv[++i];
         else if (argv[i] === "--arch") out.arch = argv[++i];
+        else if (argv[i] === "--os") out.os = argv[++i];
     }
     return out;
 }
 
-function releaseDirForArch(arch) {
-    const triple = ARCH_TARGETS[arch];
+function releaseDirFor(os, arch) {
+    const osTargets = ARCH_TARGETS[os];
+    if (!osTargets) {
+        console.error(`Unknown os: ${os} (expected windows or macos)`);
+        process.exit(1);
+    }
+    const triple = osTargets[arch];
     if (triple === undefined) {
-        console.error(`Unknown arch: ${arch} (expected x86_64 or aarch64)`);
+        console.error(`Unknown arch for ${os}: ${arch}`);
         process.exit(1);
     }
     if (triple) {
@@ -64,6 +76,24 @@ function findReleaseExe(releaseDir) {
         (f) => f.endsWith(".exe") && !f.includes("uninstall"),
     );
     return exes.length ? join(releaseDir, exes[0]) : null;
+}
+
+function findDmg(releaseDir) {
+    const dmgDir = join(releaseDir, "bundle", "dmg");
+    if (!existsSync(dmgDir)) return null;
+    const dmgs = readdirSync(dmgDir).filter((f) => f.endsWith(".dmg") && !f.endsWith(".sig"));
+    if (dmgs.length === 0) return null;
+    return join(dmgDir, dmgs[0]);
+}
+
+function findAppTarGz(releaseDir) {
+    const macosDir = join(releaseDir, "bundle", "macos");
+    if (!existsSync(macosDir)) return null;
+    const tars = readdirSync(macosDir).filter(
+        (f) => f.endsWith(".app.tar.gz") && !f.endsWith(".sig"),
+    );
+    if (tars.length === 0) return null;
+    return join(macosDir, tars[0]);
 }
 
 function portableSidecars(dir, mainExeName) {
@@ -91,12 +121,17 @@ function zipWindows(paths, outZip) {
     execSync(`powershell -NoProfile -Command "${ps}"`, { stdio: "inherit" });
 }
 
-function main() {
-    const { outDir, arch } = parseArgs(process.argv.slice(2));
-    const releaseDir = releaseDirForArch(arch);
+function copyRequiredSig(src, dest) {
+    const setupSig = `${src}.sig`;
+    if (!existsSync(setupSig)) {
+        console.error(`No updater signature at ${setupSig}. Release builds must be signed.`);
+        process.exit(1);
+    }
+    copyFileSync(setupSig, dest);
+    console.log(`Wrote ${dest}`);
+}
 
-    mkdirSync(outDir, { recursive: true });
-
+function prepareWindows(releaseDir, outDir, arch) {
     const setupSrc = findNsisSetup(releaseDir);
     if (!setupSrc) {
         console.error(`NSIS setup.exe not found under ${join(releaseDir, "bundle", "nsis")}`);
@@ -106,16 +141,7 @@ function main() {
     const setupDest = join(outDir, `Shape-${arch}-setup.exe`);
     copyFileSync(setupSrc, setupDest);
     console.log(`Wrote ${setupDest}`);
-
-    const setupSig = `${setupSrc}.sig`;
-    if (existsSync(setupSig)) {
-        const sigDest = `${setupDest}.sig`;
-        copyFileSync(setupSig, sigDest);
-        console.log(`Wrote ${sigDest}`);
-    } else {
-        console.error(`No updater signature at ${setupSig}. Release builds must be signed.`);
-        process.exit(1);
-    }
+    copyRequiredSig(setupSrc, `${setupDest}.sig`);
 
     const exe = findReleaseExe(releaseDir);
     if (!exe) {
@@ -128,6 +154,40 @@ function main() {
     const zipDest = join(outDir, `Shape-${arch}.zip`);
     zipWindows(zipPaths, zipDest);
     console.log(`Wrote ${zipDest} (${zipPaths.length} entries)`);
+}
+
+function prepareMacos(releaseDir, outDir, arch) {
+    const dmgSrc = findDmg(releaseDir);
+    if (!dmgSrc) {
+        console.error(`DMG not found under ${join(releaseDir, "bundle", "dmg")}`);
+        process.exit(1);
+    }
+    const dmgDest = join(outDir, `Shape-macos-${arch}.dmg`);
+    copyFileSync(dmgSrc, dmgDest);
+    console.log(`Wrote ${dmgDest}`);
+    const dmgSig = `${dmgSrc}.sig`;
+    if (existsSync(dmgSig)) {
+        copyFileSync(dmgSig, `${dmgDest}.sig`);
+        console.log(`Wrote ${dmgDest}.sig`);
+    }
+
+    const tarSrc = findAppTarGz(releaseDir);
+    if (!tarSrc) {
+        console.error(`.app.tar.gz not found under ${join(releaseDir, "bundle", "macos")}`);
+        process.exit(1);
+    }
+    const tarDest = join(outDir, `Shape-macos-${arch}.app.tar.gz`);
+    copyFileSync(tarSrc, tarDest);
+    console.log(`Wrote ${tarDest}`);
+    copyRequiredSig(tarSrc, `${tarDest}.sig`);
+}
+
+function main() {
+    const { outDir, arch, os } = parseArgs(process.argv.slice(2));
+    const releaseDir = releaseDirFor(os, arch);
+    mkdirSync(outDir, { recursive: true });
+    if (os === "macos") prepareMacos(releaseDir, outDir, arch);
+    else prepareWindows(releaseDir, outDir, arch);
 }
 
 main();

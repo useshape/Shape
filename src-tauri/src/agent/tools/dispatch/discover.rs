@@ -236,6 +236,38 @@ pub(super) async fn tool_search_codebase(args: &Value, ctx: &ToolCtx<'_>) -> Too
     }
 }
 
+pub(super) fn tool_map_module(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let path = match get_str(args, "path") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("map_module", &e),
+    };
+    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    if matches!(
+        ext.as_str(),
+        "exe" | "dll" | "so" | "dylib" | "bin" | "o" | "obj" | "wasm"
+    ) {
+        return error_outcome(
+            "map_module",
+            "That file is a binary. Shape maps source in the open folder and does not decompile binaries.",
+        );
+    }
+    match crate::agent::tools::files::read_file(&path, ctx.project_path) {
+        Ok(content) => {
+            let mapped = crate::agent::tools::symbols::map_source(&path, &content);
+            let ui = format!(
+                "\n<status>Mapped {}</status>\n",
+                escape_xml_attr(&path)
+            );
+            ToolOutcome {
+                tool_result: clip(&mapped, 8000),
+                ui_chunk: ui,
+                side_effect: None,
+            }
+        }
+        Err(e) => error_outcome("map_module", &e.to_string()),
+    }
+}
+
 pub(super) async fn tool_codebase_overview(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     match crate::agent::overview::answer_overview(args, ctx).await {
         Ok(result) => {
@@ -252,6 +284,42 @@ pub(super) async fn tool_codebase_overview(args: &Value, ctx: &ToolCtx<'_>) -> T
         }
         Err(e) => error_outcome("codebase_overview", &e),
     }
+}
+
+fn plugin_connect_ui(toolkit: &str, name: &str) -> String {
+    format!(
+        "\n<plugin_connect toolkit=\"{}\" name=\"{}\"></plugin_connect>\n",
+        escape_xml_attr(toolkit),
+        escape_xml_attr(name)
+    )
+}
+
+fn guess_plugin_toolkit(query: &str) -> Option<(String, String)> {
+    let q = query.to_ascii_lowercase();
+    let hits = [
+        ("gmail", "gmail", "Gmail"),
+        ("google mail", "gmail", "Gmail"),
+        ("google calendar", "googlecalendar", "Google Calendar"),
+        ("calendar", "googlecalendar", "Google Calendar"),
+        ("slack", "slack", "Slack"),
+        ("linear", "linear", "Linear"),
+        ("github", "github", "GitHub"),
+        ("notion", "notion", "Notion"),
+        ("hubspot", "hubspot", "HubSpot"),
+        ("salesforce", "salesforce", "Salesforce"),
+        ("outlook", "outlook", "Outlook"),
+        ("discord", "discord", "Discord"),
+    ];
+    hits.iter().find(|(needle, _, _)| q.contains(needle)).map(|(_, toolkit, name)| {
+        ((*toolkit).to_string(), (*name).to_string())
+    })
+}
+
+fn plugin_needs_connect(res: &str) -> bool {
+    let l = res.to_ascii_lowercase();
+    l.contains("no plugins are connected")
+        || l.contains("not connected")
+        || l.contains("call plugin_connect")
 }
 
 fn plugin_call_ui(
@@ -319,22 +387,58 @@ fn plugin_needs_approval(mode: AutoRunMode, slug: &str) -> bool {
     }
 }
 
-fn plugin_discovery_outcome(toolkit: &str, slug: &str, label: &str, res: String) -> ToolOutcome {
+fn plugin_discovery_outcome(
+    toolkit: &str,
+    slug: &str,
+    label: &str,
+    res: String,
+    query: Option<&str>,
+) -> ToolOutcome {
     let status = if res.starts_with("ERROR") || res.starts_with("Plugins are not configured") {
         "error"
     } else {
         "ok"
     };
+    let mut ui_chunk = plugin_call_ui(toolkit, slug, label, status, None, &res);
+    if plugin_needs_connect(&res) {
+        if let Some((id, name)) = query.and_then(guess_plugin_toolkit).or_else(|| {
+            if toolkit != "plugins" {
+                Some((toolkit.to_string(), toolkit.to_string()))
+            } else {
+                None
+            }
+        }) {
+            ui_chunk.push_str(&plugin_connect_ui(&id, &name));
+        }
+    }
     ToolOutcome {
         tool_result: clip(&res, 8000),
-        ui_chunk: plugin_call_ui(toolkit, slug, label, status, None, &res),
+        ui_chunk,
+        side_effect: None,
+    }
+}
+
+pub(super) fn tool_plugin_connect(args: &Value) -> ToolOutcome {
+    let toolkit = match get_str(args, "toolkit") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("plugin_connect", &e),
+    };
+    let name = args
+        .get("name")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(toolkit.as_str());
+    ToolOutcome {
+        tool_result: "Showed an Authorize card in chat. Wait for the user to connect, then continue.".to_string(),
+        ui_chunk: plugin_connect_ui(&toolkit, name),
         side_effect: None,
     }
 }
 
 pub(super) async fn tool_plugin_list(ctx: &ToolCtx<'_>) -> ToolOutcome {
     let res = crate::agent::tools::plugins::execute_plugin_list(ctx.api_key).await;
-    plugin_discovery_outcome("plugins", "plugin_list", "Listed plugins", res)
+    plugin_discovery_outcome("plugins", "plugin_list", "Listed plugins", res, None)
 }
 
 pub(super) async fn tool_plugin_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
@@ -350,7 +454,7 @@ pub(super) async fn tool_plugin_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolO
     )
     .await;
     let label = format!("Searched plugins for {query}");
-    plugin_discovery_outcome("plugins", "plugin_search", &label, res)
+    plugin_discovery_outcome("plugins", "plugin_search", &label, res, Some(&query))
 }
 
 pub(super) async fn tool_plugin_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
@@ -362,7 +466,7 @@ pub(super) async fn tool_plugin_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOu
     let res =
         crate::agent::tools::plugins::execute_plugin_tools(&toolkit, query, ctx.api_key).await;
     let label = format!("Listed {toolkit} actions");
-    plugin_discovery_outcome(&toolkit, "plugin_tools", &label, res)
+    plugin_discovery_outcome(&toolkit, "plugin_tools", &label, res, Some(&toolkit))
 }
 
 async fn execute_plugin_run_ui(
@@ -389,9 +493,13 @@ async fn execute_plugin_run_ui(
         || res.starts_with("Monthly")
         || (!res.trim_start().starts_with('{') && res.to_ascii_lowercase().contains("error"));
     let status = if err { "error" } else { "ok" };
+    let mut ui_chunk = plugin_call_ui(toolkit, slug, label, status, cmd_id, &res);
+    if plugin_needs_connect(&res) {
+        ui_chunk.push_str(&plugin_connect_ui(toolkit, toolkit));
+    }
     ToolOutcome {
         tool_result: clip(&res, 8000),
-        ui_chunk: plugin_call_ui(toolkit, slug, label, status, cmd_id, &res),
+        ui_chunk,
         side_effect: None,
     }
 }
@@ -456,6 +564,7 @@ pub(super) async fn tool_plugin_run(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         reason: format!("Plugin action on {toolkit}"),
         action: Some("plugin_run".to_string()),
         payload: None,
+        conversation_id: ctx.conversation_id.clone(),
     };
     if let Ok(mut pendings) = ctx.agent_state.pending_commands.lock() {
         pendings.insert(cmd_id.clone(), pending.clone());
@@ -515,5 +624,206 @@ pub(super) async fn tool_plugin_run(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
             ),
             side_effect: None,
         },
+    }
+}
+
+const VISUAL_UA: &str = "ShapeDesktop/1.0 (chat)";
+
+fn plain_label(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| *c != '<' && *c != '>')
+        .take(120)
+        .collect()
+}
+
+async fn geocode(query: &str) -> Option<(f64, f64, String)> {
+    let resp = reqwest::Client::new()
+        .get("https://nominatim.openstreetmap.org/search")
+        .header("User-Agent", VISUAL_UA)
+        .header("Accept", "application/json")
+        .query(&[("format", "jsonv2"), ("limit", "1"), ("q", query)])
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let rows: Vec<Value> = resp.json().await.ok()?;
+    let hit = rows.first()?;
+    let lat = hit.get("lat")?.as_str()?.parse().ok()?;
+    let lng = hit.get("lon")?.as_str()?.parse().ok()?;
+    let label = hit
+        .get("display_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(query)
+        .split(',')
+        .next()
+        .unwrap_or(query);
+    Some((lat, lng, plain_label(label)))
+}
+
+fn photo_matches(query: &str, title: &str) -> bool {
+    let letters = |value: &str| {
+        value
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .flat_map(|c| c.to_lowercase())
+            .collect::<String>()
+    };
+    let query = letters(query);
+    let title = letters(title);
+    query.len() >= 4 && title.contains(&query)
+}
+
+struct WikiPhoto {
+    title: String,
+    url: String,
+    source: String,
+}
+
+async fn wiki_thumbs(query: &str, limit: usize) -> Vec<WikiPhoto> {
+    let limit_s = limit.clamp(1, 8).to_string();
+    let resp = match reqwest::Client::new()
+        .get("https://en.wikipedia.org/w/api.php")
+        .header("User-Agent", VISUAL_UA)
+        .header("Accept", "application/json")
+        .query(&[
+            ("action", "query"),
+            ("format", "json"),
+            ("generator", "search"),
+            ("gsrsearch", query),
+            ("gsrlimit", limit_s.as_str()),
+            ("prop", "pageimages|info"),
+            ("inprop", "url"),
+            ("piprop", "thumbnail|original"),
+            ("pithumbsize", "960"),
+            ("pilimit", limit_s.as_str()),
+        ])
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => resp,
+        _ => return Vec::new(),
+    };
+    let data: Value = match resp.json().await {
+        Ok(data) => data,
+        Err(_) => return Vec::new(),
+    };
+    let Some(pages) = data.pointer("/query/pages").and_then(|v| v.as_object()) else {
+        return Vec::new();
+    };
+    let mut images = Vec::new();
+    for page in pages.values() {
+        let thumb = page.pointer("/thumbnail/source").and_then(|v| v.as_str()).unwrap_or("");
+        let original = page.pointer("/original/source").and_then(|v| v.as_str()).unwrap_or("");
+        let url = if thumb.is_empty() { original } else { thumb };
+        if url.is_empty() {
+            continue;
+        }
+        let title = page
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or(query);
+        if !photo_matches(query, title) {
+            continue;
+        }
+        let page_url = page.get("fullurl").and_then(|v| v.as_str()).unwrap_or("");
+        let source = if !original.is_empty() {
+            original
+        } else if !page_url.is_empty() {
+            page_url
+        } else {
+            url
+        };
+        images.push(WikiPhoto {
+            title: plain_label(title),
+            url: url.to_string(),
+            source: source.to_string(),
+        });
+        if images.len() >= limit {
+            break;
+        }
+    }
+    images
+}
+
+pub(super) async fn tool_show_map(args: &Value, _ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let query = match get_str(args, "query") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("show_map", &e),
+    };
+    let mut names: Vec<String> = args
+        .get("places")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .take(6)
+                .map(|s| s.to_string())
+                .collect()
+        })
+        .unwrap_or_default();
+    if names.is_empty() {
+        names.push(query.clone());
+    }
+
+    let mut places = Vec::new();
+    for (index, name) in names.iter().enumerate() {
+        if index > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+        }
+        let Some((lat, lng, label)) = geocode(name).await else {
+            continue;
+        };
+        let photo = wiki_thumbs(name, 1).await.into_iter().next();
+        places.push(json!({
+            "name": if label.is_empty() { plain_label(name) } else { label },
+            "lat": lat,
+            "lng": lng,
+            "image": photo.as_ref().map(|photo| photo.url.clone()),
+            "imageSource": photo.as_ref().map(|photo| photo.source.clone()),
+        }));
+    }
+
+    if places.is_empty() {
+        return ToolOutcome {
+            tool_result: format!("Could not place \"{query}\" on a map."),
+            ui_chunk: String::new(),
+            side_effect: None,
+        };
+    }
+
+    let body = json!({ "query": plain_label(&query), "places": places });
+    ToolOutcome {
+        tool_result: format!("Showed a map for {query} with {} pin(s).", places.len()),
+        ui_chunk: format!("\n<place_map>\n{body}\n</place_map>\n"),
+        side_effect: None,
+    }
+}
+
+pub(super) async fn tool_show_images(args: &Value, _ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let query = match get_str(args, "query") {
+        Ok(s) => s,
+        Err(e) => return error_outcome("show_images", &e),
+    };
+    let images = wiki_thumbs(&query, 8).await;
+    if images.is_empty() {
+        return ToolOutcome {
+            tool_result: format!("No photos found for \"{query}\"."),
+            ui_chunk: String::new(),
+            side_effect: None,
+        };
+    }
+    let body = json!({
+        "query": plain_label(&query),
+        "images": images.iter().map(|photo| json!({ "title": photo.title, "url": photo.url, "source": photo.source })).collect::<Vec<_>>(),
+    });
+    ToolOutcome {
+        tool_result: format!("Showed {} photo(s) for {query}.", images.len()),
+        ui_chunk: format!("\n<shown_images>\n{body}\n</shown_images>\n"),
+        side_effect: None,
     }
 }

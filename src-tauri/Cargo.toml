@@ -74,12 +74,24 @@ tauri-plugin-notification = "2"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 lightningcss = { version = "1.0.0-alpha.72", default-features = false }
+sysinfo = "0.33"
+rusqlite = { version = "0.32", features = ["bundled"] }
+zip = "2"
+tar = "0.4"
+flate2 = "1"
+png = "0.17"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 tauri-winrt-notification = "0.8"
 webview2-com = "0.38"
 windows-core = "0.61"
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_System_SystemServices",
+] }
 window-vibrancy = "0.5"
 
 [target."cfg(any(target_os = \"windows\", target_os = \"linux\"))".dependencies]

@@ -12,8 +12,6 @@ import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-o
 import { MailInbox20Regular } from "@fluentui/react-icons/headless/svg/mail-inbox";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
-import { Pin20Filled } from "@fluentui/react-icons/headless/svg/pin";
-import { Pin20Regular } from "@fluentui/react-icons/headless/svg/pin";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { Eclipse } from "loading-dev";
 
@@ -30,21 +28,17 @@ import {
 import { commands, useProjectState } from "@/lib/backend";
 import type { Conversation } from "@/lib/backend/types";
 import { Icon, type IconGlyph } from "@/components/ui/icon";
+import { RevealName } from "@/components/ui/reveal-name";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
-import { NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
+import { isThreadTabId, NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
 import {
     clearChatUnread,
-    getPinnedChatIds,
-    getPinnedChatIdsServer,
     getUnreadChatIds,
     getUnreadChatIdsServer,
     markChatUnread,
-    CHAT_COLOR_HEX,
-    setChatPinned,
     type ChatColor,
-    subscribePinnedChats,
     subscribeUnreadChats,
 } from "@/lib/sidebar/chat-list-meta";
 import {
@@ -66,20 +60,21 @@ import {
 } from "@/components/ui/dropdown";
 import {
     applySubagentEvent,
+    closeSubagent,
     getSubagents,
-    openSubagent,
+    subagentDisplayTitle,
     subscribeSubagents,
     type SubagentCard,
 } from "@/features/agent/subagents/store";
 import { listen } from "@tauri-apps/api/event";
 import { ScrollArea } from "@/components/ui/scroll";
 type ChatSort = "recent" | "oldest" | "name-asc" | "name-desc";
-type ChatFilter = "all" | "pinned" | "unread";
+type ChatFilter = "all" | "unread";
 
 const SORT_KEY = "shape-sidebar-chat-sort";
+let sidebarNamesReady = false;
 const FILTER_OPTIONS: { value: ChatFilter; label: string }[] = [
     { value: "all", label: "All sessions" },
-    { value: "pinned", label: "Pinned" },
     { value: "unread", label: "Unread" },
 ];
 
@@ -146,7 +141,6 @@ function ChatRow({
     title,
     path,
     active,
-    pinned,
     unread,
     color,
     subagents,
@@ -159,7 +153,6 @@ function ChatRow({
     title: string;
     path: string;
     active: boolean;
-    pinned: boolean;
     unread: boolean;
     color: ChatColor | null;
     subagents: SubagentCard[];
@@ -193,6 +186,7 @@ function ChatRow({
     }, [renaming]);
 
     const openChat = () => {
+        closeSubagent();
         clearChatUnread(id);
         window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id } }));
     };
@@ -231,7 +225,6 @@ function ChatRow({
 
     const actions: { key: string; label: string; icon: IconGlyph; run: () => void; danger?: boolean; sep?: boolean }[] = [
         { key: "open", label: "Open", icon: Open20Regular, run: openChat },
-        { key: "pin", label: pinned ? "Unpin" : "Pin", icon: Pin20Regular, run: () => setChatPinned(id, !pinned) },
         { key: "rename", label: "Rename", icon: Edit20Regular, run: startRename },
         { key: "new", label: "New Chat", icon: Add20Regular, run: () => window.dispatchEvent(new CustomEvent("shape-chat-new")) },
         { key: "copy", label: "Copy Title", icon: Copy20Regular, sep: true, run: () => void navigator.clipboard.writeText(title) },
@@ -271,7 +264,7 @@ function ChatRow({
                 <ContextMenuTrigger asChild>
                     <div
                         className={cn(
-                            "group/chat relative flex h-10 w-full items-center gap-1 px-2 text-sm",
+                            "group/chat relative flex h-10 w-full items-center gap-1 pr-2 text-sm",
                             !color && "squircle-2xl",
                             "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                             !color && (active ? "bg-panel-hover text-text-primary" : "text-text-primary hover:bg-panel-hover"),
@@ -330,7 +323,7 @@ function ChatRow({
                                             maskImage: `linear-gradient(to right, #000 0, #000 calc(100% - ${fade}), transparent)`,
                                         }}
                                     >
-                                        {title}
+                                        <RevealName text={title} appear={sidebarNamesReady} />
                                     </span>
                                 </button>
                                 <span className="flex shrink-0 items-center gap-1">
@@ -344,18 +337,6 @@ function ChatRow({
                                 <span className="flex shrink-0 items-center">
                                     <span className="grid grid-cols-[0fr] overflow-hidden transition-[grid-template-columns] duration-150 ease-[var(--ease-out)] group-hover/chat:grid-cols-[1fr] group-has-[[data-state=open]]/chat:grid-cols-[1fr]">
                                     <span className="flex min-w-0 overflow-hidden">
-                                    {pinned ? null : (
-                                    <Tooltip content="Pin" side="bottom">
-                                        <button
-                                            type="button"
-                                            aria-label="Pin"
-                                            onClick={() => setChatPinned(id, true)}
-                                            className="flex size-6 items-center justify-center rounded-md text-text-muted hover:bg-panel-active hover:text-text-primary"
-                                        >
-                                            <Icon icon={Pin20Regular} className="icon-sm" />
-                                        </button>
-                                    </Tooltip>
-                                    )}
                                     <DropdownMenu modal={false}>
                                         <Tooltip content="Chat actions" side="bottom">
                                         <DropdownMenuTrigger asChild>
@@ -377,18 +358,6 @@ function ChatRow({
                                     </DropdownMenu>
                                     </span>
                                     </span>
-                                    {pinned ? (
-                                        <Tooltip content="Unpin" side="bottom">
-                                            <button
-                                                type="button"
-                                                aria-label="Unpin"
-                                                onClick={() => setChatPinned(id, false)}
-                                                className="flex size-6 items-center justify-center rounded-md text-text-primary"
-                                            >
-                                                <Icon icon={Pin20Filled} className="icon-sm" />
-                                            </button>
-                                        </Tooltip>
-                                    ) : null}
                                 </span>
                                 {nestedCount > 0 ? (
                                     <button
@@ -419,29 +388,43 @@ function ChatRow({
                 </ContextMenuContent>
             </ContextMenu>
             {expanded && nestedCount > 0 ? (
-                <div className="flex flex-col">
-                    {subagents.map((card) => (
-                        <button
-                            key={`s-${card.id}`}
-                            type="button"
-                            onClick={() => {
-                                clearChatUnread(id);
-                                window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id } }));
-                                openSubagent(card.id);
-                            }}
-                            className={cn(
-                                "flex h-8 items-center gap-2 pr-2 pl-7 text-left text-sm text-text-secondary",
-                                color
-                                    ? "hover:bg-[color-mix(in_oklch,var(--chat-tint)_16%,transparent)] hover:text-text-primary"
-                                    : "hover:bg-panel-hover hover:text-text-primary",
-                            )}
-                        >
-                            <span className={cn("size-1.5 shrink-0 rounded-full", nestedDot(card.status))} aria-hidden />
-                            <span className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,#000_0,#000_calc(100%-1.5rem),transparent)]">
-                                {card.title}
-                            </span>
-                        </button>
-                    ))}
+                <div className="ml-3.5 flex flex-col">
+                    {subagents.map((card, index) => {
+                        const last = index === subagents.length - 1;
+                        return (
+                            <button
+                                key={`s-${card.id}`}
+                                type="button"
+                                onClick={() => {
+                                    clearChatUnread(id);
+                                    window.dispatchEvent(new CustomEvent("shape-open-subagent", {
+                                        detail: { id: card.id, parentId: id },
+                                    }));
+                                }}
+                                className={cn(
+                                    "relative flex h-8 w-full items-center gap-2 pr-2 pl-4 text-left text-sm text-text-secondary",
+                                    color
+                                        ? "hover:bg-[color-mix(in_oklch,var(--chat-tint)_16%,transparent)] hover:text-text-primary"
+                                        : "hover:bg-panel-hover hover:text-text-primary",
+                                )}
+                            >
+                                <span
+                                    aria-hidden
+                                    className="pointer-events-none absolute left-0 top-0 h-1/2 w-3.5 rounded-bl-[10px] border-b-2 border-l-2 border-text-secondary"
+                                />
+                                {last ? null : (
+                                    <span
+                                        aria-hidden
+                                        className="pointer-events-none absolute bottom-0 left-0 top-1/2 border-l-2 border-text-secondary"
+                                    />
+                                )}
+                                <span className={cn("size-1.5 shrink-0 rounded-full", nestedDot(card.status))} aria-hidden />
+                                <span className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm [mask-image:linear-gradient(to_right,#000_0,#000_calc(100%-1.5rem),transparent)]">
+                                    <RevealName text={subagentDisplayTitle(card)} appear={sidebarNamesReady} />
+                                </span>
+                            </button>
+                        );
+                    })}
                 </div>
             ) : null}
         </div>
@@ -452,7 +435,6 @@ function SessionRow({
     chat,
     projectPath,
     activeId,
-    pinned,
     unread,
     color,
     subagents,
@@ -464,7 +446,6 @@ function SessionRow({
     chat: Conversation;
     projectPath: string;
     activeId: string | null;
-    pinned: boolean;
     unread: boolean;
     color: ChatColor | null;
     subagents: SubagentCard[];
@@ -479,7 +460,6 @@ function SessionRow({
             title={chat.title?.trim() || "Untitled"}
             path={chat.project_path || projectPath}
             active={chat.id === activeId}
-            pinned={pinned}
             unread={unread}
             color={color}
             subagents={subagents}
@@ -505,11 +485,6 @@ export function ChatList({
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [activeId, setActiveId] = useState<string | null>(null);
 
-    const pinnedIds = useSyncExternalStore(
-        subscribePinnedChats,
-        getPinnedChatIds,
-        getPinnedChatIdsServer,
-    );
     const unreadIds = useSyncExternalStore(
         subscribeUnreadChats,
         getUnreadChatIds,
@@ -519,6 +494,7 @@ export function ChatList({
 
     useEffect(() => {
         setSort(loadSort());
+        sidebarNamesReady = true;
     }, []);
 
     useEffect(() => {
@@ -601,12 +577,9 @@ export function ChatList({
     }, [project_path]);
 
     const visible = useMemo(() => {
-        const live = chats.filter((c) => !c.archived);
+        const live = chats.filter((c) => !c.archived && c.kind !== "thread" && !isThreadTabId(c.id));
         const sorted = [...live];
         sorted.sort((a, b) => {
-            const aPin = pinnedIds.has(a.id);
-            const bPin = pinnedIds.has(b.id);
-            if (aPin !== bPin) return aPin ? -1 : 1;
             if (sort === "name-asc") {
                 return (a.title || "").localeCompare(b.title || "", undefined, {
                     sensitivity: "base",
@@ -621,13 +594,12 @@ export function ChatList({
             return sort === "oldest" ? delta : -delta;
         });
         return sorted;
-    }, [chats, sort, pinnedIds]);
+    }, [chats, sort]);
 
     const filtered = useMemo(() => {
-        if (filter === "pinned") return visible.filter((c) => pinnedIds.has(c.id));
         if (filter === "unread") return visible.filter((c) => unreadIds.has(c.id));
         return visible;
-    }, [visible, filter, pinnedIds, unreadIds]);
+    }, [visible, filter, unreadIds]);
 
     const selected = new Set(selectedIds);
     const toggleSelect = (id: string) => {
@@ -638,7 +610,6 @@ export function ChatList({
         chat,
         projectPath: project_path || "",
         activeId,
-        pinned: pinnedIds.has(chat.id),
         unread: unreadIds.has(chat.id),
         color: null as ChatColor | null,
         edge: "none" as const,
@@ -659,7 +630,7 @@ export function ChatList({
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex items-center justify-between pl-3 pr-1 pb-1 pt-3">
-                <span className="text-sm font-medium text-text-muted">Sessions</span>
+                <span className="text-sm font-regular text-text-muted">Sessions</span>
                 <div className="flex items-center">
                     <HeaderIconBtn label="Search" onClick={openCommandPalette}>
                         <Icon icon={Search20Regular} />
@@ -702,9 +673,6 @@ export function ChatList({
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <HeaderIconBtn label="New chat" onClick={onNewChat}>
-                        <Icon icon={Compose20Regular} />
-                    </HeaderIconBtn>
                 </div>
             </div>
 
@@ -718,20 +686,19 @@ export function ChatList({
                         <Icon icon={FolderOpen20Regular} />
                         New project
                     </button>
-                ) : filtered.length === 0 ? (
-                    <button
-                        type="button"
-                        onClick={onNewChat}
-                        className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
-                    >
-                        <Icon icon={Compose20Regular} className="shrink-0" />
-                        <span>New chat</span>
-                    </button>
                 ) : (
                     <div className="space-y-0.5">
                         {filtered.map((c) => (
                             <SessionRow key={c.id} {...rowProps(c)} />
                         ))}
+                        <button
+                            type="button"
+                            onClick={onNewChat}
+                            className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
+                        >
+                            <Icon icon={Compose20Regular} className="shrink-0" />
+                            <span>New chat</span>
+                        </button>
                     </div>
                 )}
             </ScrollArea>

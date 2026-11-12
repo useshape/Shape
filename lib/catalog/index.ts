@@ -28,23 +28,10 @@ export type ShapeCatalog = {
 
 export const FALLBACK_CATALOG: ShapeCatalog = {
   tiers: [],
-  models: [
-    {
-      id: "auto",
-      name: "Auto",
-      description: "Picks a fast model for everyday work.",
-      provider: "Auto",
-      inputCost: 0,
-      cachedInputCost: 0,
-      outputCost: 0,
-      contextWindow: "200K",
-      releaseDate: "Rolling",
-      minTier: "free",
-    },
-  ],
-  providerOrder: ["Auto"],
-  freeTierModelIds: ["auto", "openrouter/auto"],
-  defaultEnabledModelIds: ["auto"],
+  models: [],
+  providerOrder: [],
+  freeTierModelIds: [],
+  defaultEnabledModelIds: [],
 };
 
 let cached: ShapeCatalog | null = null;
@@ -111,6 +98,7 @@ export function catalogModelsAsModelInfo(catalog: ShapeCatalog) {
     releaseDate: m.releaseDate,
     tags: m.tags,
     tier: m.tier,
+    minTier: m.minTier,
     viaApi: m.viaApi,
   }));
 }

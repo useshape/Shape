@@ -8,6 +8,7 @@ export function normalizePath(filePath: string): string {
 export function cleanPath(filePath: string): string {
     const normalized = normalizePath(filePath);
     const isWindowsAbs = /^[A-Za-z]:\//.test(normalized);
+    const isUnixAbs = normalized.startsWith("/");
     const parts = normalized.split("/");
     const stack: string[] = [];
 
@@ -15,13 +16,14 @@ export function cleanPath(filePath: string): string {
         if (!part || part === ".") continue;
         if (part === "..") {
             if (stack.length > 0 && stack[stack.length - 1] !== "..") stack.pop();
-            else if (!isWindowsAbs) stack.push("..");
+            else if (!isWindowsAbs && !isUnixAbs) stack.push("..");
             continue;
         }
         stack.push(part);
     }
 
     if (isWindowsAbs) return `${parts[0]}/${stack.slice(1).join("/")}`;
+    if (isUnixAbs) return `/${stack.join("/")}`;
     return stack.join("/") || "";
 }
 

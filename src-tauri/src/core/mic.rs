@@ -4,13 +4,20 @@
 
 #[cfg(windows)]
 pub fn allow_microphone(app: &tauri::AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
     use tauri::Manager;
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         COREWEBVIEW2_PERMISSION_KIND_MICROPHONE, COREWEBVIEW2_PERMISSION_STATE_ALLOW,
     };
     use webview2_com::PermissionRequestedEventHandler;
 
+    static INSTALLED: AtomicBool = AtomicBool::new(false);
+    if INSTALLED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
     let Some(window) = app.get_webview_window("main") else {
+        INSTALLED.store(false, Ordering::SeqCst);
         return;
     };
     let _ = window.with_webview(|webview| unsafe {

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { TRAFFIC_LIGHTS_INSET, WINDOWS_CONTROLS_WIDTH, useChromeKind } from "@/lib/ui/chrome-platform";
+import { TrafficLights } from "./traffic-lights";
 
 export function IconMinimize() {
     return (
@@ -37,7 +39,7 @@ export function IconClose() {
     );
 }
 
-const CONTROLS_WIDTH = 46 * 3;
+const CONTROLS_WIDTH = WINDOWS_CONTROLS_WIDTH;
 
 function WindowControlButtons({
     isMaximized,
@@ -80,11 +82,20 @@ function WindowControlButtons({
     );
 }
 
-export function WindowControlsSpacer() {
+export function WindowControlsSpacer({ side = "trailing" }: { side?: "leading" | "trailing" }) {
+    const chrome = useChromeKind();
+    const width =
+        side === "leading"
+            ? chrome === "macos"
+                ? TRAFFIC_LIGHTS_INSET
+                : 0
+            : chrome === "macos"
+              ? 0
+              : CONTROLS_WIDTH;
     return (
         <div
             className="h-full shrink-0"
-            style={{ width: CONTROLS_WIDTH }}
+            style={{ width }}
             aria-hidden
         />
     );
@@ -108,10 +119,25 @@ export function WindowControls({
     spacer?: boolean;
     floating?: boolean;
 }) {
+    const chrome = useChromeKind();
     const [host, setHost] = useState<HTMLElement | null>(null);
     useEffect(() => {
         setHost(document.body);
     }, []);
+
+    if (chrome === "macos") {
+        return (
+            <>
+                {spacer ? <WindowControlsSpacer side="trailing" /> : null}
+                <TrafficLights
+                    isMaximized={isMaximized}
+                    onMinimize={onMinimize}
+                    onToggleMaximize={onToggleMaximize}
+                    onClose={onClose}
+                />
+            </>
+        );
+    }
 
     const buttons = (
         <WindowControlButtons
@@ -123,7 +149,7 @@ export function WindowControls({
     );
 
     const bg =
-        surface === "sidebar" ? "bg-sidebar" : surface === "chrome" ? "bg-surface-3" : "bg-panel";
+        surface === "sidebar" ? "bg-transparent" : surface === "chrome" ? "bg-transparent" : "bg-transparent";
 
     /** Same layer as Radix overlays (document.body) so blur cannot cover these. */
     const floatingEl = floating ? (

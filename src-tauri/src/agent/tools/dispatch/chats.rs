@@ -20,10 +20,6 @@ pub(super) fn tool_list_chats(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             "Chat memory is off. Enable it in Settings → AI → Chat memory.",
         );
     }
-    if ctx.project_path.is_empty() {
-        return error_outcome("list_chats", "No project is open.");
-    }
-
     let query = args
         .get("query")
         .and_then(|v| v.as_str())
@@ -36,7 +32,15 @@ pub(super) fn tool_list_chats(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         .clamp(1, 50) as usize;
 
     let current_id = ctx.conversation_id.clone().unwrap_or_default();
-    let mut convs = history::load_conversations(ctx.project_path);
+    let mut convs = if ctx.project_path.is_empty() {
+        history::load_conversations(history::TALK_STORE)
+    } else {
+        let mut list = history::load_conversations(ctx.project_path);
+        if !history::is_talk_store(ctx.project_path) {
+            list.extend(history::load_conversations(history::TALK_STORE));
+        }
+        list
+    };
     convs.sort_by(|a, b| {
         b.timestamp
             .partial_cmp(&a.timestamp)
@@ -100,10 +104,6 @@ pub(super) fn tool_read_chat(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             "Chat memory is off. Enable it in Settings → AI → Chat memory.",
         );
     }
-    if ctx.project_path.is_empty() {
-        return error_outcome("read_chat", "No project is open.");
-    }
-
     let id = match get_str(args, "conversation_id").or_else(|_| get_str(args, "id")) {
         Ok(s) => s,
         Err(_) => {
@@ -119,22 +119,17 @@ pub(super) fn tool_read_chat(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         .unwrap_or(40)
         .clamp(1, 80) as usize;
 
-    let Some((_proj, conv)) =
-        history::find_conversation_by_id(&id, Some(ctx.project_path))
-    else {
+    let preferred = if ctx.project_path.is_empty() {
+        Some(history::TALK_STORE)
+    } else {
+        Some(ctx.project_path)
+    };
+    let Some((_proj, conv)) = history::find_conversation_by_id(&id, preferred) else {
         return error_outcome(
             "read_chat",
-            &format!("No chat found with id '{id}' in this project."),
+            &format!("No chat found with id '{id}'."),
         );
     };
-
-    if !history::project_paths_equal(
-        &Some(conv.project_path.clone()),
-        &Some(ctx.project_path.to_string()),
-    ) {
-        // Prefer-project load can still return a foreign chat if ids collide across files.
-        return error_outcome("read_chat", "That chat belongs to another project.");
-    }
 
     let total = conv.history.len();
     let start = total.saturating_sub(max_messages);

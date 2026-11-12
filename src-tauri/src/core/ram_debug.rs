@@ -1,6 +1,7 @@
 //! Always-on memory log. One line every 10s while idle, plus agent-turn
 //! snapshots. Covers this process and the WebView2 processes it owns.
-//! File: `%LOCALAPPDATA%\shape\ram-debug.log` (Windows). Set
+//! File: `%LOCALAPPDATA%\shape\ram-debug.log` on Windows, or
+//! `~/Library/Application Support/shape/ram-debug.log` on macOS. Set
 //! `SHAPE_RAM_DEBUG=0` to turn it off.
 
 use serde_json::Value;
@@ -220,15 +221,30 @@ mod win {
 
             let mut total_ws = 0u64;
             let mut total_private = 0u64;
-            let mut by_name: std::collections::BTreeMap<String, (usize, u64)> =
+            let mut total_handles = 0u32;
+            let mut total_gdi = 0u32;
+            let mut total_user = 0u32;
+            let mut by_name: std::collections::BTreeMap<String, (usize, u64, u32, u32, u32)> =
                 std::collections::BTreeMap::new();
+            const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
             for pid in owned.iter().skip(1) {
-                let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, *pid);
+                let handle = OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_QUERY_INFORMATION,
+                    0,
+                    *pid,
+                );
                 if handle.is_null() {
                     continue;
                 }
                 let mut counters = std::mem::zeroed::<ProcessMemoryCountersEx>();
                 counters.cb = std::mem::size_of::<ProcessMemoryCountersEx>() as u32;
+                let mut handles = 0u32;
+                GetProcessHandleCount(handle, &mut handles);
+                let gdi = GetGuiResources(handle, 0);
+                let user = GetGuiResources(handle, 1);
+                total_handles += handles;
+                total_gdi += gdi;
+                total_user += user;
                 if GetProcessMemoryInfo(handle, &mut counters, counters.cb) != 0 {
                     total_ws += counters.working_set_size as u64;
                     total_private += counters.private_usage as u64;
@@ -237,19 +253,27 @@ mod win {
                         .find(|(p, _, _)| p == pid)
                         .map(|(_, _, n)| n.clone())
                         .unwrap_or_else(|| "?".into());
-                    let slot = by_name.entry(name).or_insert((0, 0));
+                    let slot = by_name.entry(name).or_insert((0, 0, 0, 0, 0));
                     slot.0 += 1;
                     slot.1 += counters.private_usage as u64;
+                    slot.2 += handles;
+                    slot.3 += gdi;
+                    slot.4 += user;
                 }
                 CloseHandle(handle);
             }
             let detail = by_name
                 .iter()
-                .map(|(name, (count, private))| format!("{name}x{count}={:.0}MB", mb(*private)))
+                .map(|(name, (count, private, handles, gdi, user))| {
+                    format!(
+                        "{name}x{count}={:.0}MB,h={handles},gdi={gdi},user={user}",
+                        mb(*private)
+                    )
+                })
                 .collect::<Vec<_>>()
-                .join(",");
+                .join(";");
             format!(
-                "children={} children_ws_mb={:.0} children_private_mb={:.0} [{detail}]",
+                "children={} children_ws_mb={:.0} children_private_mb={:.0} children_handles={total_handles} children_gdi={total_gdi} children_user={total_user} [{detail}]",
                 owned.len() - 1,
                 mb(total_ws),
                 mb(total_private)
@@ -448,6 +472,53 @@ pub fn note_watch_event(pending: usize) {
 #[allow(dead_code)]
 pub fn append_raw(line: &str) {
     write_line(line);
+}
+
+fn logs_dir() -> PathBuf {
+    let dir = dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("shape");
+    let _ = create_dir_all(&dir);
+    dir
+}
+
+/// Directory for ram-debug, panic, and release log files.
+pub fn shape_log_dir() -> PathBuf {
+    logs_dir()
+}
+
+fn write_panic_file(line: &str) {
+    let path = logs_dir().join("panic.log");
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(file, "{line}");
+        let _ = file.flush();
+    }
+}
+
+/// Persist panics to disk so a GUI release build still leaves a stack.
+pub fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let loc = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown".to_string());
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Box<dyn Any>".to_string()
+        };
+        let bt = std::backtrace::Backtrace::force_capture();
+        let line = format!(
+            "[panic] t={:.1}s loc={loc} payload={payload}\n{bt}",
+            elapsed_s()
+        );
+        write_panic_file(&line);
+        append_raw(&line);
+        previous(info);
+    }));
 }
 
 #[allow(dead_code)]

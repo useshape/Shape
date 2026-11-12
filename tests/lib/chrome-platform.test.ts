@@ -1,0 +1,42 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { nativeChromeKind, resolveChromeKind, setChromePreview } from "@/lib/ui/chrome-platform";
+
+describe("chrome platform", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.unstubAllEnvs();
+        window.localStorage.clear();
+        window.history.replaceState({}, "", "/");
+    });
+
+    it("detects macOS from the user agent", () => {
+        vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Macintosh; Intel Mac OS X" });
+        expect(nativeChromeKind()).toBe("macos");
+    });
+
+    it("detects Windows from the user agent", () => {
+        vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows NT 10.0" });
+        expect(nativeChromeKind()).toBe("windows");
+    });
+
+    it("lets NEXT_PUBLIC_SHAPE_CHROME preview another titlebar", () => {
+        vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+        vi.stubEnv("NEXT_PUBLIC_SHAPE_CHROME", "macos");
+        expect(resolveChromeKind()).toBe("macos");
+    });
+
+    it("lets ?shape-chrome= override the env preview", () => {
+        vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+        vi.stubEnv("NEXT_PUBLIC_SHAPE_CHROME", "windows");
+        window.history.replaceState({}, "", "/?shape-chrome=macos");
+        expect(resolveChromeKind()).toBe("macos");
+    });
+
+    it("persists a preview choice", () => {
+        vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+        setChromePreview("linux");
+        expect(resolveChromeKind()).toBe("linux");
+        setChromePreview("auto");
+        expect(resolveChromeKind()).toBe("windows");
+    });
+});

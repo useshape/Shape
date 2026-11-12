@@ -1,3 +1,4 @@
+import { getShapeCatalog } from "@/lib/catalog/store";
 import type { ShapeAuthState } from "@/lib/cloud/types";
 import type { LastTurnUsage } from "@/lib/chat/last-turn-usage";
 
@@ -19,13 +20,14 @@ export type MessageUsageStats = {
 
 export function isAutoModelId(model?: string | null): boolean {
     if (!model) return false;
-    const normalized = model === "openrouter/auto" ? "auto" : model;
-    return normalized === "auto";
+    if (model === "auto" || model === "openrouter/auto") return true;
+    const catalog = getShapeCatalog();
+    return Boolean(catalog?.models.some((item) => item.id === model && (item.minTier === "free" || item.provider === "Free Models")));
 }
 
 export function formatModelLabel(model?: string | null): string {
     if (!model?.trim()) return "";
-    if (isAutoModelId(model)) return "Auto";
+    if (isAutoModelId(model) && (model === "auto" || model === "openrouter/auto")) return "Included";
     const slug = model.includes("/") ? model.split("/").pop()! : model;
     return slug
         .split("-")
@@ -38,7 +40,7 @@ export function formatMessageModelLabel(
     model?: string | null,
     stats?: MessageUsageStats,
 ): string {
-    if (stats?.usedAuto || isAutoModelId(model)) return "Auto";
+    if ((model === "auto" || model === "openrouter/auto") && (stats?.usedAuto || isAutoModelId(model))) return "Included";
     return formatModelLabel(model);
 }
 
@@ -145,7 +147,7 @@ export function resolveChatUsageDisplay(
             percent,
             title,
             detail: title,
-            tooltip: `${title} this month (Auto)`,
+            tooltip: `${title} of included usage this month`,
         };
     }
 

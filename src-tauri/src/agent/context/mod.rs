@@ -25,6 +25,8 @@ pub struct ContextOptions {
     pub include_repo_map: bool,
     pub include_diagnostics: bool,
     pub include_git_status: bool,
+    /// When false, omit the open project, files, and diagnostics. Used by Chat and Cowork.
+    pub include_workspace: bool,
 }
 
 impl Default for ContextOptions {
@@ -36,6 +38,7 @@ impl Default for ContextOptions {
             include_repo_map: true,
             include_diagnostics: true,
             include_git_status: true,
+            include_workspace: true,
         }
     }
 }
@@ -45,6 +48,12 @@ pub async fn build_context_with_options(
     opts: ContextOptions,
 ) -> Result<(String, Option<String>, Option<String>), AppError> {
     let mut context_string = String::new();
+    if !opts.include_workspace {
+        context_string.push_str(
+            "No project context. This conversation cannot see the open folder, files, or git status.\n",
+        );
+        return Ok((context_string, None, None));
+    }
     let (active_path_opt, open_files, project_path_opt) = {
         let proj_state = app_state.0.lock()?;
         (

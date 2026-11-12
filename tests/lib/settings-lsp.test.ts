@@ -42,4 +42,16 @@ describe("settings lsp", () => {
         expect(resolveDefaultTerminalShell()).toBe("powershell");
         vi.unstubAllGlobals();
     });
+
+    it("auto resolves to zsh on macOS", () => {
+        withSettings({ terminal: { ...DEFAULT_SETTINGS.terminal, defaultShell: "auto" } });
+        vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Macintosh; Intel Mac OS X" });
+        expect(resolveDefaultTerminalShell()).toBe("zsh");
+        vi.unstubAllGlobals();
+    });
+
+    it("uses explicit zsh setting", () => {
+        withSettings({ terminal: { ...DEFAULT_SETTINGS.terminal, defaultShell: "zsh" } });
+        expect(resolveDefaultTerminalShell()).toBe("zsh");
+    });
 });

@@ -155,7 +155,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         }, [inactive, label]);
 
         const classes = cn(
-            "press-spring relative inline-flex items-center justify-center gap-1.5 font-medium outline-none select-none",
+            "press-spring relative inline-flex items-center justify-center gap-1.5 font-normal outline-none select-none",
             "touch-manipulation [-webkit-tap-highlight-color:transparent]",
             "focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
             "[&_svg.shape-icon]:pointer-events-none [&_svg.shape-icon]:shrink-0",

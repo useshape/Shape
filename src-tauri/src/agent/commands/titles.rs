@@ -135,6 +135,24 @@ pub(crate) fn first_title_prompt(user_text: &str) -> String {
     )
 }
 
+fn echoes_user(title: &str, source: &str) -> bool {
+    let norm = |value: &str| {
+        value
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .trim_matches(|c: char| c == '.' || c == ',' || c == '?' || c == '!')
+            .to_lowercase()
+    };
+    let title_n = norm(title);
+    if title_n.is_empty() {
+        return true;
+    }
+    let source_n = norm(&text_for_title(source));
+    let first = source_n.lines().next().unwrap_or(source_n.as_str()).trim();
+    title_n == first || title_n == norm(&title_from_message(source))
+}
+
 async fn request_model_title(
     client: &Client,
     auth_token: &str,
@@ -143,11 +161,12 @@ async fn request_model_title(
     turn_id: &str,
     conversation_id: &str,
 ) -> Option<String> {
+    let mut prompt = first_title_prompt(title_source);
     for attempt in 0..2 {
         match streaming::complete_chat(
             client,
             auth_token,
-            &first_title_prompt(title_source),
+            &prompt,
             MODEL_TITLE_GEN,
             &streaming::ProxyContext::new("title")
                 .with_provider(provider.clone())
@@ -155,11 +174,23 @@ async fn request_model_title(
         )
         .await
         {
-            Ok(text) if parse_model_title(&text).is_some() => return Some(text),
-            Ok(text) => logging::warn(
-                "title",
-                &format!("Title attempt {} was not a title: {}", attempt + 1, text.chars().take(80).collect::<String>()),
-            ),
+            Ok(text) => match parse_model_title(&text) {
+                Some(title) if !echoes_user(&title, title_source) => return Some(title),
+                Some(_) => {
+                    logging::warn("title", "Title model copied the user message; retrying");
+                    prompt = format!(
+                        "The previous title copied the user's sentence. Reply with a different 2-5 word Title Case topic. No quotes, no explanation.\nUser:\n{title_source}"
+                    );
+                }
+                None => logging::warn(
+                    "title",
+                    &format!(
+                        "Title attempt {} was not a title: {}",
+                        attempt + 1,
+                        text.chars().take(80).collect::<String>()
+                    ),
+                ),
+            },
             Err(err) => logging::warn(
                 "title",
                 &format!("Title attempt {} failed: {err}", attempt + 1),
@@ -170,16 +201,19 @@ async fn request_model_title(
 }
 
 /// A model title, or nothing. Never the chopped user sentence.
-fn parse_model_title(raw: &str) -> Option<String> {
+fn parse_title_line(raw: &str) -> Option<String> {
     let title = raw
         .trim()
-        .trim_matches(|c: char| c == '"' || c == '\'' || c == '`')
+        .trim_matches(|c: char| c == '"' || c == '\'' || c == '`' || c == '*' || c == '#')
         .trim()
         .trim_start_matches("Title:")
+        .trim_start_matches("RENAME:")
         .trim();
-    let first_line = title.lines().next().unwrap_or(title).trim();
-    let words: Vec<&str> = first_line.split_whitespace().take(5).collect();
-    let title = words.join(" ").trim_matches(|c: char| c == '.' || c == ',').to_string();
+    let words: Vec<&str> = title.split_whitespace().take(5).collect();
+    let title = words
+        .join(" ")
+        .trim_matches(|c: char| c == '.' || c == ',' || c == ':' || c == '-')
+        .to_string();
     let word_count = title.split_whitespace().count();
     let lower = title.to_lowercase();
     let alpha_count = title.chars().filter(|c| c.is_alphabetic()).count();
@@ -193,11 +227,17 @@ fn parse_model_title(raw: &str) -> Option<String> {
         || lower.starts_with("could you")
         || lower.contains("data:image")
         || lower.contains("base64");
-    if looks_invalid {
-        None
-    } else {
-        Some(title)
+    if looks_invalid { None } else { Some(title) }
+}
+
+/// A model title, or nothing. Never the chopped user sentence.
+fn parse_model_title(raw: &str) -> Option<String> {
+    for line in raw.lines() {
+        if let Some(title) = parse_title_line(line) {
+            return Some(title);
+        }
     }
+    None
 }
 
 /// Apply a model title onto the conversation that started this turn.
@@ -213,11 +253,9 @@ pub(crate) async fn apply_generated_title(
     cancel: tokio_util::sync::CancellationToken,
     project_path: Option<String>,
 ) {
-    if cancel.is_cancelled() {
-        return;
-    }
-    // Own lifetime: the chat turn's cancel token dies when the user hits Stop,
-    // and that was leaving the chopped first-line placeholder on the chat forever.
+    let _ = cancel;
+    // Title naming outlives Stop. The turn cancel token used to abort this and
+    // leave the user's sentence as the chat name.
     let raw = request_model_title(&client, &auth_token, &title_source, &provider, &turn_id, &conversation_id).await;
     let Some(state) = app.try_state::<AgentState>() else {
         return;
@@ -232,17 +270,13 @@ pub(crate) async fn apply_generated_title(
             return;
         }
     }
-    let Some(title) = raw.and_then(|text| parse_model_title(&text)) else {
+    let Some(title) = raw else {
         logging::warn(
             "title",
             "Title model returned nothing usable, so the placeholder stayed",
         );
         return;
     };
-    if title.eq_ignore_ascii_case(&title_from_message(&title_source)) {
-        logging::warn("title", "Title model echoed the user message; keeping placeholder");
-        return;
-    }
     let user_turns = state
         .history
         .lock()
@@ -458,6 +492,27 @@ pub(crate) fn sanitize_generated_title(raw: &str, fallback_message: &str) -> Str
         title_from_message(fallback_message)
     } else {
         title
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_title_after_a_preamble() {
+        assert_eq!(
+            parse_model_title("Sure.\nFix login redirect").as_deref(),
+            Some("Fix login redirect")
+        );
+    }
+
+    #[test]
+    fn rejects_a_title_that_copies_the_user() {
+        assert!(echoes_user("Whats Folder", "whats folder"));
+        assert!(echoes_user("how are you", "how are you"));
+        assert!(!echoes_user("Folder contents", "whats folder"));
+        assert!(!echoes_user("Greeting", "how are you"));
     }
 }
 

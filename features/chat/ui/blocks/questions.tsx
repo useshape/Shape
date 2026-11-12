@@ -152,8 +152,8 @@ export function QuestionsCard({
     if (!current) return null;
 
     return (
-        <div className="my-2 overflow-hidden rounded-xl bg-surface-3">
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-text-muted">
+        <div className="my-2 overflow-hidden squircle-2xl border border-border/10 bg-surface-3">
+            <div className="flex items-center justify-between gap-2 p-2 text-text-muted">
                 <div className="flex items-center gap-0.5">
                     <Button
                         type="button"

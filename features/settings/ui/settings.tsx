@@ -38,6 +38,7 @@ import {
 import { AiSettingsPanel } from "./sections/ai";
 import { AccountSettingsPanel } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
+import { nativeChromeKind, setChromePreview, useChromePreviewOverride } from "@/lib/ui/chrome-platform";
 import { clearRepoHistory } from "@/lib/workspace/repo-history";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import {
@@ -269,8 +270,26 @@ function EditorSettings({ settings }: { settings: ShapeSettings }) {
 
 function TerminalSettings({ settings }: { settings: ShapeSettings }) {
     const t = settings.terminal;
+    const chromePreview = useChromePreviewOverride();
+    const native = nativeChromeKind();
     return (
         <SettingSection id="settings-terminal" title="Integrated Terminal">
+            <SettingRow title="Window chrome" description="Preview Windows or macOS titlebar controls without changing OS. Local only — not written into project files. You can also set NEXT_PUBLIC_SHAPE_CHROME or ?shape-chrome=macos.">
+                <SettingSelect
+                    value={chromePreview}
+                    options={[
+                        { value: "auto", label: `Auto (${native === "macos" ? "macOS" : native === "linux" ? "Linux" : "Windows"})` },
+                        { value: "windows", label: "Windows" },
+                        { value: "macos", label: "macOS" },
+                        { value: "linux", label: "Linux" },
+                    ]}
+                    onChange={(v) => {
+                        if (v === "windows" || v === "macos" || v === "linux" || v === "auto") {
+                            setChromePreview(v);
+                        }
+                    }}
+                />
+            </SettingRow>
             <SettingRow title="Default Shell">
                 <SettingSelect
                     value={t.defaultShell}
@@ -279,6 +298,8 @@ function TerminalSettings({ settings }: { settings: ShapeSettings }) {
                         { value: "powershell", label: "PowerShell" },
                         { value: "cmd", label: "Command Prompt" },
                         { value: "git-bash", label: "Git Bash" },
+                        { value: "zsh", label: "zsh" },
+                        { value: "bash", label: "bash" },
                     ]}
                     onChange={(v) => updateSettingSection("terminal", { defaultShell: v })}
                 />

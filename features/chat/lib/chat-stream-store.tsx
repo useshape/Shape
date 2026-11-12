@@ -7,6 +7,7 @@ import type { ChatMessage } from "@/lib/backend/types";
 import { setChatGenerating } from "./generating-chats";
 import { NEW_CHAT_TAB_ID } from "../ui/shell/tabs";
 import { upsertTaggedBlockInContent } from "./upsert-stream-blocks";
+import { isPlaceholderView, isThreadConversationId, resolveLiveTurnKey, streamVisibleToView } from "./live-turn-key";
 
 function isForeignConversation(id?: string | null) {
     return Boolean(id && id.startsWith("mw-worker-"));
@@ -19,6 +20,7 @@ const TOOL_LABELS: Record<string, string> = {
     search_files: "Finding files",
     search_codebase: "Searching codebase",
     codebase_overview: "Mapping codebase",
+    map_module: "Mapping module",
     edit_file: "Editing file",
     run_terminal: "Running command",
     wait: "Waiting",
@@ -76,6 +78,8 @@ type ChatStreamContextValue = ChatStreamState & {
     stopLiveTurn: () => void;
     /** Leave a running turn in the background and show an empty draft. */
     startDraftChat: () => void;
+    /** Last messages shown for a conversation, so a tab switch can paint before disk. */
+    peekSnapshot: (id: string) => ChatMessage[] | null;
 };
 
 const defaultState: ChatStreamState = {
@@ -143,6 +147,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
     const [sendError, setSendError] = React.useState<string | null>(null);
     const [contextSummarized, setContextSummarized] = React.useState(false);
     const viewingIdRef = React.useRef<string | null>(null);
+    const snapshotsRef = React.useRef(new Map<string, ChatMessage[]>());
     const liveTurnsRef = React.useRef<Map<string, LiveTurn>>(new Map());
     const messagesRef = React.useRef<ChatMessage[]>(messages);
     const turnIdRef = React.useRef<string | null>(null);
@@ -188,6 +193,16 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         setTurnPhase("idle");
     }, [applyLive]);
 
+    React.useEffect(() => {
+        const id = viewingIdRef.current;
+        if (!id || id.startsWith("__") || messages.length === 0) return;
+        snapshotsRef.current.set(id, messages);
+    }, [messages]);
+
+    const peekSnapshot = React.useCallback((id: string) => {
+        return snapshotsRef.current.get(id) ?? null;
+    }, []);
+
     const resumeLiveConversation = React.useCallback((id: string | null) => {
         if (!id) return false;
         const live = liveTurnsRef.current.get(id);
@@ -199,28 +214,42 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
 
     const syncFromBackend = React.useCallback(async () => {
         try {
+            const requestedView = viewingIdRef.current;
             const [history, gen, convId] = await Promise.all([
                 commands.getChatHistory(),
                 commands.getChatGenerationState(),
                 commands.getCurrentConversationId().catch(() => null),
             ]);
+            if (viewingIdRef.current !== requestedView) return;
+            if (requestedView && requestedView !== "__draft__" && convId !== requestedView) return;
             viewingIdRef.current = convId ?? null;
 
-            if (gen.isGenerating && gen.conversationId && !ignoredIdsRef.current.has(gen.conversationId)) {
-                const liveId = gen.conversationId;
+            const generatingIds = [
+                ...(gen.conversationIds ?? []),
+                ...(gen.conversationId ? [gen.conversationId] : []),
+            ].filter((id, index, all) => all.indexOf(id) === index);
+            for (const liveId of generatingIds) {
+                if (ignoredIdsRef.current.has(liveId)) continue;
                 const existing = liveTurnsRef.current.get(liveId);
                 liveTurnsRef.current.set(liveId, {
                     conversationId: liveId,
                     turnId: gen.turnId ?? existing?.turnId ?? null,
-                    messages: viewingIdRef.current === liveId ? history : (existing?.messages ?? history),
+                    messages: viewingIdRef.current === liveId ? history : (existing?.messages ?? []),
                     activityLabel: gen.activityLabel ?? existing?.activityLabel ?? "Thinking",
                     turnPhase: existing?.turnPhase ?? "thinking",
                 });
+                setChatGenerating(liveId, true);
             }
 
             const shown = liveForView();
             if (shown) {
                 applyLive(shown);
+                return;
+            }
+            if (
+                requestedView
+                && (liveTurnsRef.current.has(requestedView) || liveTurnsRef.current.has(PENDING_KEY))
+            ) {
                 return;
             }
 
@@ -267,10 +296,11 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
             { role: "user" as const, content: userMsg, timestamp: optimisticTs },
             { role: "assistant" as const, content: "", timestamp: optimisticTs + 0.001 },
         ];
-        const key = viewingIdRef.current || PENDING_KEY;
+        const unbound = isPlaceholderView(viewingIdRef.current);
+        const key = unbound ? PENDING_KEY : viewingIdRef.current || PENDING_KEY;
         ignoredIdsRef.current.delete(key);
         liveTurnsRef.current.set(key, {
-            conversationId: viewingIdRef.current,
+            conversationId: unbound ? null : viewingIdRef.current,
             turnId: null,
             messages: next,
             activityLabel: "Thinking",
@@ -294,33 +324,42 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
 
         const finishedTurns = new Set<string>();
 
-        const resolveLiveKey = (conversationId?: string | null) => {
-            if (conversationId && liveTurnsRef.current.has(conversationId)) return conversationId;
-            const viewing = viewingIdRef.current;
-            if (viewing && liveTurnsRef.current.has(viewing)) return viewing;
-            if (liveTurnsRef.current.has(PENDING_KEY)) return PENDING_KEY;
-            if (liveTurnsRef.current.size === 1) {
-                return liveTurnsRef.current.keys().next().value ?? null;
-            }
-            return conversationId || null;
-        };
+        const resolveLiveKey = (conversationId?: string | null) =>
+            resolveLiveTurnKey(conversationId, liveTurnsRef.current.keys(), viewingIdRef.current, PENDING_KEY);
 
+        let paintFrame = 0;
+        const paintLive = () => {
+            paintFrame = 0;
+            const live = liveForView();
+            if (!live) return;
+            setMessages(live.messages);
+            setIsLoading(true);
+            setActivityLabel(live.activityLabel);
+            setTurnPhase(live.turnPhase);
+            setTurnId(live.turnId);
+        };
         const patchLive = (conversationId: string | null | undefined, update: (live: LiveTurn) => void) => {
             const key = resolveLiveKey(conversationId);
             if (!key || ignoredIdsRef.current.has(key)) return;
             const live = liveTurnsRef.current.get(key);
             if (!live) return;
             update(live);
-            const shown =
-                (viewingIdRef.current && viewingIdRef.current === live.conversationId) ||
-                (!viewingIdRef.current && key === PENDING_KEY);
-            if (shown) {
-                setMessages(live.messages);
-                setIsLoading(true);
-                setActivityLabel(live.activityLabel);
-                setTurnPhase(live.turnPhase);
-                setTurnId(live.turnId);
+            const shown = streamVisibleToView(
+                viewingIdRef.current,
+                live.conversationId,
+                key,
+                PENDING_KEY,
+            );
+            if (
+                shown
+                && live.conversationId
+                && isPlaceholderView(viewingIdRef.current)
+                && !isThreadConversationId(live.conversationId)
+            ) {
+                viewingIdRef.current = live.conversationId;
             }
+            if (!shown || paintFrame) return;
+            paintFrame = requestAnimationFrame(paintLive);
         };
 
         register(
@@ -341,8 +380,21 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     ignoredIdsRef.current.delete(convId);
                 }
                 const pending = liveTurnsRef.current.get(PENDING_KEY);
-                const existing = (convId && liveTurnsRef.current.get(convId)) || pending;
-                let snapshot = existing?.messages ?? messagesRef.current;
+                const named = convId ? liveTurnsRef.current.get(convId) : undefined;
+                const viewing = viewingIdRef.current;
+                const unbound = isPlaceholderView(viewing);
+                const viewLive = viewing && viewing !== convId
+                    ? liveTurnsRef.current.get(viewing)
+                    : undefined;
+                const threadStart = isThreadConversationId(convId);
+                const claimPending =
+                    !named
+                    && unbound
+                    && (!!pending || !!viewLive)
+                    && !threadStart;
+                const existing = threadStart ? named : named ?? pending ?? viewLive;
+                const viewingThis = viewing === convId || claimPending;
+                let snapshot = existing?.messages ?? (viewingThis ? messagesRef.current : []);
                 if (startedModel) {
                     const latest = snapshot[snapshot.length - 1];
                     if (latest?.role === "assistant") {
@@ -360,7 +412,10 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     }
                 }
                 const key = convId || PENDING_KEY;
-                liveTurnsRef.current.delete(PENDING_KEY);
+                if (claimPending) {
+                    liveTurnsRef.current.delete(PENDING_KEY);
+                    if (viewing && viewing !== key) liveTurnsRef.current.delete(viewing);
+                }
                 liveTurnsRef.current.set(key, {
                     conversationId: convId,
                     turnId: tid,
@@ -368,9 +423,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     activityLabel: "Thinking",
                     turnPhase: "thinking",
                 });
-                const stayOnThisTurn = !viewingIdRef.current || viewingIdRef.current === convId;
+                const stayOnThisTurn = viewingIdRef.current === convId || claimPending;
                 if (stayOnThisTurn) {
-                    viewingIdRef.current = convId;
+                    if (convId) viewingIdRef.current = convId;
                     turnIdRef.current = tid;
                     setIsLoading(true);
                     setSendError(null);
@@ -393,16 +448,29 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     const meta = typeof raw === "string" ? undefined : raw;
                     if (isForeignConversation(meta?.conversationId)) return;
                     if (meta?.turnId && finishedTurns.has(meta.turnId)) return;
-                    const convId = meta?.conversationId ?? viewingIdRef.current;
-                    if (convId && ignoredIdsRef.current.has(convId)) return;
-                    const key = convId || PENDING_KEY;
+                    const convId = meta?.conversationId ?? null;
+                    if (!convId) {
+                        patchLive(null, (live) => {
+                            if (meta?.turnId) live.turnId = meta.turnId;
+                            live.messages = appendAssistantChunk(live.messages, chunk);
+                        });
+                        return;
+                    }
+                    if (ignoredIdsRef.current.has(convId)) return;
+                    const key = convId;
                     if (!liveTurnsRef.current.has(key)) {
                         const pending = liveTurnsRef.current.get(PENDING_KEY);
-                        if (pending && key !== PENDING_KEY) {
+                        if (
+                            pending
+                            && key !== PENDING_KEY
+                            && isPlaceholderView(viewingIdRef.current)
+                            && !isThreadConversationId(key)
+                        ) {
                             liveTurnsRef.current.delete(PENDING_KEY);
                             pending.conversationId = convId;
                             pending.turnId = meta?.turnId ?? pending.turnId;
                             liveTurnsRef.current.set(key, pending);
+                            viewingIdRef.current = convId;
                         } else {
                             liveTurnsRef.current.set(key, {
                                 conversationId: convId,
@@ -621,8 +689,8 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         );
 
         register(
-            listen<{ phase?: string; tool?: string; label?: string }>("chat_status", (event) => {
-                const { phase, tool, label } = event.payload ?? {};
+            listen<{ phase?: string; tool?: string; label?: string; conversationId?: string }>("chat_status", (event) => {
+                const { phase, tool, label, conversationId } = event.payload ?? {};
                 let nextPhase: TurnPhase | null = null;
                 let nextLabel: string | null = null;
                 if (phase === "approval") {
@@ -638,7 +706,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     nextLabel = label.trim();
                 }
                 if (!nextPhase && !nextLabel) return;
-                patchLive(undefined, (live) => {
+                patchLive(conversationId, (live) => {
                     if (nextPhase) live.turnPhase = nextPhase;
                     if (nextLabel) live.activityLabel = nextLabel;
                 });
@@ -659,6 +727,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
 
         return () => {
             disposed = true;
+            if (paintFrame) cancelAnimationFrame(paintFrame);
             unlisteners.forEach((fn) => fn());
         };
     }, [syncFromBackend]);
@@ -680,6 +749,7 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
         resumeLiveConversation,
         stopLiveTurn,
         startDraftChat,
+        peekSnapshot,
     };
 
     return (

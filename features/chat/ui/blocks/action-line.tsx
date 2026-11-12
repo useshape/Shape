@@ -99,6 +99,7 @@ export function ActionLine({
                 className={cn(
                     "group/line flex w-fit max-w-full items-center gap-1.5 py-0.5 text-left chat-text font-normal text-text-muted",
                     interactive && "cursor-pointer",
+                    shimmer && "tool-arrive",
                     className,
                 )}
             >

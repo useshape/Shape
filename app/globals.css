@@ -11,19 +11,19 @@
   --surface-1: #181818;
   --surface-2: #1b1b1b;
   --surface-3: #202020;
-  --surface-4: #252525;
+  --surface-4: #292828;
   --settings-card: #2a2a2a;
 
   /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
-  --chrome: #1E1E1E;
-  --sidebar: #2D2D2D;
+  --chrome: #191919;
+  --sidebar: #222121;
   --editor: #191919;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #1B1B1B;
+  --panel: #1a1919;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(255, 255, 255, 0.06);
   --panel-hover: rgba(255, 255, 255, 0.04);
@@ -141,6 +141,7 @@
 
   --chrome-height: 30px;
   --titlebar-height: 34px;
+  --traffic-lights-inset: 0px;
   --statusbar-height: 33px;
 
   /* ── Typography ── */
@@ -939,9 +940,74 @@ body[data-resizing] .xterm {
 [data-tauri-drag-region] [role="menuitem"],
 [data-tauri-drag-region] [data-radix-collection-item],
 [data-tauri-drag-region] .titlebar-window-controls,
-[data-tauri-drag-region] .control-button {
+[data-tauri-drag-region] .control-button,
+[data-tauri-drag-region] .traffic-lights,
+[data-tauri-drag-region] .traffic-light {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+html[data-chrome="macos"] {
+  --traffic-lights-inset: 78px;
+}
+
+.traffic-lights {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-titlebar-controls);
+  display: flex;
+  height: var(--titlebar-height);
+  width: var(--traffic-lights-inset);
+  align-items: center;
+  padding-left: 16px;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.traffic-light {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  cursor: default;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.traffic-light-close { background: #ff5f57; }
+.traffic-light-min { background: #febc2e; }
+.traffic-light-zoom { background: #28c840; }
+
+.traffic-lights.is-inactive .traffic-light {
+  background: #d0d0d0;
+}
+
+html.dark .traffic-lights.is-inactive .traffic-light,
+html[data-theme="dark"] .traffic-lights.is-inactive .traffic-light {
+  background: #555;
+}
+
+.traffic-lights:hover .traffic-light-close::after,
+.traffic-lights:hover .traffic-light-min::after,
+.traffic-lights:hover .traffic-light-zoom::after {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+}
+
+.traffic-lights:hover .traffic-light-close::after { content: "×"; }
+.traffic-lights:hover .traffic-light-min::after { content: "–"; }
+.traffic-lights:hover .traffic-light-zoom::after { content: "+"; }
+
+html[data-chrome="macos"] [data-chrome-leading="true"] {
+  padding-left: var(--traffic-lights-inset);
 }
 
 /* Never disable pointer-events on the whole tree - that permanently kills
@@ -1731,6 +1797,50 @@ body[data-resizing] .xterm {
 
 .animate-in {
   animation: shape-fade-in var(--transition-base) var(--ease-out) both;
+}
+
+@keyframes chat-name-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes chat-name-sheen {
+  0% {
+    background-position: 130% 0;
+    opacity: 0.95;
+  }
+  100% {
+    background-position: -30% 0;
+    opacity: 0;
+  }
+}
+
+.chat-name-reveal {
+  animation: chat-name-reveal 760ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.chat-name-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    100deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.78) 50%,
+    transparent 68%
+  );
+  background-size: 220% 100%;
+  animation: chat-name-sheen 760ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-name-reveal,
+  .chat-name-sheen {
+    animation: none;
+  }
+  .chat-name-sheen {
+    display: none;
+  }
 }
 
 @keyframes shape-orb-breathe {

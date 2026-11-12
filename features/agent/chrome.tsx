@@ -95,7 +95,11 @@ export function AgentChrome({
     onSidebarHoverEnd?: () => void;
 }) {
     return (
-        <div className="relative z-30 flex h-titlebar shrink-0 items-stretch overflow-hidden bg-transparent" data-tauri-drag-region>
+        <div
+            className="relative z-30 flex h-titlebar shrink-0 items-stretch overflow-hidden bg-transparent"
+            data-tauri-drag-region
+            data-chrome-leading={sidebarOpen ? "false" : "true"}
+        >
             {!sidebarOpen && onToggleSidebar ? (
                 <div
                     data-sidebar-peek-toggle=""

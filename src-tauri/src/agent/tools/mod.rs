@@ -1,10 +1,16 @@
 pub mod browse;
+pub mod desktop;
+pub mod host;
+pub mod host_shot;
 pub mod dispatch;
 pub mod files;
 pub mod page_shot;
 pub mod plugins;
 pub mod generate;
+pub mod model3d;
+pub mod reverse;
 pub mod runtime_inspect;
 pub mod schema;
 pub mod search;
 pub mod spill;
+pub mod symbols;
