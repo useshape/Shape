@@ -8,10 +8,15 @@ import {
     type UnifiedDiffRow,
 } from "@/lib/ui/diff-count";
 
-function DiffRows({ rows }: { rows: UnifiedDiffRow[] }) {
+function DiffRows({ rows, flush }: { rows: UnifiedDiffRow[]; flush?: boolean }) {
     if (rows.length === 0) return null;
     return (
-        <div className="relative mt-1 mb-1 max-h-56 w-full overflow-auto squircle-2xl border border-border-subtle bg-transparent px-1.5 py-2 font-mono text-sm leading-6">
+        <div
+            className={cn(
+                "max-h-56 w-full overflow-auto py-2 font-mono text-sm leading-6",
+                flush ? "bg-transparent" : "relative mt-1 mb-1",
+            )}
+        >
             {rows.map((row, i) => {
                 if (row.type === "hunk") return null;
                 const num = row.type === "remove" ? row.oldNum : row.newNum ?? row.oldNum;
@@ -40,22 +45,24 @@ function DiffRows({ rows }: { rows: UnifiedDiffRow[] }) {
 export function ChatEditDiff({
     original,
     replacement,
+    flush,
 }: {
     original: string;
     replacement: string;
+    flush?: boolean;
 }) {
     const rows = useMemo(
         () => unifiedDiffRows(original || "", replacement || "", 4),
         [original, replacement],
     );
-    return <DiffRows rows={rows} />;
+    return <DiffRows rows={rows} flush={flush} />;
 }
 
 /** Unified preview for a git/patch body string. */
-export function ChatPatchDiff({ body }: { body: string }) {
+export function ChatPatchDiff({ body, flush }: { body: string; flush?: boolean }) {
     const rows = useMemo(() => parseUnifiedDiffBody(body || ""), [body]);
     if (!body.trim()) {
         return <span className="px-1 text-sm text-text-muted">No diff output</span>;
     }
-    return <DiffRows rows={rows} />;
+    return <DiffRows rows={rows} flush={flush} />;
 }

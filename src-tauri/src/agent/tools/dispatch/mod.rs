@@ -3,9 +3,11 @@
 mod chats;
 mod common;
 mod computer;
+mod desktop;
 mod discover;
 mod files;
 mod git;
+mod host;
 mod meta;
 mod persona;
 mod subagent;
@@ -39,6 +41,7 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "git_create_branch",
     "git_switch",
     "git_sync",
+    "git_fetch",
     "git_worktree",
     "plugin_run",
     "save_media",
@@ -46,6 +49,10 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "generate_image",
     "generate_audio",
     "edit_image",
+    "generate_3d_model",
+    "edit_3d_model",
+    "convert_3d_model",
+    "re_extract",
 ];
 
 const WORKSPACE_UNTRUSTED_MSG: &str =
@@ -70,11 +77,19 @@ pub struct ToolCtx<'a> {
     pub pty_state: Option<&'a PtyState>,
     pub turn_id: Option<String>,
     pub conversation_id: Option<String>,
+    /// When set, shell commands that name this directory are refused.
+    /// Chat uses it so the open code project cannot be edited from that mode.
+    pub sealed_project: Option<&'a str>,
+    /// Tool names listed on this turn. `None` allows any known tool (tests).
+    pub allowed_tools: Option<&'a [String]>,
 }
 
 impl<'a> ToolCtx<'a> {
     pub fn emit_ui_token(&self, chunk: impl Into<String>) {
-        let chunk = chunk.into();
+        let chunk = crate::agent::tools::browse::strip_data_urls(&chunk.into());
+        if chunk.is_empty() {
+            return;
+        }
         let _ = self.app_handle.emit(
             "chat_token",
             serde_json::json!({
@@ -110,6 +125,17 @@ pub enum SideEffect {
 }
 
 pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    if let Some(allowed) = ctx.allowed_tools {
+        if !allowed.iter().any(|n| n == name) {
+            return blocked_outcome(
+                name,
+                "That tool is not available on this turn. Use a listed tool, or load_tools if that pack is offered.",
+            );
+        }
+    }
+    if name == "spawn_subagent" && crate::agent::subagents::spawn_depth(ctx.conversation_id.as_deref()) >= 2 {
+        return blocked_outcome(name, "Threads can nest one level. This thread cannot spawn another.");
+    }
     if design_gate_blocks_tool(name, ctx) {
         return blocked_outcome(name, DESIGN_GATE_BLOCK_MSG);
     }
@@ -121,13 +147,24 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
             || name == "generate_image"
             || name == "generate_audio"
             || name == "edit_image"
+            || name == "generate_3d_model"
+            || name == "edit_3d_model"
+            || name == "convert_3d_model"
             || name == "save_media"
+            || name == "re_extract"
             || name == "browse")
     {
         return blocked_outcome(name, "This tool is not available in Ask or Plan mode.");
     }
 
-    if TRUST_GATED_TOOLS.contains(&name) || name.starts_with("mcp_") {
+    let policy = ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref());
+    if !policy.browse_enabled && matches!(name, "browse" | "screenshot_page" | "inspect_runtime" | "design_review") {
+        return blocked_outcome(name, "Browsing is turned off in settings.");
+    }
+
+    let talk_store = ctx.project_path.is_empty() || ctx.project_path == "__shape_talk__";
+    let chat_scratch = crate::agent::commands::history::is_chat_work_dir(ctx.project_path);
+    if !talk_store && !chat_scratch && (TRUST_GATED_TOOLS.contains(&name) || name.starts_with("mcp_")) {
         let trust = ctx.app_handle.state::<WorkspaceTrustState>();
         if !trust.is_trusted(ctx.project_path) {
             return blocked_outcome(name, WORKSPACE_UNTRUSTED_MSG);
@@ -154,14 +191,18 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "grep" => discover::tool_grep(&args, ctx).await,
         "search_codebase" => discover::tool_search_codebase(&args, ctx).await,
         "codebase_overview" => discover::tool_codebase_overview(&args, ctx).await,
+        "map_module" => discover::tool_map_module(&args, ctx),
         "list_chats" => chats::tool_list_chats(&args, ctx),
         "read_chat" => chats::tool_read_chat(&args, ctx),
         "web_search" => discover::tool_web_search(&args, ctx).await,
         "visit_url" => discover::tool_visit_url(&args, ctx).await,
+        "show_map" => discover::tool_show_map(&args, ctx).await,
+        "show_images" => discover::tool_show_images(&args, ctx).await,
         "plugin_list" => discover::tool_plugin_list(ctx).await,
         "plugin_search" => discover::tool_plugin_search(&args, ctx).await,
         "plugin_tools" => discover::tool_plugin_tools(&args, ctx).await,
         "plugin_run" => discover::tool_plugin_run(&args, ctx).await,
+        "plugin_connect" => discover::tool_plugin_connect(&args),
         "create_directory" => files::tool_create_directory(&args, ctx),
         "create_file" => files::tool_create_file(&args, ctx).await,
         "save_media" => files::tool_save_media(&args, ctx).await,
@@ -183,6 +224,16 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "git_switch" => git::tool_git_switch(&args, ctx),
         "git_sync" => git::tool_git_sync(ctx),
         "git_worktree" => git::tool_git_worktree(&args, ctx),
+        "inspect_computer" => desktop::tool_inspect_computer(&args, ctx).await,
+        "screenshot_desktop" => host::tool_screenshot_desktop(&args, ctx).await,
+        "system_diagnostics" => host::tool_system_diagnostics(&args, ctx),
+        "profile_processes" => host::tool_profile_processes(&args, ctx),
+        "inspect_ports" => host::tool_inspect_ports(&args, ctx),
+        "inspect_sqlite" => host::tool_inspect_sqlite(&args, ctx),
+        "http_request" => host::tool_http_request(&args, ctx).await,
+        "analyze_trace" => host::tool_analyze_trace(&args, ctx),
+        "inspect_archive" => host::tool_inspect_archive(&args, ctx),
+        "inspect_font" => host::tool_inspect_font(&args, ctx),
         "decide" => computer::tool_decide(&args, ctx).await,
         "check_done" => computer::tool_check_done(&args, ctx).await,
         "list_terminals" => terminal::tool_list_terminals(ctx),
@@ -195,16 +246,32 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
         "browse" => crate::agent::tools::browse::tool_browse(&args, ctx).await,
         "design_review" => persona::tool_design_review(&args, ctx).await,
+        "adversarial_review" => meta::tool_adversarial_review(&args, ctx).await,
         "mcp_search" => meta::tool_mcp_search(&args, ctx).await,
         "mcp_call" => meta::tool_mcp_call_named(&args, ctx).await,
         "inspect_runtime" => meta::tool_inspect_runtime(&args, ctx).await,
         "ask_user" => meta::tool_ask_user(&args, ctx).await,
+        "schedule_followup" => meta::tool_schedule_followup(&args, ctx),
         "generate_svg" => crate::agent::tools::generate::tool_generate_svg(&args, ctx).await,
         "generate_image" => crate::agent::tools::generate::tool_generate_image(&args, ctx).await,
         "generate_audio" => crate::agent::tools::generate::tool_generate_audio(&args, ctx).await,
         "edit_image" => crate::agent::tools::generate::tool_edit_image(&args, ctx).await,
+        "generate_3d_model" => crate::agent::tools::model3d::tool_generate_3d_model(&args, ctx).await,
+        "edit_3d_model" => crate::agent::tools::model3d::tool_edit_3d_model(&args, ctx).await,
+        "inspect_3d_model" => crate::agent::tools::model3d::tool_inspect_3d_model(&args, ctx).await,
+        "convert_3d_model" => crate::agent::tools::model3d::tool_convert_3d_model(&args, ctx).await,
+        "re_catalog" => crate::agent::tools::reverse::tool_re_catalog(&args, ctx),
+        "re_identify" => crate::agent::tools::reverse::tool_re_identify(&args, ctx),
+        "re_inspect" => crate::agent::tools::reverse::tool_re_inspect(&args, ctx),
+        "re_strings" => crate::agent::tools::reverse::tool_re_strings(&args, ctx),
+        "re_disassemble" => crate::agent::tools::reverse::tool_re_disassemble(&args, ctx),
+        "re_functions" => crate::agent::tools::reverse::tool_re_functions(&args, ctx),
+        "re_callgraph" => crate::agent::tools::reverse::tool_re_callgraph(&args, ctx),
+        "re_extract" => crate::agent::tools::reverse::tool_re_extract(&args, ctx),
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,
         "finish" => meta::tool_finish(&args),
+        "load_tools" => tool_load_tools(&args, ctx),
+        "load_skill" => tool_load_skill(&args),
         other => {
             if other.starts_with("mcp_") {
                 let mcp_out = meta::tool_mcp_call(other, args_json, ctx).await;
@@ -238,5 +305,89 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         tool_result,
         ui_chunk: outcome.ui_chunk,
         side_effect: outcome.side_effect,
+    }
+}
+
+fn tool_load_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let Some(id) = ctx.conversation_id.clone().filter(|s| !s.is_empty()) else {
+        return error_outcome("load_tools", "No conversation is active.");
+    };
+    let policy = ctx.agent_state.turn_policy_for(Some(&id));
+    let requested = args
+        .get("packs")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if requested.is_empty() {
+        return error_outcome("load_tools", "Pass packs: an array of pack names.");
+    }
+    let mut packs = ctx.agent_state.session_packs(&id);
+    let mut added = Vec::new();
+    let mut refused = Vec::new();
+    for name in requested {
+        let before = packs;
+        match name.as_str() {
+            "workspace" => packs.workspace = true,
+            "terminal" => packs.terminal = true,
+            "git" => packs.git = true,
+            "browse" => {
+                if policy.browse_enabled {
+                    packs.browse = true;
+                } else {
+                    refused.push(name);
+                    continue;
+                }
+            }
+            "web" => packs.web = true,
+            "media" => packs.media = true,
+            "reverse" => packs.reverse = true,
+            "plugins" => packs.plugins = true,
+            _ => {
+                refused.push(name);
+                continue;
+            }
+        }
+        if packs != before {
+            added.push(name);
+        }
+    }
+    packs = packs.clamp(policy.browse_enabled, true);
+    ctx.agent_state.set_session_packs(&id, packs);
+    let mut msg = if added.is_empty() {
+        "No new packs were loaded.".to_string()
+    } else {
+        format!("Loaded packs: {}. They are available on your next step.", added.join(", "))
+    };
+    if !refused.is_empty() {
+        msg.push_str(&format!(" Refused: {}.", refused.join(", ")));
+    }
+    ToolOutcome {
+        tool_result: msg,
+        ui_chunk: String::new(),
+        side_effect: None,
+    }
+}
+
+fn tool_load_skill(args: &Value) -> ToolOutcome {
+    let name = match args.get("name").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => return error_outcome("load_skill", "Pass name."),
+    };
+    match crate::agent::prompts::skill_body(name) {
+        Some(body) => ToolOutcome {
+            tool_result: body.to_string(),
+            ui_chunk: String::new(),
+            side_effect: None,
+        },
+        None => error_outcome(
+            "load_skill",
+            "Unknown skill. Use terminal, git, edits, browse, plan, review, reverse, or models.",
+        ),
     }
 }

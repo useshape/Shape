@@ -248,7 +248,11 @@ fn run_gh_login() -> Result<(), AppError> {
 pub fn start_login(app: AppHandle) -> Result<(), AppError> {
     let provider = resolve_provider().ok_or_else(|| {
         AppError::Message(
-            "Git Credential Manager or GitHub CLI is required. Install Git for Windows or run: winget install GitHub.cli".to_string(),
+            if cfg!(windows) {
+                "Git Credential Manager or GitHub CLI is required. Install Git for Windows or run: winget install GitHub.cli".to_string()
+            } else {
+                "Git Credential Manager or GitHub CLI is required. Install gh (`brew install gh`) and run `gh auth login`.".to_string()
+            },
         )
     })?;
 

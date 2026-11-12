@@ -17,6 +17,7 @@ import { ProjectQuickPickHost } from "@/features/chat/ui/shell/project-pick";
 import { startAgentBackgroundExitToasts } from "@/features/chat/lib/agent-terminal-notify";
 import { useWindowControls } from "@/features/agent/workbench/titlebar/hooks/use-window-controls";
 import { WindowControls } from "@/features/agent/workbench/titlebar/ui/window-controls";
+import { normalizePath } from "@/lib/path/utils";
 
 const MIN_WORKSPACE = 360;
 const MIN_WORKSPACE_SOFT = 280;
@@ -534,7 +535,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 <SidebarPeek shown={sidebarFlyout} onEnter={openSidebarFlyout} onLeave={closeSidebarFlyout} />
             )}
 
-            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel rounded-xl border-l border-border">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel squircle-l-2xl rounded-r-lg m-1">
                 <AgentChrome
                     rightOpen={rightExpanded}
                     onToggleRight={toggleWorkspace}
@@ -561,7 +562,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                             ) : project_path ? (
                                 <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
                                     <Chat
-                                        key={project_path.replace(/\//g, "\\").toLowerCase()}
+                                        key={normalizePath(project_path).toLowerCase()}
                                         className="bg-transparent"
                                     />
                                 </div>

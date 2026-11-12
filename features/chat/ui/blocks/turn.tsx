@@ -38,7 +38,7 @@ import { PluginLogo } from "@/components/ui/plugin-logo";
 import { ApprovalCard } from "./approval";
 import { humanizeToolName } from "@/lib/mcp/oauth";
 import { BrowseChatCard } from "./browse-frame";
-import { openSubagent, upsertSubagent } from "@/features/agent/subagents/store";
+import { upsertSubagent } from "@/features/agent/subagents/store";
 
 function estimateThoughtSeconds(content: string): number {
     const words = content.trim().split(/\s+/).filter(Boolean).length;
@@ -53,11 +53,19 @@ function fileName(path: string): string {
 function GroupActionLabel({
     action,
     detail,
+    path,
 }: {
     action: string;
     detail?: string | null;
+    path?: string;
 }) {
-    return <ActionLine action={action} detail={detail} />;
+    return (
+        <ActionLine
+            action={action}
+            detail={detail}
+            onClick={path ? () => void openProjectFile(path) : undefined}
+        />
+    );
 }
 
 function groupDetail(names: string[]): string | null {
@@ -74,7 +82,7 @@ function modelChipLabel(model?: string): string {
 }
 
 function openSpawnedAgent(block: Chunk) {
-    const name = block.query || "agent";
+    const name = block.query || "Thread";
     const id = block.file || name;
     upsertSubagent({
         id,
@@ -86,7 +94,7 @@ function openSpawnedAgent(block: Chunk) {
         transcript: block.type === "subagent" ? block.content : undefined,
         status: (block.commandStatus as "running" | "done" | "error" | "pending") || "running",
     });
-    openSubagent(id);
+    window.dispatchEvent(new CustomEvent("shape-open-subagent", { detail: { id } }));
 }
 
 function SubagentRow({ block }: { block: Chunk }) {
@@ -95,7 +103,7 @@ function SubagentRow({ block }: { block: Chunk }) {
     const model = modelChipLabel(block.command);
     return (
         <ActionLine
-            action="Spawned"
+            action="Thread"
             detail={task || name}
             icon={providerIcon(block.command || "auto", 14)}
             onClick={() => openSpawnedAgent(block)}
@@ -237,6 +245,20 @@ function computeTurnStats(blocks: Chunk[]) {
     };
 }
 
+function ThoughtScroller({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="relative mt-1 max-h-28">
+            <div className="max-h-28 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="whitespace-pre-wrap py-3 chat-text leading-relaxed text-text-muted">
+                    {children}
+                </div>
+            </div>
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-[var(--panel)] to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-[var(--panel)] to-transparent" />
+        </div>
+    );
+}
+
 function ThoughtStep({
     content,
     isActive,
@@ -246,17 +268,13 @@ function ThoughtStep({
 }) {
     const trimmed = joinThoughtLines(content).trim();
     if (!trimmed) return null;
-    if (isActive) return <ActionLine action="Thinking" shimmer />;
+    if (isActive) return null;
 
     const expandable = trimmed.length >= 80;
     const detail = trimmed.length < 40 ? "briefly" : `${estimateThoughtSeconds(trimmed)}s`;
     return (
         <ActionLine action="Thought" detail={detail}>
-            {expandable ? (
-                <div className="mt-1 w-full min-w-0 whitespace-pre-wrap chat-text leading-relaxed text-text-muted">
-                    {trimmed}
-                </div>
-            ) : null}
+            {expandable ? <ThoughtScroller>{trimmed}</ThoughtScroller> : null}
         </ActionLine>
     );
 }
@@ -264,11 +282,13 @@ function ThoughtStep({
 function WorkflowEditPreview({
     original,
     replacement,
+    flush,
 }: {
     original: string;
     replacement: string;
+    flush?: boolean;
 }) {
-    return <ChatEditDiff original={original} replacement={replacement} />;
+    return <ChatEditDiff original={original} replacement={replacement} flush={flush} />;
 }
 
 /**
@@ -358,6 +378,7 @@ function EditApprovalRow({ block }: { block: Chunk }) {
                 <WorkflowEditPreview
                     original={block.original || ""}
                     replacement={block.replacement || ""}
+                    flush
                 />
             </Collapse>
         </ApprovalCard>
@@ -369,7 +390,7 @@ function StepRowAppliedEdit({ block }: { block: Chunk }) {
     const { add, del } = editDelta(block);
     const file = block.file || "";
     return (
-        <ActionLine action="Edited" detail={fileName(file)} add={add} del={del}>
+        <ActionLine action="Edited" detail={fileName(file)} add={add} del={del} defaultOpen>
             {add > 0 || del > 0 ? (
                 <WorkflowEditPreview
                     original={block.original || ""}
@@ -505,7 +526,14 @@ function StepRow({ block }: { block: Chunk }) {
             <ActionLine
                 action="Ran"
                 detail={summary ? `${summary}${raw.length > 72 ? "…" : ""}` : "tool"}
-            />
+                defaultOpen
+            >
+                {raw.trim() ? (
+                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap font-mono text-sm text-text-secondary">
+                        {raw}
+                    </pre>
+                ) : null}
+            </ActionLine>
         );
     }
 
@@ -581,7 +609,7 @@ function StepRow({ block }: { block: Chunk }) {
                 action={block.isGenerating ? "Visiting" : "Visited"}
                 detail={host}
                 favicons={url ? [url] : undefined}
-                shimmer={Boolean(block.isGenerating)}
+                shimmer={false}
                 onClick={block.visitUrl ? () => void commands.openUrlExternal(block.visitUrl!) : undefined}
             />
         );
@@ -591,7 +619,7 @@ function StepRow({ block }: { block: Chunk }) {
         const { add, del } = editDelta(block);
         const file = block.file;
         return (
-            <ActionLine action="Edited" detail={fileName(file)} add={add} del={del}>
+            <ActionLine action="Edited" detail={fileName(file)} add={add} del={del} defaultOpen>
                 {add > 0 || del > 0 ? (
                     <WorkflowEditPreview
                         original={block.original || ""}
@@ -713,12 +741,14 @@ export function TurnWorkflowSummary({
     isActive,
     showHeader = true,
     activityLabel,
+    model,
     children,
 }: {
     blocks: Chunk[];
     isActive?: boolean;
     durationMs?: number;
     activityLabel?: string | null;
+    model?: string;
     /** When false, only the step pile is shown (for interleaved mid-turn groups). */
     showHeader?: boolean;
     children?: React.ReactNode;
@@ -782,7 +812,6 @@ export function TurnWorkflowSummary({
                     add={stats.linesAdded}
                     del={stats.linesRemoved}
                     favicons={marks.urls}
-                    shimmer={Boolean(isActive)}
                     open={open}
                     onOpenChange={setOpen}
                     extra={
@@ -819,6 +848,7 @@ export function TurnWorkflowSummary({
                                                 key={`reads-${i}`}
                                                 action="Explored"
                                                 detail={groupDetail(row.files.map((f) => f.path))}
+                                                path={row.files[0]?.path}
                                             />
                                         );
                                     }
@@ -837,6 +867,7 @@ export function TurnWorkflowSummary({
                                                 key={`writes-${i}`}
                                                 action="Edited"
                                                 detail={groupDetail(row.paths)}
+                                                path={row.paths[0]}
                                             />
                                         );
                                     }

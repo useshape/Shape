@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/lib/utils";
 import type { IconModule } from "thesvg";
 import anthropic from "thesvg/anthropic";
 import openai from "thesvg/openai";
@@ -14,7 +15,26 @@ import mistral from "thesvg/mistral-ai";
 import meta from "thesvg/meta";
 import cohere from "thesvg/cohere";
 import zhipu from "thesvg/zhipu";
-import { ShapeLogo } from "@/components/ui/shape-logo";
+/** Application mark used wherever Auto is shown. */
+export function ShapeAutoIcon({
+    size = 16,
+    className,
+}: {
+    size?: number;
+    className?: string;
+}) {
+    return (
+        <img
+            src="/logos/logo.svg"
+            alt=""
+            width={size}
+            height={size}
+            draggable={false}
+            className={cn("shrink-0", className)}
+            style={{ width: size, height: size }}
+        />
+    );
+}
 
 type Provider =
     | "shape"
@@ -46,20 +66,6 @@ const BRANDS: Record<Exclude<Provider, "shape">, IconModule> = {
     cohere,
 };
 
-function providerFromModelId(modelId: string): Provider {
-    if (modelId === "auto" || modelId === "openrouter/auto") return "shape";
-    const prefix = modelId.split("/")[0]?.toLowerCase();
-    if (prefix === "meta-llama") return "meta";
-    if (
-        prefix === "anthropic" || prefix === "openai" || prefix === "google" || prefix === "x-ai"
-        || prefix === "deepseek" || prefix === "z-ai" || prefix === "qwen" || prefix === "minimax"
-        || prefix === "moonshotai" || prefix === "mistralai" || prefix === "cohere"
-    ) {
-        return prefix;
-    }
-    return "shape";
-}
-
 function BrandIcon({ icon, size }: { icon: IconModule; size: number }) {
     const html = icon.variants.dark || icon.variants.default || icon.svg;
     return (
@@ -72,24 +78,37 @@ function BrandIcon({ icon, size }: { icon: IconModule; size: number }) {
     );
 }
 
-export function ShapeAutoIcon({
-    size = 16,
-    className,
-}: {
-    size?: number;
-    className?: string;
-}) {
-    return <ShapeLogo size={size} className={className} />;
+function providerFromModelId(modelId: string): string {
+    if (modelId === "auto" || modelId === "openrouter/auto") return "shape";
+    const prefix = modelId.split("/")[0]?.toLowerCase() || "";
+    if (prefix === "meta-llama") return "meta";
+    return prefix || "shape";
 }
 
-export function providerIcon(modelId: string, size = 16): React.ReactNode {
+function BrandMark({ name, size }: { name: string; size: number }) {
+    const known = BRANDS[name as Exclude<Provider, "shape">];
+    if (known) return <BrandIcon icon={known} size={size} />;
+    const letter = (name.replace(/[^a-z0-9]/gi, "")[0] || "?").toUpperCase();
+    return (
+        <span
+            aria-hidden
+            className="inline-flex shrink-0 items-center justify-center rounded-full bg-panel-hover text-[10px] font-medium leading-none text-text-secondary"
+            style={{ width: size, height: size }}
+        >
+            {letter}
+        </span>
+    );
+}
+
+export function providerIcon(modelId: string, size = 18): React.ReactNode {
     const provider = providerFromModelId(modelId);
     if (provider === "shape") return <ShapeAutoIcon size={size} />;
-    return <BrandIcon icon={BRANDS[provider]} size={size} />;
+    return <BrandMark name={provider} size={size} />;
 }
 
 export function providerLabel(modelId: string): string {
-    switch (providerFromModelId(modelId)) {
+    const provider = providerFromModelId(modelId);
+    switch (provider) {
         case "anthropic": return "Anthropic";
         case "openai": return "OpenAI";
         case "google": return "Google";
@@ -102,6 +121,9 @@ export function providerLabel(modelId: string): string {
         case "mistralai": return "Mistral";
         case "meta": return "Meta";
         case "cohere": return "Cohere";
-        default: return "Shape";
+        case "amazon": return "Amazon";
+        case "nvidia": return "Nvidia";
+        case "shape": return "Shape";
+        default: return provider.replace(/(^|-)([a-z])/g, (_, gap: string, letter: string) => `${gap}${letter.toUpperCase()}`);
     }
 }

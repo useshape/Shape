@@ -14,83 +14,56 @@ function model(partial: Partial<ModelInfo> & Pick<ModelInfo, "id" | "name" | "pr
 }
 
 const list: ModelInfo[] = [
-    model({ id: "auto", name: "Auto", provider: "Auto" }),
+    model({ id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash", provider: "Free Models", minTier: "free" }),
     model({ id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", viaApi: true }),
     model({ id: "anthropic/claude-sonnet-4.6", name: "Claude", provider: "Anthropic", viaApi: true }),
-    model({ id: "anthropic/claude-opus-5", name: "Opus", provider: "Anthropic" }),
 ];
 
 describe("resolveChatModels", () => {
-    it("lists the catalog, including API rows, without adding models that are not in it", () => {
+    it("lists the catalog without inventing an Auto row", () => {
         const ids = resolveChatModels(list).map((m) => m.id);
-        expect(ids).toEqual(["auto", "openai/gpt-4o", "anthropic/claude-sonnet-4.6", "anthropic/claude-opus-5"]);
+        expect(ids).toEqual(["deepseek/deepseek-v4-flash", "openai/gpt-4o", "anthropic/claude-sonnet-4.6"]);
     });
 });
 
 describe("sanitizeEnabledModels", () => {
-    it("clears stale ids so the picker shows the full catalog", () => {
+    it("drops ids the catalog no longer has", () => {
         expect(
             sanitizeEnabledModels(
                 ["auto", "openai/gpt-4o-mini", "openai/gpt-4o"],
-                ["auto", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5"],
-                ["auto"],
-            ),
-        ).toEqual([]);
-    });
-
-    it("treats a full catalog selection as all models", () => {
-        expect(
-            sanitizeEnabledModels(
-                ["auto", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5"],
-                ["auto", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5"],
+                ["anthropic/claude-sonnet-4.6", "openai/gpt-5.5"],
             ),
         ).toEqual([]);
     });
 });
 
 describe("sanitizeSubagentModels", () => {
-    it("defaults to Auto when empty or stale", () => {
-        const catalog = ["auto", "anthropic/claude-opus-5.5", "google/gemini-3.8-flash"];
-        expect(sanitizeSubagentModels([], catalog)).toEqual(["auto"]);
-        expect(sanitizeSubagentModels(["gone/model"], catalog)).toEqual(["auto"]);
-    });
-
-    it("keeps an explicit cheap allowlist", () => {
-        const catalog = ["auto", "anthropic/claude-opus-5.5", "google/gemini-3.8-flash"];
-        expect(sanitizeSubagentModels(["auto", "google/gemini-3.8-flash"], catalog)).toEqual([
-            "auto",
-            "google/gemini-3.8-flash",
-        ]);
-        expect(resolveSubagentDefaultModel("anthropic/claude-opus-5.5", ["auto", "google/gemini-3.8-flash"])).toBe(
-            "auto",
-        );
+    it("falls back to included models from the catalog", () => {
+        const catalog = list;
+        expect(sanitizeSubagentModels([], catalog).map((item) => item)).toEqual(["deepseek/deepseek-v4-flash"]);
+        expect(sanitizeSubagentModels(["gone/model"], catalog)).toEqual(["deepseek/deepseek-v4-flash"]);
     });
 });
 
 describe("subagentModelsForSend", () => {
-    const catalog = ["auto", "anthropic/claude-opus-5.5", "google/gemini-3.8-flash"];
-    const allow = (id: string) => id !== "gone";
-
-    it("stays on Auto when credits are gone even if Opus is enabled", () => {
+    it("keeps the included model when credits are gone", () => {
         expect(
-            subagentModelsForSend(["auto", "anthropic/claude-opus-5.5"], catalog, {
+            subagentModelsForSend(["deepseek/deepseek-v4-flash", "anthropic/claude-sonnet-4.6"], list, {
                 creditsRemaining: 0,
-                modelAllowed: allow,
-                defaultModel: "anthropic/claude-opus-5.5",
+                modelAllowed: () => true,
+                defaultModel: "anthropic/claude-sonnet-4.6",
             }),
-        ).toEqual({ models: ["auto"], defaultModel: "auto" });
+        ).toEqual({ models: ["deepseek/deepseek-v4-flash"], defaultModel: "deepseek/deepseek-v4-flash" });
     });
 
-    it("keeps a paid model when credits remain and the catalog allows it", () => {
+    it("keeps a paid model when credits remain", () => {
         expect(
-            subagentModelsForSend(["auto", "google/gemini-3.8-flash"], catalog, {
+            subagentModelsForSend(["deepseek/deepseek-v4-flash", "openai/gpt-4o"], list, {
                 creditsRemaining: 12,
-                modelAllowed: allow,
-                defaultModel: "google/gemini-3.8-flash",
-            }),
-        ).toEqual({
-            models: ["auto", "google/gemini-3.8-flash"],
-            defaultModel: "google/gemini-3.8-flash",
-        });
+                modelAllowed: () => true,
+                defaultModel: "openai/gpt-4o",
+            }).models,
+        ).toEqual(["deepseek/deepseek-v4-flash", "openai/gpt-4o"]);
+        expect(resolveSubagentDefaultModel("openai/gpt-4o", ["deepseek/deepseek-v4-flash", "openai/gpt-4o"])).toBe("openai/gpt-4o");
     });
 });

@@ -14,8 +14,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { getRepoName } from "@/lib/workspace/repo-history";
 import { useProjectState } from "@/lib/backend";
-import { AGENT_CHROME_ACTIONS_SLOT } from "@/features/agent/chrome";
-import { CommitMenu } from "@/features/agent/workspace/commit-menu";
+import { AGENT_CHROME_ACTIONS_SLOT, AGENT_TABS_SLOT } from "@/features/agent/chrome";
+import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -23,13 +23,16 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { providerIcon } from "@/lib/ui/provider-icon";
+import { getCatalogModels } from "@/lib/catalog/store";
+import { isIncludedModel } from "@/lib/settings/models";
 import {
     getSubagents,
-    openSubagent,
+    subagentDisplayTitle,
     subscribeSubagents,
     type SubagentCard,
 } from "@/features/agent/subagents/store";
 import { cn } from "@/lib/utils";
+import { RevealName } from "@/components/ui/reveal-name";
 
 function isGenericChatTitle(title: string | null | undefined): boolean {
     const value = (title || "").trim().toLowerCase();
@@ -67,19 +70,32 @@ export function resolveChatCrumbTitle(opts: {
     return picks.find((title) => !isGenericChatTitle(title))?.trim() || "New chat";
 }
 
-function shortModelName(model?: string): string {
+function freeModelId(): string {
+    return getCatalogModels().find((model) => isIncludedModel(model))?.id || "";
+}
+
+function resolvedModelId(model?: string): string {
     const id = (model || "").trim();
-    if (!id || id === "auto" || id.endsWith("/auto")) return "Auto";
+    if (id && id !== "auto" && !id.endsWith("/auto")) return id;
+    return freeModelId();
+}
+
+function shortModelName(model?: string): string {
+    const id = resolvedModelId(model);
+    if (!id) return "";
     const leaf = id.split("/").pop() || id;
     if (/\s/.test(leaf)) return leaf;
     return leaf.replace(/[-_]+/g, " ");
 }
 
 function ModelMark({ model, pin = false }: { model?: string; pin?: boolean }) {
+    const id = resolvedModelId(model);
+    const label = shortModelName(id);
+    if (!id || !label) return null;
     return (
         <span className={cn("flex shrink-0 items-center gap-1 text-xs text-text-muted", pin && "ml-auto")}>
-            {providerIcon(model || "auto", 12)}
-            <span className="max-w-[7rem] truncate">{shortModelName(model)}</span>
+            {providerIcon(id, 12)}
+            <span className="max-w-[7rem] truncate">{label}</span>
         </span>
     );
 }
@@ -111,7 +127,7 @@ export function ChatTitlebar({
     conversationId: string | null;
     recentIds: string[];
     timestamp?: number | null;
-    onSelect: (id: string) => void;
+    onSelect?: (id: string) => void;
     subagentTitle?: string | null;
     subagentModel?: string | null;
     onCloseSubagent?: () => void;
@@ -120,14 +136,17 @@ export function ChatTitlebar({
     const { project_path } = useProjectState();
     const repo = project_path ? getRepoName(project_path) : null;
     const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
+    const [tabsSlot, setTabsSlot] = useState<HTMLElement | null>(null);
     const [terminalOpen, setTerminalOpen] = useState(false);
     useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
     const subagents = chatSubagents(conversationId, extractedSubagents);
 
     useEffect(() => {
         const find = () => {
-            const el = document.getElementById(AGENT_CHROME_ACTIONS_SLOT);
-            setActionsSlot(el && el.isConnected ? el : null);
+            const actions = document.getElementById(AGENT_CHROME_ACTIONS_SLOT);
+            const tabs = document.getElementById(AGENT_TABS_SLOT);
+            setActionsSlot(actions && actions.isConnected ? actions : null);
+            setTabsSlot(tabs && tabs.isConnected ? tabs : null);
         };
         find();
         const timer = window.setInterval(find, 200);
@@ -162,7 +181,7 @@ export function ChatTitlebar({
 
     const actions = (
         <div className="flex items-center gap-2">
-            {project_path ? <CommitMenu projectPath={project_path} /> : null}
+            {project_path ? <WorkspaceBranchSwitch /> : null}
             <Tooltip content={terminalOpen ? "Hide terminal" : "Show terminal"}>
                 <button
                     type="button"
@@ -191,7 +210,7 @@ export function ChatTitlebar({
                                 : "text-text-secondary",
                         )}
                     >
-                        <span className="min-w-0 truncate">{title}</span>
+                        <RevealName text={title} className="min-w-0 truncate" />
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-52">
@@ -203,11 +222,15 @@ export function ChatTitlebar({
                     {subagents.map((card) => (
                         <DropdownMenuItem
                             key={card.id}
-                            onClick={() => openSubagent(card.id)}
+                            onClick={() => {
+                                window.dispatchEvent(new CustomEvent("shape-open-subagent", {
+                                    detail: { id: card.id, parentId: card.parentId || conversationId },
+                                }));
+                            }}
                             className="gap-2"
                         >
                             <Icon icon={People20Filled} className="text-text-muted" />
-                            <span className="min-w-0 flex-1 truncate">{card.title}</span>
+                            <span className="min-w-0 flex-1 truncate">{subagentDisplayTitle(card)}</span>
                             <ModelMark model={card.model} pin />
                         </DropdownMenuItem>
                     ))}
@@ -216,35 +239,40 @@ export function ChatTitlebar({
         </li>
     ) : subagentTitle ? (
         <BreadcrumbItem onClick={() => onCloseSubagent?.()} className="min-w-0 truncate">
-            {title}
+            <RevealName text={title} />
         </BreadcrumbItem>
     ) : (
         <BreadcrumbItem current className="min-w-0 truncate">
-            {title}
+            <RevealName text={title} />
         </BreadcrumbItem>
     );
 
-    return (
+    const crumb = (
         <div className="flex h-full min-w-0 flex-1 items-center overflow-hidden pl-1">
-            <Breadcrumb className="w-auto min-w-0 max-w-full overflow-hidden" aria-label="Project">
-                {repo ? (
-                    <BreadcrumbItem onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}>
-                        {repo}
-                    </BreadcrumbItem>
-                ) : null}
-                {chatCrumb}
-                {subagentTitle ? (
-                    <BreadcrumbItem current className="min-w-0 max-w-[24rem]">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                            <Icon icon={People20Filled} className="shrink-0 text-text-muted" />
-                            <span className="min-w-0 truncate">{subagentTitle}</span>
-                            <ModelMark model={subagentModel || undefined} />
-                        </span>
-                    </BreadcrumbItem>
-                ) : null}
-            </Breadcrumb>
-            <div className="h-full min-w-4 flex-1" />
+            <div className="min-w-0 shrink-0" data-no-drag>
+                <Breadcrumb className="w-auto min-w-0 max-w-full overflow-hidden" aria-label="Project">
+                    {repo ? (
+                        <BreadcrumbItem onClick={() => window.dispatchEvent(new Event("shape-open-project-pick"))}>
+                            {repo}
+                        </BreadcrumbItem>
+                    ) : null}
+                    {chatCrumb}
+                    {subagentTitle ? (
+                        <BreadcrumbItem current className="min-w-0 max-w-[24rem]">
+                            <span className="flex min-w-0 items-center gap-1.5">
+                                <Icon icon={People20Filled} className="shrink-0 text-text-muted" />
+                                <RevealName text={subagentTitle} appear className="min-w-0 truncate" />
+                                <ModelMark model={subagentModel || undefined} />
+                            </span>
+                        </BreadcrumbItem>
+                    ) : null}
+                </Breadcrumb>
+            </div>
+            <div className="h-full min-w-4 flex-1" data-tauri-drag-region />
             {actionsSlot && actionsSlot.isConnected ? createPortal(actions, actionsSlot) : null}
         </div>
     );
+
+    if (!tabsSlot || !tabsSlot.isConnected) return null;
+    return createPortal(crumb, tabsSlot);
 }

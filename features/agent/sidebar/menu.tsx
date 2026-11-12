@@ -82,17 +82,17 @@ export function AccountMenu({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side={side} className="w-56">
-                <div className="flex items-center gap-2.5 px-2 py-1.5">
+            <DropdownMenuContent align="start" side={side} className="w-80">
+                <div className="flex items-center gap-2.5 px-2 py-1">
                     <ProfileAvatar
-                        size={22}
+                        size={20}
                         gitAvatarUrl={githubAuth.loggedIn ? githubAuth.avatarUrl : null}
                         shapeUserId={shapeAuth.userId}
                         offline={Boolean(shapeAuth.offline)}
                         name={displayName}
                     />
                     <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-text-primary">
+                        <div className="truncate text-sm font-regular text-text-primary">
                             {displayName}
                         </div>
                     </div>

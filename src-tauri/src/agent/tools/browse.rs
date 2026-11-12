@@ -1016,6 +1016,33 @@ fn fail(message: &str) -> ToolOutcome {
     }
 }
 
+/// Drop huge `data:` image payloads so they are not resent to the model.
+pub fn strip_data_urls(content: &str) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut rest = content;
+    while let Some(idx) = rest.find("data:image") {
+        out.push_str(&rest[..idx]);
+        out.push_str("[image]");
+        rest = &rest[idx + "data:image".len()..];
+        if let Some(end) = rest.find(|c: char| c == '"' || c == ')' || c.is_whitespace()) {
+            rest = &rest[end..];
+        } else {
+            rest = "";
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+pub fn scrub_transcript_screenshots(content: &str) -> String {
+    strip_data_urls(&seal_browse_markup(content))
+}
+
+#[tauri::command]
+pub fn list_browse_wallpapers(_app: tauri::AppHandle) -> Vec<String> {
+    Vec::new()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

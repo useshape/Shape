@@ -3,7 +3,7 @@
  * and the Terminal UI). Keeps background Run tabs available when the panel is closed.
  */
 
-type TerminalShell = "powershell" | "pwsh" | "cmd" | "gitbash" | "wsl" | "ai";
+type TerminalShell = "powershell" | "pwsh" | "cmd" | "gitbash" | "wsl" | "zsh" | "bash" | "ai";
 type TerminalGroupId = "left" | "right";
 
 export type TerminalTab = {

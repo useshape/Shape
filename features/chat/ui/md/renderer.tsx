@@ -14,14 +14,17 @@ import {
 } from '../blocks/workflow';
 import { TurnWorkflowSummary } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
+import { PluginConnectCard } from '../blocks/plugin-connect';
 import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
 import type { DesignPreviewItem } from '../blocks/gallery';
 import { GeneratedMediaCard } from '../blocks/generated-media';
+import { PhotoStack } from '../blocks/photo-stack';
 import { SentFileCard } from '../blocks/sent-file';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { PersonaReviewPanel } from '../blocks/persona-review';
 import { BrowseChatCard } from '../blocks/browse-frame';
 import { ChartBlock, InsightCard } from '../blocks/chart';
+import { ShownImages } from '../blocks/place-map';
 import { QuestionsCard, parseQuestionsPayload, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
 import { hostnameOf } from '@/lib/ui/favicon';
 
@@ -120,7 +123,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'plugin_connect' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'generated_model' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
     content?: string;
     file?: string;
     query?: string;
@@ -155,6 +158,8 @@ export type Chunk = {
     pluginLabel?: string;
     mediaPrompt?: string;
     mediaCredits?: string;
+    mediaId?: string;
+    mediaModel?: string;
     questions?: AgentQuestion[];
     answers?: QuestionAnswers | null;
 };
@@ -373,8 +378,11 @@ function unescapeXml(s: string): string {
     };
 
     const parseReviewDebateBlock = (block: string): Chunk => {
-        const modelMatch = block.match(/<review_debate[^>]*\bmodel="([^"]*)"/i);
-        const inner = block
+        const trimmedBlock = block.trim();
+        const open = trimmedBlock.match(/^<review_debate\b[^>]*>/i)?.[0] || "";
+        const modelMatch = open.match(/\bmodel="([^"]*)"/i);
+        const statusMatch = open.match(/\bstatus="([^"]*)"/i);
+        const inner = trimmedBlock
             .replace(/^<review_debate[^>]*>\s*/i, "")
             .replace(/\s*<\/review_debate>$/i, "")
             .trim();
@@ -382,6 +390,7 @@ function unescapeXml(s: string): string {
             type: "review_debate",
             content: inner,
             reviewModel: modelMatch?.[1],
+            commandStatus: statusMatch?.[1],
         };
     };
 
@@ -433,6 +442,15 @@ function unescapeXml(s: string): string {
         };
     };
 
+    const parsePluginConnectBlock = (tagFull: string): Chunk => {
+        const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
+        return {
+            type: "plugin_connect",
+            pluginToolkit: get("toolkit") || undefined,
+            pluginLabel: get("name") || undefined,
+        };
+    };
+
     const parseSentFileBlock = (tagFull: string, content: string): Chunk => {
         const get = (name: string) => tagFull.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? "";
         return {
@@ -445,7 +463,7 @@ function unescapeXml(s: string): string {
     };
 
     const parseGeneratedMediaBlock = (
-        type: "generated_svg" | "generated_image" | "generated_audio",
+        type: "generated_svg" | "generated_image" | "generated_audio" | "generated_model",
         tagFull: string,
         content: string,
         isGenerating: boolean,
@@ -454,8 +472,13 @@ function unescapeXml(s: string): string {
         return {
             type,
             content: content.trim(),
+            file: decodeXml(get("name")) || undefined,
             mediaPrompt: get("prompt") || undefined,
             mediaCredits: get("credits") || undefined,
+            mediaId: get("media_id") || undefined,
+            mediaModel: get("model") || get("format") || undefined,
+            commandId: get("ordinal") || undefined,
+            commandStatus: get("failed") === "1" ? "failed" : undefined,
             query: get("prompt") || undefined,
             isGenerating,
         };
@@ -524,12 +547,16 @@ function unescapeXml(s: string): string {
             { type: 'plan_saved', start: '<plan_saved', end: '</plan_saved>' },
             { type: 'todos', start: '<todos', end: '</todos>' },
             { type: 'web_result', start: '<web_result', end: '</web_result>' },
+            { type: 'place_map', start: '<place_map', end: '</place_map>' },
+            { type: 'shown_images', start: '<shown_images', end: '</shown_images>' },
             { type: 'web_visit', start: '<web_visit', end: '</web_visit>' },
             { type: 'generated_svg', start: '<generated_svg', end: '</generated_svg>' },
             { type: 'generated_svg', start: '<recraft_svg', end: '</recraft_svg>' },
             { type: 'generated_image', start: '<generated_image', end: '</generated_image>' },
             { type: 'generated_audio', start: '<generated_audio', end: '</generated_audio>' },
+            { type: 'generated_model', start: '<generated_model', end: '</generated_model>' },
             { type: 'plugin_call', start: '<plugin_call', end: '</plugin_call>' },
+            { type: 'plugin_connect', start: '<plugin_connect', end: '</plugin_connect>' },
             { type: 'browse_session', start: '<browse_session', end: '</browse_session>' },
             { type: 'chart', start: '<chart', end: '</chart>' },
             { type: 'insight_card', start: '<insight_card', end: '</insight_card>' },
@@ -588,7 +615,11 @@ function unescapeXml(s: string): string {
         }
 
         if (!firstMatch) {
-            const tail = stripOrphanThinkTags(text.slice(currentIndex));
+            let tail = stripOrphanThinkTags(text.slice(currentIndex));
+            const dangling = tail.lastIndexOf("<");
+            if (dangling >= 0 && !tail.slice(dangling).includes(">")) {
+                tail = tail.slice(0, dangling);
+            }
             if (tail) chunks.push({ type: 'text', content: tail });
             break;
         }
@@ -679,8 +710,10 @@ function unescapeXml(s: string): string {
                 chunks.push(parseInspectRuntimeBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_call') {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
+            } else if (firstMatch.type === 'plugin_connect') {
+                chunks.push(parsePluginConnectBlock(tagFull));
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio' || firstMatch.type === 'generated_model') {
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio" | "generated_model", tagFull, content, false));
             } else if (firstMatch.type === 'sent_file') {
                 chunks.push(parseSentFileBlock(tagFull, content));
             } else {
@@ -775,9 +808,11 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, true));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
+            } else if (firstMatch.type === 'plugin_connect') {
+                chunks.push(parsePluginConnectBlock(text.slice(firstMatch.index, contentStartIndex)));
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio' || firstMatch.type === 'generated_model') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, true));
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio" | "generated_model", tagFull, content, true));
             } else if (firstMatch.type === 'sent_file') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseSentFileBlock(tagFull, content));
@@ -872,9 +907,11 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'plugin_call') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
+            } else if (firstMatch.type === 'plugin_connect') {
+                chunks.push(parsePluginConnectBlock(text.slice(firstMatch.index, contentStartIndex)));
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio' || firstMatch.type === 'generated_model') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio" | "generated_model", tagFull, content, false));
             } else if (firstMatch.type === 'sent_file') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseSentFileBlock(tagFull, content));
@@ -979,10 +1016,78 @@ function buildSegments(chunks: Chunk[]): Segment[] {
             continue;
         }
         if (chunk.type === 'text' && !(chunk.content || '').trim()) continue;
+        const prev = segments[segments.length - 1];
+        if (chunk.type === "text" && prev?.kind === "chunk" && prev.chunk.type === "text") {
+            prev.chunk.content = `${prev.chunk.content || ""}\n\n${chunk.content || ""}`;
+            if (chunk.isGenerating) prev.chunk.isGenerating = true;
+            continue;
+        }
         segments.push({ kind: 'chunk', chunk });
     }
     return segments;
 }
+
+/** Drop tool dumps that leaked into a text. Keep the short reply at the end. */
+function isSelfTalk(line: string): boolean {
+    return /nothing (left|more|else) to do|no further action|answer is up above|there(?:'s| is) nothing left/i.test(line);
+}
+
+function talkProse(raw: string): string {
+    const source = raw.length > 24_000 ? raw.slice(-24_000) : raw;
+    let text = source
+        .replace(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]{80,}/gi, " ")
+        .replace(/<([a-z][\w:-]*)\b[^>]*>[\s\S]*?<\/\1>/gi, "\n")
+        .replace(/<\/?[a-z][\w:-]*\b[^>]*>/gi, " ")
+        .replace(/\[truncated,[^\]]*\]/gi, " ");
+    if ((/https?:\/\//i.test(text) || /<web_result/i.test(source)) && text.length > 320) {
+        const bits = text
+            .split(/\n+/)
+            .map((line) => line.replace(/\s+/g, " ").trim())
+            .filter((line) => line.length > 1 && line.length < 420 && !isSelfTalk(line) && !/^https?:/i.test(line) && !/^url:?$/i.test(line));
+        const spoken = bits.filter((line) => /[.!?]/.test(line));
+        if (spoken.length > 0) text = spoken.slice(-3).join("\n\n");
+        else if (bits.length > 0) text = bits.slice(-3).join("\n\n");
+    } else {
+        text = text
+            .split("\n")
+            .filter((line) => !isSelfTalk(line))
+            .join("\n");
+    }
+    return text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+const TALK_SKIP = new Set([
+    "terminal_command",
+    "edit",
+    "edit_pending",
+    "git_operation",
+    "tool_result",
+    "run",
+    "ls",
+    "cat",
+    "create_file",
+    "mkdir",
+    "delete_file",
+    "rename_file",
+    "search",
+    "grep",
+    "inspect_runtime",
+    "plugin_call",
+    "browse_session",
+    "subagent",
+    "subagent_ref",
+    "plan",
+    "plan_saved",
+    "think",
+    "thought",
+    "web_search",
+    "web_result",
+    "web_visit",
+    "search_result",
+    "status",
+    "shown_images",
+    "todos",
+]);
 
 export function MessageRenderer({
     content,
@@ -990,7 +1095,9 @@ export function MessageRenderer({
     activityLabel,
     isFileEditResolved,
     durationMs,
-    skipSubagentSync,
+    skipSubagentSync = true,
+    surface = "code",
+    talkName = "Shape",
 }: {
     content: string;
     isGenerating?: boolean;
@@ -998,6 +1105,8 @@ export function MessageRenderer({
     isFileEditResolved?: (file: string, replacement?: string) => boolean;
     durationMs?: number;
     skipSubagentSync?: boolean;
+    surface?: "code" | "talk";
+    talkName?: string;
 }) {
     const chunks = useMemo(() => {
         const parsed = parseMessageContent(content);
@@ -1008,7 +1117,7 @@ export function MessageRenderer({
     useEffect(() => {
         if (skipSubagentSync) return;
         syncSubagentsFromChunks(chunks, Boolean(isGenerating));
-    }, [chunks, isGenerating, skipSubagentSync]);
+    }, [chunks, isGenerating, skipSubagentSync]); // terminal cards refuse a later running tag inside the store
 
     const contentChunks = useMemo(() => {
         const merged = mergeAdjacentTextChunks(chunks);
@@ -1026,6 +1135,10 @@ export function MessageRenderer({
         () =>
             buildSegments(
                 contentChunks.filter((c) => {
+                    if (surface === "talk") {
+                        if (TALK_SKIP.has(c.type) || WORKFLOW_CHUNK_TYPES.has(c.type)) return false;
+                        return true;
+                    }
                     if (browsing && (c.type === "think" || c.type === "thought")) return false;
                     if (WORKFLOW_CHUNK_TYPES.has(c.type)) {
                         return isRenderableWorkflowBlock(c, isGenerating);
@@ -1033,7 +1146,7 @@ export function MessageRenderer({
                     return true;
                 }),
             ),
-        [contentChunks, isGenerating, browsing],
+        [contentChunks, isGenerating, browsing, surface],
     );
 
     const workflowSegments = segments.filter((s): s is Extract<Segment, { kind: "workflow" }> => s.kind === "workflow");
@@ -1053,11 +1166,6 @@ export function MessageRenderer({
         return -1;
     })();
 
-    const lastSegment = segments[segments.length - 1];
-    const proseIsStreaming =
-        lastSegment?.kind === 'chunk'
-        && lastSegment.chunk.type === 'text'
-        && !!lastSegment.chunk.content?.trim();
     const hasPendingApproval =
         workflowSegments.some((s) =>
             s.blocks.some(
@@ -1068,33 +1176,20 @@ export function MessageRenderer({
         )
         || contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
         || contentChunks.some((b) => b.type === 'design_previews' && b.commandStatus === 'pending');
-    const lastWorkflowBlock = workflowSegments.at(-1)?.blocks.at(-1);
-    const isThinking = !!isGenerating
-        && (lastWorkflowBlock?.type === 'think' || lastWorkflowBlock?.type === 'thought')
-        && !!lastWorkflowBlock.isGenerating;
-    const lastIsEdit = lastWorkflowBlock?.type === "edit" || lastWorkflowBlock?.type === "edit_pending";
-    const activityIsEdit = /\bedit/i.test(activityLabel ?? "");
-    const editFileName = [...(workflowSegments.at(-1)?.blocks ?? [])]
-        .reverse()
-        .find((b) => b.type === "edit" || b.type === "edit_pending")
-        ?.file?.split(/[\\/]/).pop();
-    const statusLabel = hasPendingApproval
-        ? (contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
-            ? "Waiting for your answers"
-            : contentChunks.some((b) => b.type === 'design_previews' && b.commandStatus === 'pending')
-              ? "Waiting for you to pick a design"
-              : "Waiting for approval")
-        : lastIsEdit || activityIsEdit
-          ? `Editing ${editFileName || "file"}`
-          : (activityLabel?.trim() || (isThinking ? "Thinking" : (workflowSegments.length > 0 ? "Working" : undefined)));
-    const showStatusLine =
-        !!isGenerating
-        && !proseIsStreaming
-        && (
-            hasPendingApproval
-            || !!statusLabel
-        );
+    const showStatusLine = !!isGenerating;
+    const statusPhrase = !hasPendingApproval
+        ? null
+        : contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
+          ? "Waiting for your answers"
+          : contentChunks.some((b) => b.type === 'design_previews' && b.commandStatus === 'pending')
+            ? "Waiting for you to pick a design"
+            : "Waiting for approval";
 
+    // Text keys follow prose order, not the segment index. A tool block
+    // inserted ahead of an existing paragraph must not remount it — a remount
+    // restarts the typewriter at the first few characters and the rest stays
+    // missing until the turn settles.
+    let textOrdinal = 0;
     const renderedSegments = segments.map((segment, index) => {
         const isLastSegment = index === segments.length - 1;
 
@@ -1102,13 +1197,14 @@ export function MessageRenderer({
             const isFirst = index === firstWorkflowIndex;
             const isLastWf = index === lastWorkflowIndex;
             return (
-                <TurnWorkflowSummary
-                    key={`wf-${index}`}
-                    blocks={segment.blocks}
-                    isActive={!!isGenerating && isLastWf}
-                    durationMs={isFirst ? durationMs : undefined}
-                    activityLabel={isLastWf ? activityLabel : null}
-                />
+                <div key={`wf-${index}`} className="my-1.5 w-full min-w-0 overflow-visible contain-layout">
+                    <TurnWorkflowSummary
+                        blocks={segment.blocks}
+                        isActive={!!isGenerating && isLastWf}
+                        durationMs={isFirst ? durationMs : undefined}
+                        activityLabel={isLastWf ? activityLabel : null}
+                    />
+                </div>
             );
         }
 
@@ -1116,15 +1212,25 @@ export function MessageRenderer({
         if (chunk.type === 'text') {
             const text = chunk.content;
             if (!text?.trim()) return null;
+            const shown = surface === "talk" ? talkProse(text) : text;
+            if (!shown.trim()) return null;
+            const textKey = `text-${textOrdinal}`;
+            textOrdinal += 1;
             return (
                 <div
-                    key={`text-${index}`}
-                    className={cn(
-                        "text-sm font-medium text-text-primary leading-[var(--conversation-line-height)] mb-0 w-full overflow-hidden prose-compact chat-markdown",
-                        isGenerating && isLastSegment && "animate-in fade-in duration-300",
-                    )}
+                    key={textKey}
+                    className={
+                        surface === "talk"
+                            ? "mb-0 w-fit max-w-full min-w-0 overflow-visible text-sm font-normal leading-[var(--conversation-line-height)] text-text-primary prose-compact chat-markdown"
+                            : "mb-2 w-full min-w-0 overflow-visible text-sm font-normal leading-[var(--conversation-line-height)] text-text-primary prose-compact chat-markdown"
+                    }
                 >
-                    <ChatMarkdown content={text} isGenerating={isGenerating} isLast={isLastSegment} />
+                    <ChatMarkdown
+                        content={shown}
+                        isGenerating={isGenerating}
+                        isLast={isLastSegment}
+                        plain={surface === "talk" || (!isLastSegment && !!isGenerating)}
+                    />
                 </div>
             );
         }
@@ -1177,6 +1283,12 @@ export function MessageRenderer({
                 />
             );
         }
+        if (chunk.type === 'place_map') {
+            return null;
+        }
+        if (chunk.type === 'shown_images') {
+            return <ShownImages key={`photos-${index}`} content={chunk.content} />;
+        }
         if (chunk.type === 'chart') {
             return <ChartBlock key={`chart-${index}`} content={chunk.content} />;
         }
@@ -1210,6 +1322,17 @@ export function MessageRenderer({
                 />
             );
         }
+        if (chunk.type === 'plugin_connect') {
+            if (!chunk.pluginToolkit) return null;
+            return (
+                <PluginConnectCard
+                    key={`plugin-connect-${index}`}
+                    toolkit={chunk.pluginToolkit}
+                    name={chunk.pluginLabel}
+                    botName={talkName}
+                />
+            );
+        }
         if (chunk.type === 'sent_file') {
             return (
                 <SentFileCard
@@ -1222,17 +1345,17 @@ export function MessageRenderer({
             );
         }
         if (chunk.type === 'attached_image') {
-            const src = chunk.content?.trim() || "";
-            if (!src) return null;
-            return (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                    key={`image-${index}`}
-                    src={src}
-                    alt={chunk.file || ""}
-                    className="my-2 max-h-80 max-w-[420px] rounded-xl border border-border-subtle object-contain"
-                />
-            );
+            const previous = segments[index - 1];
+            if (previous?.kind === "chunk" && previous.chunk.type === "attached_image") return null;
+            const group = [];
+            for (let cursor = index; cursor < segments.length; cursor++) {
+                const next = segments[cursor];
+                if (next?.kind !== "chunk" || next.chunk.type !== "attached_image") break;
+                const src = next.chunk.content?.trim() || "";
+                if (src) group.push({ src, alt: next.chunk.file || "" });
+            }
+            if (group.length === 0) return null;
+            return <PhotoStack key={`attached-${index}`} photos={group} align="start" />;
         }
         if (chunk.type === 'design_previews') {
             const n = chunk.designPreviews?.length ?? 0;
@@ -1247,21 +1370,45 @@ export function MessageRenderer({
                 </p>
             );
         }
-        if (chunk.type === 'generated_svg' || chunk.type === 'generated_image' || chunk.type === 'generated_audio') {
+        if (chunk.type === 'generated_image') {
+            const previous = segments[index - 1];
+            if (previous?.kind === "chunk" && previous.chunk.type === "generated_image") return null;
+            const group = [];
+            for (let cursor = index; cursor < segments.length; cursor++) {
+                const next = segments[cursor];
+                if (next?.kind !== "chunk" || next.chunk.type !== "generated_image") break;
+                group.push(next.chunk);
+            }
+            const ready = group.filter((item) => item.content?.trim() || item.mediaId || item.commandStatus === "failed");
+            if (ready.length === 0) return null;
+            return (
+                <div key={`photos-${index}`} className="flex flex-col">
+                    {ready.map((item, offset) => (
+                        <GeneratedMediaCard
+                            key={`media-${index + offset}`}
+                            kind="image"
+                            src={item.content}
+                            mediaId={item.mediaId}
+                            name={item.file}
+                            prompt={item.mediaPrompt || item.query}
+                            failed={item.commandStatus === "failed"}
+                        />
+                    ))}
+                </div>
+            );
+        }
+        if (chunk.type === 'generated_svg' || chunk.type === 'generated_audio' || chunk.type === 'generated_model') {
+            if (!chunk.content?.trim() && !chunk.mediaId && chunk.commandStatus !== "failed") return null;
+            const kind = chunk.type === "generated_svg" ? "svg" : chunk.type === "generated_audio" ? "audio" : "model";
             return (
                 <GeneratedMediaCard
                     key={`media-${index}`}
-                    kind={
-                        chunk.type === "generated_svg"
-                            ? "svg"
-                            : chunk.type === "generated_audio"
-                              ? "audio"
-                              : "image"
-                    }
+                    kind={kind}
                     src={chunk.content}
+                    mediaId={chunk.mediaId}
+                    name={chunk.file}
                     prompt={chunk.mediaPrompt || chunk.query}
-                    credits={chunk.mediaCredits}
-                    loading={!!chunk.isGenerating && !chunk.content?.trim()}
+                    failed={chunk.commandStatus === "failed"}
                 />
             );
         }
@@ -1271,6 +1418,7 @@ export function MessageRenderer({
                     key={`review-debate-${index}`}
                     content={chunk.content || ''}
                     model={chunk.reviewModel}
+                    status={chunk.commandStatus}
                 />
             );
         }
@@ -1300,11 +1448,13 @@ export function MessageRenderer({
     });
 
     return (
-        <div className="flex flex-col gap-0 overflow-hidden">
+        <div className="flex w-fit max-w-full min-w-0 flex-col items-start gap-0 overflow-visible">
             {renderedSegments}
-            {showStatusLine && (
-                <GeneratingIndicator label={statusLabel} />
-            )}
+            {showStatusLine ? (
+                <div className="mt-1">
+                    <GeneratingIndicator label={statusPhrase ?? undefined} />
+                </div>
+            ) : null}
         </div>
     );
 }

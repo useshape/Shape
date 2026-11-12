@@ -37,6 +37,7 @@ export type ChatTab = {
     models?: string[];
     /** Git status letter for file-diff tabs (A/M/D/…). */
     gitStatus?: string;
+    parentId?: string;
 };
 
 /** Draft / unsaved conversation sentinel — still used by the chat session store. */
@@ -44,6 +45,20 @@ export const NEW_CHAT_TAB_ID = "__new_chat__";
 
 export function isEphemeralChatTabId(id: string): boolean {
     return id === NEW_CHAT_TAB_ID;
+}
+
+export function isThreadTabId(id: string): boolean {
+    return id.startsWith("thread-") || id.startsWith("subagent-");
+}
+
+export function placeThreadTab(tabs: ChatTab[], tab: ChatTab): ChatTab[] {
+    const next = tabs.filter((item) => item.id !== tab.id);
+    const parentIndex = tab.parentId ? next.findIndex((item) => item.id === tab.parentId) : -1;
+    if (parentIndex >= 0) {
+        next.splice(parentIndex + 1, 0, tab);
+        return next;
+    }
+    return [...next, tab];
 }
 
 function SortableChatTab({

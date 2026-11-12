@@ -6,13 +6,8 @@ import { Calendar20Regular } from "@fluentui/react-icons/headless/svg/calendar";
 import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
-import { CodeTextEdit20Filled, CodeTextEdit20Regular } from "@fluentui/react-icons/headless/svg/code-text-edit";
 import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
 import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
-import { ChatMultiple20Filled, ChatMultiple20Regular } from "@fluentui/react-icons/headless/svg/chat-multiple";
-import { CalendarMultiple24Filled, CalendarMultiple24Regular } from "@fluentui/react-icons/headless/svg/calendar-multiple";
-import { ColorLine24Filled, ColorLine24Regular } from "@fluentui/react-icons/headless/svg/color-line";
-import { Incognito24Filled } from "@fluentui/react-icons/headless/svg/incognito";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
 import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
@@ -56,7 +51,7 @@ import {
 import { providerIcon } from "@/lib/ui/provider-icon";
 import { MentionPicker } from "./mentions";
 import { PendingEditsPanel } from "./edits";
-import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
+import { composerGhost, composerSpell, loadComposerPrompts, rememberComposerPrompt } from "@/lib/chat/composer-complete";
 import {
     ComposerTasksStrip,
     type ComposerTaskItem,
@@ -73,8 +68,6 @@ import {
     pastedTextFile,
     terminalAttachmentFile,
 } from "@/features/chat/lib/shape-clip";
-import type { BrowserPickedElement } from "@/lib/backend/types";
-import { registerElementMention } from "@/lib/chat/element-mentions";
 import { slashCommandRanges } from "@/lib/chat/workflows";
 import { revealComposerCaret, syncComposerOverlayScroll } from "@/lib/chat/composer-scroll";
 import { listSkills, subscribeSkills, type Skill } from "@/lib/chat/skills";
@@ -88,11 +81,16 @@ import {
     isCatalogModelAllowed,
     useShapeCatalog,
 } from "@/lib/catalog/store";
-import { useSettings } from "@/lib/settings";
+import { commands, useProjectState } from "@/lib/backend";
+import { CommitMenu } from "@/features/agent/workspace/commit-menu";
+import { updateSettingSection, useSettings, type AutoRunModeSetting } from "@/lib/settings";
+import { ChatUsageButton } from "./usage";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { SearchInput } from "@/components/ui/search";
-import { effortDisplayLabel, modelSupportsSuperThinking, type ReasoningEffort } from "./reasoning-effort";
-import { ThinkingEffortControl } from "./thinking-bar";
+import { effortDisplayLabel, effortsForModel, modelSupportsSuperThinking, type ReasoningEffort } from "./reasoning-effort";
+import { ShapeAutoIcon } from "@/lib/ui/provider-icon";
+import { WorkerMark } from "@/features/agent/sidebar/worker-mark";
+import { Add20Filled } from "@fluentui/react-icons";
 export type { ReasoningEffort };
 
 type ChatInputProps = {
@@ -110,12 +108,12 @@ type ChatInputProps = {
     handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     selectedModel: string;
     setSelectedModel: (m: string) => void;
+    selectedMode?: string;
+    setSelectedMode?: (m: string) => void;
     selectedWorkerModels?: string[];
     setSelectedWorkerModels?: (models: string[]) => void;
     multiSelectModels?: boolean;
     hideModeSelect?: boolean;
-    selectedMode: string;
-    setSelectedMode: (m: string) => void;
     reasoningEffort: ReasoningEffort;
     setReasoningEffort: (e: ReasoningEffort) => void;
     pendingEdits?: { id: string; file: string; original: string; replacement: string; baseline?: string }[];
@@ -132,6 +130,11 @@ type ChatInputProps = {
     onNewChat?: () => void;
     /** Tighter chrome for empty-chat centered layout */
     variant?: "default" | "empty";
+    talkSurface?: boolean;
+    talkName?: string;
+    talkMark?: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
+    /** Code mode with no folder: composer is a folder-open prompt. */
+    folderLocked?: boolean;
 };
 
 function formatContextWindow(raw?: string): string {
@@ -156,13 +159,13 @@ const ModelTooltip = ({
     model: ModelInfo;
     effort: ReasoningEffort;
 }) => {
-    const isAuto = model.id === "auto" || model.id === "openrouter/auto";
+    const isAuto = false;
     const ctx = formatContextWindow(model.contextWindow);
     const effortName = effortDisplayLabel(effort).toLowerCase();
 
     return (
         <div className="flex flex-col gap-1 min-w-[220px] max-w-[280px] p-3 select-none">
-            <div className="text-sm] font-medium leading-tight text-text-primary">
+            <div className="text-sm font-normal leading-tight text-text-primary">
                 {isAuto ? "Auto" : model.name}
             </div>
             <p className="text-xs leading-snug text-text-secondary">
@@ -297,141 +300,32 @@ function isAllowedFile(file: File): boolean {
 }
 
 function ComposerContextHighlight({ text }: { text: string }) {
-    return (
-        <span className="relative">
-            <span
-                aria-hidden
-                className="absolute inset-y-0 -inset-x-0.5 rounded-md bg-accent-text-bg"
-            />
-            <span className="relative text-accent-text">{text}</span>
-        </span>
-    );
+    return <span className="text-accent-text">{text}</span>;
 }
-
-const CHAT_MODES = [
-    { id: "Code", icon: CodeTextEdit20Filled, color: "#3B82F6", bg: "rgba(59, 130, 246, 0.16)", description: "Build and edit files in the project" },
-    { id: "Ask", icon: ChatMultiple20Filled, color: "#22C55E", bg: "rgba(34, 197, 94, 0.16)", description: "Answer questions without making changes" },
-    { id: "Plan", icon: CalendarMultiple24Filled, color: "#F97316", bg: "rgba(249, 115, 22, 0.16)", description: "Create a plan before proceeding" },
-    { id: "Visual", icon: ColorLine24Filled, color: "#F43F5E", bg: "rgba(244, 63, 94, 0.16)", description: "Design and iterate on the UI" },
-    { id: "Review", icon: Incognito24Filled, color: "#A855F7", bg: "rgba(168, 85, 247, 0.16)", description: "Review code for bugs and edge cases" },
-] as const;
 
 const COMPOSER_HINTS = [
     "Ask a task. @ for files. / for a workflow.",
     "Escape stops the current turn.",
     "Queue a follow-up while Shape is working.",
-    "Visual: ask to see a few button styles first",
     "Drop a screenshot to redesign",
     "Paste a stack trace to debug",
 ] as const;
 
-function SwapText({
-    value,
-    className,
-}: {
-    value: string;
-    className?: string;
-}) {
-    const wrapRef = React.useRef<HTMLSpanElement>(null);
-    const measureNewRef = React.useRef<HTMLSpanElement>(null);
-    const measureOldRef = React.useRef<HTMLSpanElement>(null);
-    const [shown, setShown] = React.useState(value);
-    const [leaving, setLeaving] = React.useState<string | null>(null);
-    const [width, setWidth] = React.useState<number | null>(null);
-    const [ready, setReady] = React.useState(false);
-    const [clipping, setClipping] = React.useState(false);
-    const shownRef = React.useRef(value);
-
-    const fitWidth = React.useCallback(() => {
-        const wrap = wrapRef.current;
-        const measureNew = measureNewRef.current;
-        if (!wrap || !measureNew) return;
-        const wNew = measureNew.getBoundingClientRect().width;
-        const natural = wNew;
-
-        let constraint: HTMLElement | null = wrap.parentElement;
-        let maxInner = Number.POSITIVE_INFINITY;
-        while (constraint) {
-            const cs = getComputedStyle(constraint);
-            const maxW = parseFloat(cs.maxWidth);
-            if (!Number.isNaN(maxW) && cs.maxWidth !== "none") {
-                const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-                maxInner = Math.max(0, maxW - pad);
-                break;
-            }
-            constraint = constraint.parentElement;
-        }
-
-        const parent = wrap.parentElement;
-        let used = 0;
-        if (parent && Number.isFinite(maxInner)) {
-            const cs = getComputedStyle(parent);
-            const gap = parseFloat(cs.columnGap || cs.gap) || 0;
-            const others = Array.from(parent.children).filter((el) => el !== wrap);
-            used =
-                others.reduce((sum, el) => sum + el.getBoundingClientRect().width, 0) +
-                gap * others.length;
-        }
-
-        const cap = Number.isFinite(maxInner) ? Math.max(0, maxInner - used) : Number.POSITIVE_INFINITY;
-        setWidth(Math.max(0, Math.min(natural, cap)));
-        requestAnimationFrame(() => {
-            const el = wrapRef.current;
-            if (!el) return;
-            setClipping(el.scrollWidth > el.clientWidth + 1);
-        });
-    }, [leaving]);
-
-    React.useLayoutEffect(() => {
-        fitWidth();
-        if (!ready) {
-            requestAnimationFrame(() => setReady(true));
-        }
-    }, [value, shown, leaving, fitWidth, ready]);
-
-    React.useEffect(() => {
-        const parent = wrapRef.current?.parentElement;
-        if (!parent) return;
-        const ro = new ResizeObserver(() => fitWidth());
-        ro.observe(parent);
-        return () => ro.disconnect();
-    }, [fitWidth]);
-
-    React.useEffect(() => {
-        if (value === shownRef.current) return;
-        const from = shownRef.current;
-        shownRef.current = value;
-        setLeaving(from || null);
-        setShown(value);
-        const t = window.setTimeout(() => setLeaving(null), 400);
-        return () => window.clearTimeout(t);
-    }, [value]);
-
+function SlideChevron({ group }: { group: "model" | "effort" }) {
     return (
         <span
-            ref={wrapRef}
-            data-ready={ready ? "true" : "false"}
-            data-fade={clipping ? "true" : "false"}
-            className={cn("t-swap", className)}
-            style={width != null ? { width } : undefined}
-            onTransitionEnd={(event) => {
-                if (event.propertyName === "width") setClipping(false);
-            }}
+            className={cn(
+                "inline-flex w-0 shrink-0 items-center justify-end overflow-hidden opacity-0 transition-[width,opacity] duration-150",
+                group === "model"
+                    ? "group-hover/model:ml-1 group-hover/model:w-5 group-hover/model:opacity-100 group-data-[state=open]/model:ml-1 group-data-[state=open]/model:w-5 group-data-[state=open]/model:opacity-100"
+                    : "group-hover/effort:ml-1 group-hover/effort:w-5 group-hover/effort:opacity-100 group-data-[state=open]/effort:ml-1 group-data-[state=open]/effort:w-5 group-data-[state=open]/effort:opacity-100",
+            )}
         >
-            <span ref={measureNewRef} className="t-swap__measure" aria-hidden>
-                {value}
-            </span>
-            <span ref={measureOldRef} className="t-swap__measure" aria-hidden>
-                {leaving ?? ""}
-            </span>
-            {leaving ? (
-                <span className="t-swap__layer t-swap__layer--out" aria-hidden>
-                    {leaving}
-                </span>
-            ) : null}
-            {shown ? (
-                <span className={cn("t-swap__layer", leaving && "t-swap__layer--in")}>{shown}</span>
-            ) : null}
+            <Icon
+                icon={ChevronDown20Regular}
+                className="size-4"
+                style={{ width: 16, height: 16, minWidth: 16, minHeight: 16 }}
+            />
         </span>
     );
 }
@@ -473,59 +367,6 @@ function RotatingComposerHint({ paused }: { paused: boolean }) {
     );
 }
 
-function ModeMenu({
-    selectedMode,
-    setSelectedMode,
-    disabled,
-}: {
-    selectedMode: string;
-    setSelectedMode: (m: string) => void;
-    disabled?: boolean;
-}) {
-    const selected = CHAT_MODES.find((m) => m.id === selectedMode) ?? CHAT_MODES[0];
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild disabled={disabled}>
-                <Button
-                    variant="ghost"
-                    size="xs"
-                    disabled={disabled}
-                    className="h-8 bg-transparent px-2 font-medium hover:bg-transparent"
-                    style={{ color: selected.color }}
-                    aria-label={selected.id}
-                >
-                    <div className="flex items-center gap-1.5 text-sm">
-                        <Icon icon={selected.icon} />
-                        <SwapText value={selected.id} />
-                    </div>
-                </Button>
-            </DropdownMenuTrigger >
-            <DropdownMenuContent align="start" className="w-100">
-                {CHAT_MODES.map((mode) => (
-                    <DropdownMenuItem
-                        key={mode.id}
-                        onClick={() => setSelectedMode(mode.id)}
-                        className="items-start gap-2.5 py-2"
-                    >
-                        <Icon
-                            icon={mode.icon}
-                            className="mt-0.5"
-                            style={{ color: mode.color }}
-                        />
-                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                            <span className="text-sm text-text-primary">{mode.id}</span>
-                            <span className="text-sm leading-snug text-text-muted">
-                                {mode.description}
-                            </span>
-                        </span>
-                    </DropdownMenuItem>
-                ))}
-            </DropdownMenuContent>
-        </DropdownMenu>
-    );
-}
-
-
 export function ChatInput({
     inputValue,
     isLoading,
@@ -541,9 +382,7 @@ export function ChatInput({
     selectedWorkerModels = [],
     setSelectedWorkerModels,
     multiSelectModels = false,
-    hideModeSelect = false,
-    selectedMode,
-    setSelectedMode,
+    hideModeSelect: _hideModeSelect = false,
     reasoningEffort,
     setReasoningEffort,
     pendingEdits = [],
@@ -559,10 +398,15 @@ export function ChatInput({
     projectRuleFiles = [],
     onNewChat,
     variant = "default",
+    talkSurface = false,
+    talkName = "Shape",
+    talkMark = null,
+    folderLocked = false,
 }: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
 
     const settings = useSettings();
     const shapeAuth = useShapeAuth();
+    const { project_path } = useProjectState();
     const { catalog } = useShapeCatalog();
     const allModels = resolveChatModels(getCatalogModels());
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -573,7 +417,6 @@ export function ChatInput({
     const [mentionCaret, setMentionCaret] = React.useState(0);
     const [slashOpen, setSlashOpen] = React.useState(false);
     const [slashQuery, setSlashQuery] = React.useState("");
-
     const handleInputChangeWithMentions = React.useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const raw = e.target.value;
         const caretRaw = e.target.selectionStart ?? raw.length;
@@ -671,15 +514,44 @@ export function ChatInput({
         requestAnimationFrame(() => textarea.focus());
     }, [inputValue, onInputChange]);
 
+    const [composerTall, setComposerTall] = React.useState(false);
+    const [prompts, setPrompts] = React.useState<string[]>(() => loadComposerPrompts());
+    const [caret, setCaret] = React.useState(0);
+
+    const rememberPrompt = React.useCallback((text: string) => {
+        rememberComposerPrompt(text);
+        setPrompts(loadComposerPrompts());
+    }, []);
+
+    const spell = composerSpell(inputValue, caret);
+    const ghost = spell ? "" : composerGhost(inputValue, caret, prompts);
+    const ghostText = spell?.word ?? ghost;
+    const ghostBase = spell ? inputValue.slice(0, spell.start) : inputValue;
+
     const onComposerKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if ((mentionOpen || slashOpen) && (e.key === "Enter" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Escape")) {
             e.preventDefault();
             return;
         }
+        const el = e.currentTarget;
+        const atEnd = el.selectionStart === el.selectionEnd && el.selectionStart === inputValue.length;
+        if ((ghost || spell) && atEnd && !mentionOpen && !slashOpen && (e.key === "Tab" || e.key === "ArrowRight")) {
+            e.preventDefault();
+            const next = spell ? inputValue.slice(0, spell.start) + spell.word : inputValue + ghost;
+            onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>);
+            setCaret(next.length);
+            requestAnimationFrame(() => {
+                el.focus();
+                el.setSelectionRange(next.length, next.length);
+            });
+            return;
+        }
+        if (e.key === "Enter" && !e.shiftKey && inputValue.trim()) {
+            rememberPrompt(inputValue);
+        }
+        setCaret(el.selectionStart ?? inputValue.length);
         onKeyDown(e);
-    }, [mentionOpen, slashOpen, onKeyDown]);
-
-    const [composerTall, setComposerTall] = React.useState(false);
+    }, [mentionOpen, slashOpen, onKeyDown, ghost, spell, inputValue, onInputChange, rememberPrompt]);
 
     React.useEffect(() => {
         if (reasoningEffort === "super" && !modelSupportsSuperThinking(selectedModel)) {
@@ -690,12 +562,14 @@ export function ChatInput({
     React.useEffect(() => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-        const line = 24;
         const max = 220;
-        textarea.style.height = "0px";
+        textarea.style.paddingTop = "0px";
+        textarea.style.paddingBottom = "0px";
+        textarea.style.lineHeight = "24px";
+        textarea.style.height = "auto";
         const content = textarea.scrollHeight;
-        const tall = content > line + 2 || inputValue.includes("\n");
-        const next = tall ? Math.min(Math.max(content, line), max) : line;
+        const tall = inputValue.includes("\n") || content > 28;
+        const next = Math.min(Math.max(content, 24), max);
         textarea.style.height = `${next}px`;
         textarea.style.overflowY = content > max ? "auto" : "hidden";
         textarea.style.overflowX = "hidden";
@@ -822,31 +696,6 @@ export function ChatInput({
         e.stopPropagation();
     }, []);
 
-    // Elements picked in the Browser tab become @element mentions at the caret.
-    React.useEffect(() => {
-        const onElement = (e: Event) => {
-            const detail = (e as CustomEvent<BrowserPickedElement>).detail;
-            if (!detail?.tag) return;
-            const token = registerElementMention(detail);
-            const textarea = textareaRef.current;
-            const val = inputValue;
-            const caret = textarea?.selectionStart ?? val.length;
-            const before = val.slice(0, caret);
-            const after = val.slice(caret);
-            const lead = before && !/\s$/.test(before) ? " " : "";
-            const trail = after && !/^\s/.test(after) ? " " : after ? "" : " ";
-            const next = `${before}${lead}${token}${trail}${after}`;
-            onInputChange({ target: { value: next } } as React.ChangeEvent<HTMLTextAreaElement>);
-            const pos = before.length + lead.length + token.length + trail.length;
-            requestAnimationFrame(() => {
-                textarea?.focus();
-                textarea?.setSelectionRange(pos, pos);
-            });
-        };
-        window.addEventListener("shape-chat-attach-element", onElement as EventListener);
-        return () => window.removeEventListener("shape-chat-attach-element", onElement as EventListener);
-    }, [inputValue, onInputChange]);
-
     // Filter file uploads to only allowed types
     const handleFilteredFileUpload = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -866,23 +715,22 @@ export function ChatInput({
         getCatalogDefaultEnabledIds(),
     );
     const MODELS = getVisibleModels(allModels, enabled);
-    const autoModel = allModels.find((m) => m.id === "auto") ?? {
-        id: "auto",
-        name: "Auto",
-        description: "Picks a fast model for everyday work.",
-        provider: "Auto",
+    const freeModel = allModels.find((model) => model.minTier === "free" || model.provider === "Free Models");
+    const modelInfo = MODELS.find((m) => m.id === selectedModel) ?? freeModel ?? allModels[0] ?? {
+        id: "",
+        name: "Model",
+        description: "",
+        provider: "",
         inputCost: 0,
         cachedInputCost: 0,
         outputCost: 0,
-        contextWindow: "200K",
-        releaseDate: "Rolling",
+        contextWindow: "",
+        releaseDate: "",
     };
-    const modelInfo = MODELS.find((m) => m.id === selectedModel) || autoModel;
     const workerExtra = multiSelectModels
         ? selectedWorkerModels.filter((id) => id && id !== selectedModel)
         : [];
-    const modelNameBase =
-        selectedModel === "auto" || modelInfo.name === "auto" ? "Auto" : modelInfo.name;
+    const modelNameBase = modelInfo.name;
     const modelName =
         multiSelectModels && workerExtra.length > 0
             ? `${modelNameBase} +${workerExtra.length}`
@@ -919,10 +767,9 @@ export function ChatInput({
     React.useEffect(() => subscribeSkills(() => setSkills(listSkills())), []);
 
     React.useEffect(() => {
-        if (selectedModel === "auto") return;
-        if (allModels.length <= 1) return;
-        if (!allModels.some((m) => m.id === selectedModel)) {
-            setSelectedModel("auto");
+        if (!freeModel) return;
+        if (selectedModel === "auto" || selectedModel === "openrouter/auto" || !allModels.some((m) => m.id === selectedModel)) {
+            setSelectedModel(freeModel.id);
         }
     }, [allModels, selectedModel, setSelectedModel]);
 
@@ -962,15 +809,25 @@ export function ChatInput({
     }, []);
 
     const hasContextStrip =
-        (pendingEdits?.length ?? 0) > 0 ||
         queuedMessages.length > 0 ||
         projectRuleFiles.length > 0 ||
         taskItems.length > 0;
 
     const sendDisabled =
         needsSignIn ||
+        folderLocked ||
         uploadedFiles.some((a) => a.status === "processing") ||
         (!isLoading && !inputValue.trim() && uploadedFiles.length === 0);
+
+    const openFolder = () => {
+        window.dispatchEvent(new Event("shape-open-project-pick"));
+    };
+
+    const runMode = settings.ai.autoRunMode;
+    const setRunMode = (next: AutoRunModeSetting) => {
+        updateSettingSection("ai", { autoRunMode: next });
+        void commands.updateTurnPolicy({ autoRunMode: next });
+    };
 
     const sendActive =
         (inputValue.trim() || isLoading || uploadedFiles.length > 0) &&
@@ -980,21 +837,12 @@ export function ChatInput({
         <div
             className={cn(
                 "relative shrink-0 overflow-visible",
-                variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-0 pb-3 pt-0",
+                talkSurface ? "w-full px-0 pb-5 pt-0" : variant === "empty" ? "w-full px-0 pb-0 pt-0" : "px-0 pb-3 pt-0",
             )}
         >
             <div className="relative z-10 flex w-full flex-col gap-1.5">
                 {hasContextStrip ? (
                     <div className="flex min-w-0 items-center gap-1 px-1">
-                        {pendingEdits.length > 0 ? (
-                        <PendingEditsPanel
-                            edits={pendingEdits}
-                            onAcceptAll={onAcceptAllEdits ?? (() => {})}
-                            onRejectAll={onRejectAllEdits ?? (() => {})}
-                            onAccept={onAcceptEdit}
-                            onReject={onRejectEdit}
-                        />
-                        ) : null}
                         {queuedMessages.length > 0 && onEditQueuedMessage && onRemoveQueuedMessage ? (
                             <QueuedMessagesPanel
                                 items={queuedMessages}
@@ -1022,20 +870,29 @@ export function ChatInput({
                 <div
                     ref={composerBoxRef}
                     className={cn(
-                        "relative flex w-full flex-col border transition-colors p-1.5",
-                        "border-border-subtle/40 bg-surface-4",
-                        composerTall || uploadedFiles.length > 0 ? "rounded-xl" : "rounded-full",
+                        "relative flex w-full flex-col transition-colors p-1.5",
+                        "bg-surface-4",
+                        !composerTall && uploadedFiles.length === 0 ? "rounded-full" : "rounded-[22px]",
                         dragOver && "bg-surface-3/80",
-                        needsSignIn && "cursor-default",
+                        (needsSignIn || folderLocked) && "cursor-default",
+                        folderLocked && "opacity-70",
                     )}
-                    onDrop={needsSignIn ? undefined : handleDrop}
-                    onDragEnter={needsSignIn ? undefined : handleDragEnter}
-                    onDragLeave={needsSignIn ? undefined : handleDragLeave}
-                    onDragOver={needsSignIn ? undefined : handleDragOver}
+                    onDrop={needsSignIn || folderLocked ? undefined : handleDrop}
+                    onDragEnter={needsSignIn || folderLocked ? undefined : handleDragEnter}
+                    onDragLeave={needsSignIn || folderLocked ? undefined : handleDragLeave}
+                    onDragOver={needsSignIn || folderLocked ? undefined : handleDragOver}
                 >
+                    {folderLocked ? (
+                        <button
+                            type="button"
+                            className="absolute inset-0 z-30 cursor-pointer rounded-[inherit]"
+                            aria-label="Open a folder to start coding"
+                            onClick={openFolder}
+                        />
+                    ) : null}
                     {dragOver ? (
                         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] border-2 border-border-subtle bg-surface-3/95">
-                            <p className="text-sm font-medium text-text-primary">Drop files to attach</p>
+                            <p className="text-sm font-regular text-text-primary">Drop files to attach</p>
                         </div>
                     ) : null}
                     <MentionPicker
@@ -1058,7 +915,8 @@ export function ChatInput({
                             setUploadedFiles((prev) => prev.filter((a) => a.id !== id))
                         }
                     />
-                    <div className={cn("relative flex gap-1 px-1.5", composerTall ? "items-end" : "h-11 items-center")}>
+                    <div className="relative flex flex-col gap-0.5 px-1.5 pb-0.5">
+                        <div className={cn("flex min-w-0 gap-1", composerTall ? "items-end" : "h-9 items-center")}>
                         <input
                             type="file"
                             id="chat-media-upload"
@@ -1090,29 +948,57 @@ export function ChatInput({
                             <DropdownMenuTrigger asChild>
                                 <button
                                     className={cn(
-                                        "size-9 shrink-0 p-0",
+                                        "inline-flex size-9 shrink-0 items-center justify-center p-0",
                                         "text-text-muted hover:text-text-primary",
                                         "rounded-full bg-panel-hover hover:bg-panel-active",
                                     )}
                                     aria-label="Add"
                                     disabled={needsSignIn}
                                 >
-                                    <Icon icon={Add20Regular} />
+                                    <Icon icon={Add20Filled} />
                                 </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-56">
+                            <DropdownMenuContent align="start" className="w-66">
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                        Permission
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-52">
+                                        {([
+                                            ["ask", "Read only"],
+                                            ["auto", "Guard"],
+                                            ["always", "Full access"],
+                                        ] as const).map(([id, label]) => (
+                                            <DropdownMenuItem key={id} onClick={() => setRunMode(id)}>
+                                                <span className="min-w-0 flex-1">{label}</span>
+                                                {runMode === id ? <Icon icon={Checkmark20Regular} /> : null}
+                                            </DropdownMenuItem>
+                                        ))}
+                                        <DropdownMenuItem
+                                            onClick={() => {
+                                                void import("@/lib/window/open-settings").then(({ openSettingsWindow }) =>
+                                                    openSettingsWindow({ category: "ai" }),
+                                                );
+                                            }}
+                                        >
+                                            Global setting
+                                        </DropdownMenuItem>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
                                 <DropdownMenuItem
                                     onClick={() => document.getElementById("chat-media-upload")?.click()}
                                 >
                                     <Icon icon={MoviesAndTv24Filled} />
-                                    Upload photos & file
+                                    Upload photos & files
                                 </DropdownMenuItem>
+                                {talkSurface ? null : (
                                 <DropdownMenuItem
                                     onClick={() => document.getElementById("chat-folder-upload")?.click()}
                                 >
                                     <Icon icon={FolderAdd24Filled} />
                                     Attach folder
                                 </DropdownMenuItem>
+                                )}
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
                                         <Icon icon={Connected24Filled} />
@@ -1199,18 +1085,29 @@ export function ChatInput({
                                 </DropdownMenuSub>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <div className="relative min-h-6 min-w-0 flex-1">
-                        {!needsSignIn && !inputValue ? (
+                        <div className="relative min-w-0 flex-1">
+                        <div className={cn("relative", !composerTall && "flex h-6 items-center")}>
+                        {folderLocked && !inputValue ? (
+                            <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-normal leading-6 text-text-muted">
+                                Open a folder to start coding.
+                            </div>
+                        ) : !needsSignIn && !inputValue ? (
+                            talkSurface ? (
+                                <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-normal leading-6 text-text-muted">
+                                    Message {talkName}
+                                </div>
+                            ) : (
                             <RotatingComposerHint paused={false} />
+                            )
                         ) : needsSignIn && !inputValue ? (
-                            <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-medium leading-6 text-text-muted">
+                            <div className="pointer-events-none absolute inset-0 z-0 flex items-center pl-3 text-sm font-normal leading-6 text-text-muted">
                                 Sign in to use the chat
                             </div>
                         ) : null}
                         <div
                             ref={mentionOverlayRef}
                             aria-hidden
-                            className="pointer-events-none absolute inset-0 z-0 overflow-hidden whitespace-pre-wrap break-words pl-3 text-sm font-medium leading-6 text-text-primary"
+                            className="pointer-events-none absolute inset-0 z-0 overflow-hidden pl-3 text-sm font-normal leading-6 text-text-primary whitespace-pre-wrap break-words"
                         >
                             {(() => {
                                 const mentionRs = mentionRanges(inputValue);
@@ -1225,8 +1122,17 @@ export function ChatInput({
                                     if (prev && r.start < prev.end) continue;
                                     merged.push(r);
                                 }
+                                const ghostNode = ghostText ? (
+                                    <span className="text-text-muted opacity-40">{ghostText}</span>
+                                ) : null;
+                                const painted = ghostBase;
                                 if (merged.length === 0) {
-                                    return inputValue || "\u00a0";
+                                    return (
+                                        <>
+                                            {painted || "\u00a0"}
+                                            {ghostNode}
+                                        </>
+                                    );
                                 }
                                 const nodes: React.ReactNode[] = [];
                                 let cursor = 0;
@@ -1245,26 +1151,33 @@ export function ChatInput({
                                 if (cursor < inputValue.length) {
                                     nodes.push(inputValue.slice(cursor));
                                 }
+                                nodes.push(ghostNode);
                                 return nodes;
                             })()}
                         </div>
                         <ContextMenu>
                             <ContextMenuTrigger asChild>
                                 <textarea
+                                    data-chat-composer="true"
                                     ref={textareaRef}
                                     value={inputValue}
-                                    onChange={handleInputChangeWithMentions}
+                                    onChange={(e) => {
+                                        setCaret(e.target.selectionStart ?? e.target.value.length);
+                                        handleInputChangeWithMentions(e);
+                                    }}
+                                    onKeyUp={(e) => setCaret(e.currentTarget.selectionStart ?? inputValue.length)}
                                     onKeyDown={onComposerKeyDown}
                                     onPaste={handlePaste}
                                     onSelect={(e) => {
-                                        if (!mentionOpen && !slashOpen) return;
                                         const el = e.currentTarget;
-                                        const caret = el.selectionStart ?? 0;
-                                        const before = el.value.slice(0, caret);
+                                        const caretPos = el.selectionStart ?? 0;
+                                        setCaret(caretPos);
+                                        if (!mentionOpen && !slashOpen) return;
+                                        const before = el.value.slice(0, caretPos);
                                         const atMatch = before.match(/@([\w./:-]*)$/);
                                         const slashMatch = before.match(/(?:^|\s)(\/[^\s]*)$/);
                                         if (atMatch) {
-                                            setMentionCaret(caret - atMatch[0].length);
+                                            setMentionCaret(caretPos - atMatch[0].length);
                                             setMentionQuery(atMatch[1] ?? "");
                                             setMentionOpen(true);
                                             setSlashOpen(false);
@@ -1281,13 +1194,16 @@ export function ChatInput({
                                         syncComposerOverlayScroll(e.currentTarget, mentionOverlayRef.current);
                                     }}
                                     placeholder=""
+                                    readOnly={folderLocked}
                                     aria-label={
-                                        needsSignIn
+                                        folderLocked
+                                            ? "Open a folder to start coding"
+                                            : needsSignIn
                                             ? "Sign in to use the chat"
                                             : COMPOSER_HINTS[0]
                                     }
                                     rows={1}
-                                    className="relative z-[1] block h-6 min-h-6 w-full resize-none overflow-x-hidden border-none bg-transparent py-0 pl-3 text-sm font-medium leading-6 text-transparent outline-none placeholder:text-text-muted selection:bg-accent/30 whitespace-pre-wrap break-words"
+                                    className="relative z-[1] box-border block w-full resize-none overflow-x-hidden border-0 bg-transparent p-0 pl-3 text-sm font-normal leading-6 text-transparent outline-none selection:bg-accent/30 whitespace-pre-wrap break-words"
                                     style={{ caretColor: "var(--text-primary)" }}
                                 />
                             </ContextMenuTrigger>
@@ -1338,9 +1254,11 @@ export function ChatInput({
                             </ContextMenuContent>
                         </ContextMenu>
                         </div>
+                        </div>
                         <button
                             type="button"
                             onClick={() => {
+                                if (inputValue.trim()) rememberPrompt(inputValue);
                                 if (isLoading && inputValue.trim()) {
                                     onSendMessage();
                                 } else if (isLoading) {
@@ -1363,29 +1281,39 @@ export function ChatInput({
                             }
                         >
                             {isLoading && !inputValue.trim() ? (
-                                <span role="status" aria-label="Generating" className="text-white">
+                                <span role="status" aria-label="Generating" className="text-text-primary">
                                     <Arc size={16} />
                                 </span>
                             ) : (
                                 <Icon icon={ArrowUp20Regular} />
                             )}
                         </button>
+                        </div>
                     </div>
                 </div>
-
-                <div className="flex items-center justify-between gap-2 px-1">
-                    <div className="flex min-w-0 items-center gap-0.5">
-                        {hideModeSelect ? null : (
-                            <ModeMenu
-                                selectedMode={selectedMode}
-                                setSelectedMode={setSelectedMode}
-                                disabled={needsSignIn}
-                            />
-                        )}
-                        <WorkspaceBranchSwitch />
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-0.5">
+                {talkSurface ? null : (
+                        <div className="flex min-w-0 items-center justify-between gap-2 px-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                            {project_path ? (
+                                <CommitMenu
+                                    projectPath={project_path}
+                                    edits={pendingEdits}
+                                    onAcceptAll={onAcceptAllEdits}
+                                    onRejectAll={onRejectAllEdits}
+                                    onAccept={onAcceptEdit}
+                                    onReject={onRejectEdit}
+                                />
+                            ) : pendingEdits.length > 0 ? (
+                                <PendingEditsPanel
+                                    edits={pendingEdits}
+                                    onAcceptAll={onAcceptAllEdits ?? (() => {})}
+                                    onRejectAll={onRejectAllEdits ?? (() => {})}
+                                    onAccept={onAcceptEdit}
+                                    onReject={onRejectEdit}
+                                />
+                            ) : null}
+                        </div>
+                        <div className="flex shrink-0 items-center">
                         <DropdownMenu
                             onOpenChange={(open) => {
                                 if (!open) setModelQuery("");
@@ -1395,15 +1323,13 @@ export function ChatInput({
                                 <Button
                                     variant="ghost"
                                     size="xs"
-                                    className="h-8 max-w-[220px] px-2 font-normal text-text-muted hover:text-text-primary hover:bg-transparent"
+                                    className="group/model h-8 max-w-[260px] px-2 font-normal text-text-muted hover:text-text-primary hover:bg-transparent"
                                     aria-label={modelName}
                                 >
                                     <div className="flex min-w-0 items-center gap-1.5 text-sm">
-                                        {providerIcon(selectedModel === "auto" ? "auto" : modelInfo.id, 14)}
+                                        {providerIcon(modelInfo.id, 16)}
                                         <span className="min-w-0 truncate">{modelName}</span>
-                                        {isApiModel(modelInfo) ? (
-                                            <span className="shrink-0 text-sm font-normal text-text-muted">API</span>
-                                        ) : null}
+                                        <SlideChevron group="model" />
                                     </div>
                                 </Button>
                             </DropdownMenuTrigger>
@@ -1424,31 +1350,7 @@ export function ChatInput({
                                                     Orchestrator uses the primary model. Extra picks become the worker pool.
                                                 </div>
                                             ) : null}
-                                            {modelMatches(autoModel) ? (
-                                                multiSelectModels ? (
-                                                    <DropdownMenuCheckboxItem
-                                                        checked={selectedModel === "auto" || selectedWorkerModels.includes("auto")}
-                                                        onCheckedChange={(checked) => {
-                                                            if (checked) {
-                                                                setSelectedModel("auto");
-                                                                setSelectedWorkerModels?.(
-                                                                    selectedWorkerModels.filter((id) => id !== "auto"),
-                                                                );
-                                                            }
-                                                        }}
-                                                    >
-                                                        Auto
-                                                    </DropdownMenuCheckboxItem>
-                                                ) : (
-                                                    <ModelItem
-                                                        model={autoModel}
-                                                        isSelected={selectedModel === "auto"}
-                                                        onSelect={() => setSelectedModel("auto")}
-                                                        effort={reasoningEffort}
-                                                    />
-                                                )
-                                            ) : null}
-                                            {providerOrder.filter((p) => p !== "Auto").map((provider) => {
+                                            {providerOrder.map((provider) => {
                                                 const providerModels = MODELS.filter(
                                                     (m) => m.provider === provider && modelMatches(m),
                                                 );
@@ -1499,7 +1401,7 @@ export function ChatInput({
                                                                         }}
                                                                     >
                                                                         <span className="flex min-w-0 items-center gap-1.5">
-                                                                            {providerIcon(m.id, 14)}
+                                                                            {providerIcon(m.id, 18)}
                                                                             <span className="truncate">{m.name}</span>
                                                                         </span>
                                                                     </DropdownMenuCheckboxItem>
@@ -1520,7 +1422,7 @@ export function ChatInput({
                                                     </div>
                                                 );
                                             })}
-                                            {!modelMatches(autoModel) && !MODELS.some(modelMatches) ? (
+                                            {!MODELS.some(modelMatches) ? (
                                                 <div className="px-2.5 py-3 text-sm text-text-muted">
                                                     No models match
                                                 </div>
@@ -1528,14 +1430,52 @@ export function ChatInput({
                                         </div>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <ThinkingEffortControl
-                            effort={reasoningEffort}
-                            modelId={selectedModel}
-                            onChange={setReasoningEffort}
-                            disabled={needsSignIn}
-                        />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    disabled={needsSignIn}
+                                    className="group/effort h-8 px-2 font-normal text-text-muted hover:bg-transparent hover:text-text-primary"
+                                    aria-label="Reasoning"
+                                >
+                                    <span className="text-sm">{reasoningEffort === "super" ? "Ultrabrowse" : effortDisplayLabel(reasoningEffort)}</span>
+                                    <SlideChevron group="effort" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                                {effortsForModel(selectedModel).map((stop) => (
+                                    <DropdownMenuItem
+                                        key={stop.value}
+                                        disabled={needsSignIn}
+                                        onClick={() => setReasoningEffort(stop.value)}
+                                        className={reasoningEffort === stop.value ? "bg-panel-hover" : undefined}
+                                    >
+                                        <span className="min-w-0 flex-1">{stop.value === "super" ? "Ultrabrowse" : stop.label}</span>
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <ChatUsageButton compact />
+                        </div>
+                        </div>
+                        )}
+                {talkSurface ? (
+                    <div className="flex items-center justify-center gap-2 px-2 pb-1 pt-3 text-center text-xs text-text-muted">
+                        {talkMark ? (
+                            <WorkerMark
+                                shape={talkMark.shape}
+                                color={talkMark.color}
+                                size={16}
+                                live
+                                mood={inputValue.trim() ? "typing" : "idle"}
+                            />
+                        ) : (
+                            <ShapeAutoIcon size={16} className="text-text-muted" />
+                        )}
+                        <span>You are chatting to {talkName}</span>
                     </div>
-                </div>
+                ) : null}
             </div>
             <MediaLightbox
                 open={!!mediaViewer}

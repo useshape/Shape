@@ -6,7 +6,7 @@ import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/windo
 
 
 import React, { type ReactNode } from "react";
-import { Arc } from "loading-dev";
+import { Slide } from "loading-dev";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -58,13 +58,13 @@ export function ApprovalCard({
     return (
         <div
             className={cn(
-                "my-1 overflow-hidden squircle-[20px] bg-surface-3",
+                "my-1 overflow-hidden squircle-2xl border border-border",
                 className,
             )}
         >
             <div className="flex items-center gap-2 px-3 py-2">
                 {isProcessing ? (
-                    <Arc size={12} className="shrink-0 text-text-muted" />
+                    <Slide size={10} className="shrink-0 text-text-muted" />
                 ) : (
                     icon
                 )}
@@ -101,6 +101,26 @@ export type ApprovalBarProps = {
     promptPrefix?: string;
 };
 
+/** Square command/code well inside an approval card — not clipped to the card squircle. */
+export function ApprovalCode({
+    children,
+    className,
+}: {
+    children: ReactNode;
+    className?: string;
+}) {
+    return (
+        <div
+            className={cn(
+                "rounded-none bg-panel px-3 py-2 font-mono text-sm leading-5 text-text-primary whitespace-pre-wrap break-words custom-scrollbar",
+                className,
+            )}
+        >
+            {children}
+        </div>
+    );
+}
+
 /** Inline chat approval bar for pending terminal commands. */
 export function ApprovalBar({
     label,
@@ -124,16 +144,16 @@ export function ApprovalBar({
             acceptLabel={acceptLabel}
             className={className}
         >
-            <div className="px-3 pb-2">
+            <ApprovalCode className="max-h-[96px] overflow-y-auto">
                 <Tooltip content={subject} side="top">
-                    <span className="block truncate font-mono text-sm text-text-primary">
+                    <span className="block truncate">
                         {promptPrefix ? (
                             <span className="select-none text-text-disabled">{promptPrefix}</span>
                         ) : null}
                         {subject}
                     </span>
                 </Tooltip>
-            </div>
+            </ApprovalCode>
         </ApprovalCard>
     );
 }

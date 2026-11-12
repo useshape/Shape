@@ -30,32 +30,6 @@ const PATH_IN_PROSE =
     /(?:^|(?<=\s))((?:\.{1,2}[\\/])?(?:[\w.-]+[\\/])+[\w.-]+\.[A-Za-z0-9]{1,12})(?=$|[\s,;:)\]"'`])/g;
 
 function ProjectPathLink({ path }: { path: string }) {
-    const [exists, setExists] = useState<boolean | null>(null);
-
-    useEffect(() => {
-        let cancelled = false;
-        const resolved = resolveProjectFilePath(path, getProjectPath());
-        void commands
-            .readFile(resolved)
-            .then(() => {
-                if (!cancelled) setExists(true);
-            })
-            .catch(() =>
-                commands
-                    .lsDir(resolved)
-                    .then(() => {
-                        if (!cancelled) setExists(true);
-                    })
-                    .catch(() => {
-                        if (!cancelled) setExists(false);
-                    }),
-            );
-        return () => {
-            cancelled = true;
-        };
-    }, [path]);
-
-    if (!exists) return <>{path}</>;
     return (
         <button
             type="button"
@@ -89,9 +63,47 @@ function linkifyText(text: string): React.ReactNode {
     return nodes;
 }
 
-function linkifyChildren(children: React.ReactNode): React.ReactNode {
+function withCites(text: string): React.ReactNode {
+    const bits = text.split(/(\[\d+\])/g);
+    if (bits.length === 1) return linkifyText(text);
+    return bits.map((bit, index) => {
+        const mark = bit.match(/^\[(\d+)\]$/);
+        if (!mark) return <React.Fragment key={index}>{linkifyText(bit)}</React.Fragment>;
+        return (
+            <sup
+                key={index}
+                className="mx-0.5 inline-flex size-4 items-center justify-center rounded-full bg-panel-hover align-super text-[10px] text-text-muted"
+            >
+                {mark[1]}
+            </sup>
+        );
+    });
+}
+
+type RevealState = { seen: Set<string>; seq: { n: number; fresh: number } };
+
+function revealText(text: string, reveal: RevealState | null): React.ReactNode {
+    if (!reveal) return withCites(text);
+    const parts = text.split(/(\s+)/);
+    return parts.map((part, index) => {
+        if (part === "" || /^\s+$/.test(part)) return part;
+        const id = `w${reveal.seq.n++}`;
+        const fresh = !reveal.seen.has(id);
+        reveal.seen.add(id);
+        return (
+            <span
+                key={`${id}-${index}`}
+                className={fresh ? "chat-reveal-word" : undefined}
+            >
+                {withCites(part)}
+            </span>
+        );
+    });
+}
+
+function linkifyChildren(children: React.ReactNode, reveal: RevealState | null = null): React.ReactNode {
     return React.Children.map(children, (child) => {
-        if (typeof child === "string") return linkifyText(child);
+        if (typeof child === "string") return revealText(child, reveal);
         return child;
     });
 }
@@ -132,13 +144,30 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
     );
 }
 
-function createMarkdownComponents(options?: { nested?: boolean }) {
+function createMarkdownComponents(options?: { nested?: boolean; reveal?: RevealState | null; plain?: boolean }) {
     const nested = options?.nested;
+    const reveal = options?.reveal ?? null;
+    const plain = options?.plain;
+    const linked = (children?: React.ReactNode) => linkifyChildren(children, reveal);
 
     return {
-        pre: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+        ...(plain
+            ? {
+                table: () => null,
+                thead: () => null,
+                tbody: () => null,
+                tr: () => null,
+                th: () => null,
+                td: () => null,
+                h1: ({ children }: { children?: React.ReactNode }) => <p>{linked(children)}</p>,
+                h2: ({ children }: { children?: React.ReactNode }) => <p>{linked(children)}</p>,
+                h3: ({ children }: { children?: React.ReactNode }) => <p>{linked(children)}</p>,
+            }
+            : {}),
+        pre: ({ children }: { children?: React.ReactNode }) => (plain ? <p className="whitespace-pre-wrap">{children}</p> : <>{children}</>),
         code(props: { className?: string; children?: React.ReactNode }) {
             const { className, children, ...rest } = props;
+            if (plain) return <span>{children}</span>;
             const match = /language-([a-z0-9-]+)/i.exec(className || "");
             const codeContent = String(children).replace(/\n$/, "");
             if (codeContent === "undefined") return null;
@@ -206,7 +235,7 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
             );
         },
         p: ({ children }: { children?: React.ReactNode }) => (
-            <p className="mb-2 font-sans chat-text font-medium text-text-primary last:mb-0">{linkifyChildren(children)}</p>
+            <p className="mb-2 font-sans chat-text font-normal text-text-primary last:mb-0">{linked(children)}</p>
         ),
         ul: ({ children }: { children?: React.ReactNode }) => (
             <ul className="mb-2 ml-4 list-outside list-disc space-y-1 font-sans chat-text">{children}</ul>
@@ -215,16 +244,16 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
             <ol className="mb-2 ml-4 list-outside list-decimal space-y-1 font-sans chat-text">{children}</ol>
         ),
         li: ({ children }: { children?: React.ReactNode }) => (
-            <li className="pl-0.5 font-sans chat-text font-normal leading-relaxed">{linkifyChildren(children)}</li>
+            <li className="pl-0.5 font-sans chat-text font-normal leading-relaxed">{linked(children)}</li>
         ),
         h1: ({ children }: { children?: React.ReactNode }) => (
-            <h1 className="mb-2 mt-4 font-sans chat-text font-medium text-text-primary">{linkifyChildren(children)}</h1>
+            <h1 className="mb-2 mt-4 font-sans chat-text font-normal text-text-primary">{linked(children)}</h1>
         ),
         h2: ({ children }: { children?: React.ReactNode }) => (
-            <h2 className="mb-1.5 mt-3 font-sans chat-text font-medium text-text-primary">{linkifyChildren(children)}</h2>
+            <h2 className="mb-1.5 mt-3 font-sans chat-text font-normal text-text-primary">{linked(children)}</h2>
         ),
         h3: ({ children }: { children?: React.ReactNode }) => (
-            <h3 className="mb-1 mt-2 font-sans chat-text font-medium text-text-primary">{linkifyChildren(children)}</h3>
+            <h3 className="mb-1 mt-2 font-sans chat-text font-normal text-text-primary">{linked(children)}</h3>
         ),
         strong: ({ children }: { children?: React.ReactNode }) => (
             <strong className="chat-text font-medium text-text-primary">{children}</strong>
@@ -284,23 +313,21 @@ function createMarkdownComponents(options?: { nested?: boolean }) {
     };
 }
 
-/** Fast catch-up typewriter over the raw markdown string (survives re-parses). */
+/**
+ * Fast catch-up typewriter over the raw markdown string.
+ * The cursor only moves forward. When this block is no longer the live tail
+ * (a tool run started after it, or generation finished), show the whole string
+ * immediately so a mid-word slice cannot stick around until the turn ends.
+ */
 function useRevealText(full: string, live: boolean): string {
     const len = full.length;
     const [shown, setShown] = useState(() => (live ? Math.min(24, len) : len));
     const shownRef = useRef(shown);
     shownRef.current = shown;
-    const wasLive = useRef(live);
-    if (live) wasLive.current = true;
 
     useEffect(() => {
-        // Finished message that never streamed in this mount — show fully.
-        if (!live && !wasLive.current) {
-            setShown(len);
-            return;
-        }
-        if (shownRef.current > len) {
-            setShown(len);
+        if (!live || shownRef.current > len) {
+            if (shownRef.current !== len) setShown(len);
             return;
         }
         if (shownRef.current >= len) return;
@@ -313,12 +340,15 @@ function useRevealText(full: string, live: boolean): string {
             const dt = Math.min(32, now - last);
             last = now;
             const behind = len - cur;
-            // Sprint on dumps; cruise near the tip. Stay under ~0.5s for big chunks.
+            if (behind > 1600) {
+                setShown(len);
+                return;
+            }
             let cps: number;
-            if (behind > 800) cps = 1400;
-            else if (behind > 300) cps = 900;
-            else if (behind > 80) cps = 480;
-            else cps = live ? 180 : 320;
+            if (behind > 800) cps = 2200;
+            else if (behind > 300) cps = 1200;
+            else if (behind > 80) cps = 640;
+            else cps = 240;
             const step = Math.max(1, Math.ceil((cps * dt) / 1000));
             const next = Math.min(len, cur + step);
             setShown(next);
@@ -326,9 +356,9 @@ function useRevealText(full: string, live: boolean): string {
         };
         raf = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(raf);
-    }, [len, live, shown < len]);
+    }, [len, live]);
 
-    return full.slice(0, shown);
+    return full.slice(0, Math.min(shown, len));
 }
 
 export const ChatMarkdown = React.memo(({
@@ -336,13 +366,17 @@ export const ChatMarkdown = React.memo(({
     nested,
     isGenerating,
     isLast,
+    plain,
 }: {
     content: string;
     nested?: boolean;
     isGenerating?: boolean;
     isLast?: boolean;
+    plain?: boolean;
 }) => {
-    // Keep revealing briefly after generation ends so a late dump still types in.
+    // After generation ends, keep typing for a moment if this paragraph is
+    // still the tail. A paragraph that a tool run has moved off the tail
+    // is not live, so useRevealText shows it in full.
     const [hold, setHold] = useState(false);
     useEffect(() => {
         if (isGenerating && isLast) {
@@ -355,11 +389,19 @@ export const ChatMarkdown = React.memo(({
     }, [isGenerating, isLast, hold]);
 
     const live = !nested && !!isLast && (!!isGenerating || hold);
-    const visible = useRevealText(content, live);
+    const visible = content;
+    const seenWords = useRef(new Set<string>());
+    const wordSeq = useRef({ n: 0, fresh: 0 });
+    wordSeq.current.n = 0;
+    wordSeq.current.fresh = 0;
 
     const components = React.useMemo(
-        () => createMarkdownComponents({ nested }),
-        [nested],
+        () => createMarkdownComponents({
+            nested,
+            plain,
+            reveal: live && visible.length < 280 ? { seen: seenWords.current, seq: wordSeq.current } : null,
+        }),
+        [nested, live, plain],
     );
 
     const processed = React.useMemo(
@@ -368,7 +410,7 @@ export const ChatMarkdown = React.memo(({
     );
 
     return (
-        <div className="font-sans chat-markdown-body">
+        <div className="font-sans chat-markdown-body" data-live={live ? "true" : undefined}>
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
                 {processed}
             </ReactMarkdown>

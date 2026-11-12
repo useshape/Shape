@@ -2,6 +2,7 @@
 
 import { GithubMark } from "@/components/ui/github-mark";
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import { Branch20Regular } from "@fluentui/react-icons/headless/svg/branch";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 
@@ -23,6 +24,8 @@ import {
 import { Icon } from "@/components/ui/icon";
 
 import { FileIcon } from "@/components/ui/file-icon";
+import { Checkmark } from "@/components/ui/checkmark";
+import { countChangedLines } from "@/lib/ui/diff-count";
 import { Input } from "@/components/ui/input";
 import { notify } from "@/features/notifications";
 import { GenerateStarButton } from "@/features/git/ui/shared/generate-star";
@@ -248,9 +251,24 @@ function parseDiffFileStats(raw: string): Record<string, { plus: number; minus: 
     return stats;
 }
 
-export function CommitMenu({ projectPath }: { projectPath: string }) {
+export function CommitMenu({
+    projectPath,
+    edits = [],
+    onAcceptAll,
+    onRejectAll,
+    onAccept,
+    onReject,
+}: {
+    projectPath: string;
+    edits?: { id: string; file: string; original: string; replacement: string }[];
+    onAcceptAll?: () => void;
+    onRejectAll?: () => void;
+    onAccept?: (id: string) => void;
+    onReject?: (id: string) => void;
+}) {
     const [repo, setRepo] = useState<string | null>(null);
     const [files, setFiles] = useState<GitFileParams[]>([]);
+    const [picked, setPicked] = useState<string[]>([]);
     const [stats, setStats] = useState<Record<string, { plus: number; minus: number }>>({});
     const [busy, setBusy] = useState(false);
     const [title, setTitle] = useState("");
@@ -317,6 +335,11 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
         window.addEventListener("shape-git-refresh", on);
         return () => window.removeEventListener("shape-git-refresh", on);
     }, [refresh]);
+
+    const fileKey = files.map((file) => file.path).join("\n");
+    useEffect(() => {
+        setPicked(files.map((file) => file.path));
+    }, [fileKey]);
 
     const totals = useMemo(() => {
         let plus = 0;
@@ -412,8 +435,10 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
         }
     };
 
+    const selectedPaths = files.map((file) => file.path).filter((path) => picked.includes(path));
+
     const commitAll = () => {
-        void commitPaths(files.map((file) => file.path), messageBody());
+        void commitPaths(selectedPaths, messageBody());
     };
 
     const amend = () => {
@@ -549,7 +574,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
         >
             <DropdownMenuTrigger asChild>
                 <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     disabled={busy}
                     className="px-1.5 text-sm font-normal text-text-muted hover:bg-panel-hover hover:text-text-primary"
@@ -569,7 +594,8 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                         <Input
                             value={title}
                             placeholder="Message"
-                            className="bg-transparent border-none focus-visible:ring-0 h-11 pr-9"
+                            className="h-11 border-none bg-transparent px-3 pr-11 focus-visible:ring-0"
+                            style={{ paddingLeft: 12, paddingRight: 44 }}
                             disabled={busy}
                             onChange={(event) => setTitle(event.target.value)}
                             onKeyDown={(event) => {
@@ -602,7 +628,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                             variant="default"
                             size="md"
                             className="flex-1"
-                            disabled={files.length === 0 || busy || !title.trim()}
+                            disabled={selectedPaths.length === 0 || busy || !title.trim()}
                             onClick={commitAll}
                         >
                             Commit
@@ -669,22 +695,65 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                 </div>
                 <div className="flex items-center gap-2 px-2 py-1 text-sm text-text-secondary">
                     <span className="flex-1">Changes</span>
+                    {edits.length > 0 && onRejectAll && onAcceptAll ? (
+                        <span className="flex items-center gap-1">
+                            <Button variant="ghost" size="xs" onClick={onRejectAll}>Undo</Button>
+                            <Button variant="ghost" size="xs" onClick={onAcceptAll}>Keep</Button>
+                        </span>
+                    ) : null}
                     {files.length > 0 ? (
-                        <span className="rounded-full bg-primary px-1.5 text-xs text-text-primary">{files.length}</span>
+                        <span className="rounded-full bg-primary px-1.5 text-xs text-text-primary">{selectedPaths.length}/{files.length}</span>
                     ) : null}
                 </div>
                 <div className="max-h-64 overflow-y-auto">
-                    {files.length === 0 ? (
+                    {edits.map((edit) => {
+                        const name = edit.file.split(/[\\/]/).pop() || edit.file;
+                        const diff = countChangedLines(edit.original, edit.replacement);
+                        return (
+                            <div key={edit.id} className="flex items-center gap-2 px-2 py-1 text-sm">
+                                <span className="min-w-0 flex-1 truncate text-text-primary">{name}</span>
+                                <span className="shrink-0 tabular-nums text-xs">
+                                    {diff.add > 0 ? <span className="text-success">+{diff.add}</span> : null}
+                                    {diff.del > 0 ? <span className="text-error"> -{diff.del}</span> : null}
+                                </span>
+                                {onAccept ? (
+                                    <button type="button" aria-label="Keep" className="text-text-muted hover:text-success" onClick={() => onAccept(edit.id)}>
+                                        <Icon icon={Checkmark20Regular} />
+                                    </button>
+                                ) : null}
+                                {onReject ? (
+                                    <button type="button" aria-label="Undo" className="text-text-muted hover:text-error" onClick={() => onReject(edit.id)}>
+                                        <Icon icon={Dismiss20Regular} />
+                                    </button>
+                                ) : null}
+                            </div>
+                        );
+                    })}
+                    {files.length === 0 && edits.length === 0 ? (
                         <div className="px-2 py-2 text-sm text-text-muted">No changes</div>
                     ) : (
                         files.map((file) => {
                             const letter = statusLetter(file.status);
                             const folder = parentFolder(file.path);
+                            const selected = picked.includes(file.path);
                             return (
-                                <div
+                                <button
                                     key={`${file.path}-${file.staged}`}
-                                    className="flex items-center gap-2 px-2 py-1 text-sm"
+                                    type="button"
+                                    onClick={() => setPicked((current) => (
+                                        current.includes(file.path)
+                                            ? current.filter((path) => path !== file.path)
+                                            : [...current, file.path]
+                                    ))}
+                                    className="flex w-full items-center gap-2 px-2 py-1 text-left text-sm hover:bg-panel-hover"
                                 >
+                                    <Checkmark checked={selected} onCheckedChange={() => {
+                                        setPicked((current) => (
+                                            current.includes(file.path)
+                                                ? current.filter((path) => path !== file.path)
+                                                : [...current, file.path]
+                                        ));
+                                    }} />
                                     <FileIcon name={fileName(file.path)} className="size-4 shrink-0" />
                                     <span className="min-w-0 flex-1 truncate text-text-primary">{fileName(file.path)}</span>
                                     {folder ? <span className="shrink-0 text-sm text-text-muted">{folder}</span> : null}
@@ -698,7 +767,7 @@ export function CommitMenu({ projectPath }: { projectPath: string }) {
                                     >
                                         {letter}
                                     </span>
-                                </div>
+                                </button>
                             );
                         })
                     )}

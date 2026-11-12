@@ -65,4 +65,16 @@ mod tests {
             normalize_fs_path(r"C:\Users\User\Desktop\port\portfolio\")
         );
     }
+
+    #[test]
+    fn unix_spawn_cwd_keeps_absolute_slash() {
+        if cfg!(windows) {
+            return;
+        }
+        assert_eq!(spawn_cwd("/Users/ada/proj"), "/Users/ada/proj");
+        assert_eq!(
+            normalize_fs_path("/Users/ada/proj/"),
+            "/Users/ada/proj"
+        );
+    }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useLayoutEffect } from "react";
 import { usePathname } from "next/navigation";
 import Main from "@/components/layout/main";
 import { Titlebar } from "@/features/agent/workbench";
@@ -24,6 +24,7 @@ import Onboarding from "@/features/onboarding/ui/view";
 import { PromoCardHost } from "@/features/promo/host";
 import { DesignPreviewCaptureHost } from "@/features/chat/ui/design-capture";
 import { WebviewReconnect } from "@/components/layout/webview-reconnect";
+import { applyChromeDataset, useChromeKind } from "@/lib/ui/chrome-platform";
 
 function pathMatches(pathname: string | null, base: string) {
     if (!pathname) return false;
@@ -32,6 +33,10 @@ function pathMatches(pathname: string | null, base: string) {
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const chrome = useChromeKind();
+    useLayoutEffect(() => {
+        applyChromeDataset(document.documentElement, chrome);
+    }, [chrome]);
     // Prod static export uses trailing slashes (`/settings/`); match both forms.
     const isOnboarding = pathMatches(pathname, "/onboarding");
     const isSettings = pathMatches(pathname, "/settings");

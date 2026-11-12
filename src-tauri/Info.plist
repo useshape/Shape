@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Shape uses the microphone for Talk mode.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Shape opens project folders you choose.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Shape opens project folders you choose.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Shape opens project folders you choose.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Shape does not automate other apps unless you run a command that does.</string>
+</dict>
+</plist>

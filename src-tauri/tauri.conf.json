@@ -59,8 +59,13 @@
         "enable": true,
         "scope": [
           "$HOME/**",
+          "$DOCUMENTDIR/**",
+          "$DOWNLOADDIR/**",
+          "$DESKTOP/**",
           "$APPDATA/**",
           "$LOCALAPPDATA/**",
+          "$CACHE/**",
+          "$CONFIG/**",
           "$TEMP/**"
         ]
       },
@@ -89,7 +94,9 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": [
-      "nsis"
+      "nsis",
+      "dmg",
+      "app"
     ],
     "icon": [
       "icons/32x32.png",
@@ -103,6 +110,22 @@
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico"
       }
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "hardenedRuntime": false,
+      "signingIdentity": null,
+      "dmg": {
+        "appPosition": {
+          "x": 180,
+          "y": 220
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 220
+        }
+      },
+      "infoPlist": "Info.plist"
     }
   }
 }

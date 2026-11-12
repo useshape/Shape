@@ -8,7 +8,7 @@ export function OnboardingWindowChrome() {
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
-        <div className="relative z-30 flex h-titlebar w-full shrink-0 select-none" data-tauri-drag-region>
+        <div className="relative z-30 flex h-titlebar w-full shrink-0 select-none" data-tauri-drag-region data-chrome-leading="true">
             <div className="min-w-0 flex-1" aria-hidden />
             <div className="relative z-10 ml-auto flex h-full items-stretch px-1" data-no-drag>
                 <WindowControls

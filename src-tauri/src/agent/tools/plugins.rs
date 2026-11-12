@@ -165,7 +165,7 @@ pub async fn execute_plugin_search(
                 })
                 .unwrap_or_default();
             if rec.is_empty() && connected.is_empty() {
-                return "No plugins are connected. Tell the user to connect the app in Settings → Plugins."
+                return "No plugins are connected. Call plugin_connect with the app toolkit (gmail, slack, googlecalendar, …). Do not send them to Settings."
                     .to_string();
             }
             if rec.is_empty() {
@@ -233,50 +233,6 @@ pub async fn execute_plugin_run(
             serde_json::to_string(&data).unwrap_or_else(|_| "{}".to_string())
         }
         Err(e) => e,
-    }
-}
-
-/// Hidden per-turn pack picker. Fail open so a miss never blocks the main model.
-pub async fn fetch_steer(
-    access_token: &str,
-    message: &str,
-    mode: &str,
-    turn_id: Option<&str>,
-    conversation_id: Option<&str>,
-) -> crate::agent::tools::schema::SteerPacks {
-    use crate::agent::tools::schema::SteerPacks;
-    if access_token.trim().is_empty() {
-        return SteerPacks::all_on();
-    }
-    let base = crate::core::website_url::shape_website_base();
-    let url = format!("{}/api/agent/steer", base.trim_end_matches('/'));
-    let client = match reqwest::Client::builder()
-        .timeout(Duration::from_millis(2500))
-        .build()
-    {
-        Ok(c) => c,
-        Err(_) => return SteerPacks::all_on(),
-    };
-    let mut req = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", access_token))
-        .header("Content-Type", "application/json")
-        .json(&json!({
-            "message": message.chars().take(4000).collect::<String>(),
-            "mode": mode,
-        }));
-    if let Some(turn_id) = turn_id.filter(|s| !s.is_empty()) {
-        req = req.header("X-Shape-Turn-Id", turn_id);
-    }
-    if let Some(conversation_id) = conversation_id.filter(|s| !s.is_empty()) {
-        req = req.header("X-Shape-Conversation-Id", conversation_id);
-    }
-    match req.send().await {
-        Ok(resp) if resp.status().is_success() => match resp.json::<Value>().await {
-            Ok(body) => SteerPacks::from_json(&body),
-            Err(_) => SteerPacks::all_on(),
-        },
-        _ => SteerPacks::all_on(),
     }
 }
 

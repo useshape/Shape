@@ -59,6 +59,8 @@ const SHELL_DISPLAY_NAMES: Record<TerminalShell, string> = {
     cmd: "CMD",
     gitbash: "Git Bash",
     wsl: "WSL",
+    zsh: "zsh",
+    bash: "bash",
     ai: "Agent Terminal",
 };
 

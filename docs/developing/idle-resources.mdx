@@ -1,0 +1,25 @@
+---
+title: Idle resource harness
+description: Measure Shape.exe USER/GDI growth while the app sits idle.
+order: 8
+---
+
+The desktop host writes a line every 10 seconds to `%LOCALAPPDATA%\shape\ram-debug.log`. That line now includes **this process** (`handles`, `gdi`, `user`) and **WebView2 children** (`children_user`, `children_gdi`, `children_handles`).
+
+## Run
+
+With Shape already open:
+
+```bash
+bun run test:idle
+```
+
+Thirty minutes:
+
+```bash
+bun run test:idle -- --duration 1800
+```
+
+The harness attaches to a running `Shape.exe`. It does not start a second copy unless you set `SHAPE_EXE` to a built binary. `--history` scores the existing ram-debug log when the app is not running.
+
+JSONL and a summary land in `tests/diagnostics/` (gitignored). The command fails when host USER grows faster than 30 objects per minute over at least five minutes.

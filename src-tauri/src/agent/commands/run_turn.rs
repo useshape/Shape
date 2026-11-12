@@ -7,7 +7,6 @@ use super::logging;
 use super::streaming::{self, ProxyContext};
 use crate::agent::model_router;
 use crate::agent::models::AgentState;
-use crate::agent::tools::page_shot;
 use crate::agent::tools::dispatch::{self, SideEffect, ToolCtx, ToolOutcome};
 use crate::commands::pty::PtyState;
 use crate::core::error::AppError;
@@ -301,12 +300,25 @@ fn is_repeat_prose(existing: &str, incoming: &str) -> bool {
     prefix.chars().count() >= 80 && existing.contains(&prefix)
 }
 
-/// After a real answer, skip the "nothing more to do / answer is up above" reprise.
+/// Skip the model narrating its own stop. A short "nothing left to do" is not a reply.
 fn is_redundant_coda(existing: &str, incoming: &str) -> bool {
+    let lower = strip_tool_markup(incoming).to_lowercase();
+    let trimmed = lower.trim();
+    let short = trimmed.chars().count() < 320;
+    if short
+        && (trimmed.contains("nothing left to do")
+            || trimmed.contains("nothing more to do")
+            || trimmed.contains("nothing else to do")
+            || trimmed.contains("no further action")
+            || trimmed.contains("the answer is up above")
+            || trimmed.contains("there is nothing left")
+            || trimmed.contains("there's nothing left"))
+    {
+        return true;
+    }
     if !has_substantive_text(existing) {
         return false;
     }
-    let lower = strip_tool_markup(incoming).to_lowercase();
     lower.contains("nothing more to do")
         || lower.contains("the answer is up above")
         || lower.contains("that was a question, not a change request")
@@ -485,6 +497,11 @@ pub struct AgentTurnConfig<'a> {
     pub proxy_model: &'a str,
     pub mode: &'a str,
     pub project_path: &'a str,
+    /// Where this conversation is saved. Chat tools run in a scratch folder, so this
+    /// stays the talk store instead of that folder.
+    pub history_store: &'a str,
+    /// Open code project Chat must not modify. None in Code.
+    pub sealed_project: Option<&'a str>,
     pub app_handle: &'a tauri::AppHandle,
     pub agent_state: &'a AgentState,
     pub index_state: Option<&'a crate::agent::index::IndexState>,
@@ -508,10 +525,14 @@ pub struct AgentTurnOutcome {
 }
 
 fn emit_turn_chat_token(config: &AgentTurnConfig<'_>, chunk: impl Into<String>) {
+    let chunk = crate::agent::tools::browse::strip_data_urls(&chunk.into());
+    if chunk.is_empty() {
+        return;
+    }
     let _ = config.app_handle.emit(
         "chat_token",
         json!({
-            "chunk": chunk.into(),
+            "chunk": chunk,
             "turnId": config.proxy_ctx.turn_id,
             "conversationId": config.proxy_ctx.conversation_id,
         }),
@@ -544,24 +565,20 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     let mut consecutive_readonly_rounds = 0usize;
     let mut explore_nudge_sent = false;
     let mut last_round_failed = false;
-    let mut page_shots: Vec<String> = Vec::new();
     let mut denied_paths: HashSet<String> = HashSet::new();
 
     let turn_id = config.proxy_ctx.turn_id.clone();
     let conversation_id = config.proxy_ctx.conversation_id.clone();
     crate::agent::parent_resume::set_parent_turn_active(conversation_id.as_deref(), true);
-    struct ParentTurnGuard<'a> {
-        app: &'a tauri::AppHandle,
+    struct ParentTurnGuard {
         id: Option<String>,
     }
-    impl Drop for ParentTurnGuard<'_> {
+    impl Drop for ParentTurnGuard {
         fn drop(&mut self) {
             crate::agent::parent_resume::set_parent_turn_active(self.id.as_deref(), false);
-            crate::agent::parent_resume::schedule_wake_if_idle(self.app, self.id.as_deref());
         }
     }
     let _parent_guard = ParentTurnGuard {
-        app: config.app_handle,
         id: conversation_id.clone(),
     };
 
@@ -597,6 +614,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         }
     }
     let _ram_sampler_guard = RamSamplerGuard(ram_stop.clone());
+    let mut live_tools = config.tools.to_vec();
+    let mut pack_sig = String::new();
 
     'outer: loop {
         if config.cancel.is_cancelled() {
@@ -629,13 +648,12 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         );
 
         if let Some(cid) = conversation_id.as_deref() {
-            let mut updates = crate::agent::subagents::take_parent_updates(cid);
-            updates.extend(crate::agent::parent_resume::take_pending(cid));
+            let updates = crate::agent::parent_resume::take_pending(cid);
             if !updates.is_empty() {
                 let body = updates.join("\n\n");
                 config.api_messages.push(json!({
                     "role": "user",
-                    "content": format!("<subagent_update>\n{body}\n</subagent_update>\nIncorporate this if it is relevant and keep working. Do not wait for more subagents unless you need their output."),
+                    "content": format!("<subagent_update>\n{body}\n</subagent_update>\nThe background thread finished. Use this result and reply to the user. Do not stay silent, and do not wait for another thread unless you still need it."),
                 }));
             }
         }
@@ -643,14 +661,47 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         // Reset the UI activity label: we're back in the model, not a tool.
         streaming::emit_chat_status(
             &config.app_handle,
-            json!({ "phase": "model" }),
+            json!({ "phase": "model", "conversationId": conversation_id }),
         );
+
+        if !config.mode.eq_ignore_ascii_case("agent") {
+            let conv = conversation_id.clone().unwrap_or_default();
+            let packs = config.agent_state.session_packs(&conv);
+            let sig = packs.signature();
+            if sig != pack_sig {
+                let steer = crate::agent::tools::schema::SteerPacks {
+                    workspace: packs.workspace,
+                    plugins: packs.plugins,
+                    browse: packs.browse,
+                    web: packs.web,
+                    git: packs.git,
+                    terminal: packs.terminal,
+                    media: packs.media,
+                    reverse: packs.reverse,
+                    hint: String::new(),
+                };
+                live_tools = crate::agent::tools::schema::assemble_tools(
+                    model_router::model_family(config.model),
+                    &steer,
+                    config.mode,
+                    config.agent_state.chat_memory_enabled(),
+                );
+                if config.agent_state.review_adversarial_enabled() {
+                    crate::agent::tools::schema::include_adversarial_review(&mut live_tools);
+                }
+                pack_sig = sig;
+            }
+        }
+        if crate::agent::subagents::spawn_depth(conversation_id.as_deref()) >= 2 {
+            crate::agent::tools::schema::strip_spawn_subagent(&mut live_tools);
+        }
+        let allowed_tool_names = crate::agent::tools::schema::listed_tool_names(&live_tools);
 
         let outcome = match streaming::stream_chat_with_retry(
             config.client,
             config.api_key,
             config.api_messages,
-            config.tools,
+            &live_tools,
             config.app_handle,
             config.cancel.clone(),
             config.proxy_model,
@@ -674,6 +725,12 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
         };
 
+        if outcome.cached_tokens > 0 {
+            logging::info(
+                "chat",
+                &format!("Prompt cache read {} tokens", outcome.cached_tokens),
+            );
+        }
         record_usage(&config, outcome.input_tokens, outcome.output_tokens);
         total_input_tokens += outcome.input_tokens;
         total_output_tokens += outcome.output_tokens;
@@ -697,7 +754,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 );
                 streaming::emit_chat_status(
                     &config.app_handle,
-                    json!({ "phase": "model", "label": "Retrying after model error" }),
+                    json!({ "phase": "model", "label": "Retrying after model error", "conversationId": conversation_id }),
                 );
                 continue;
             }
@@ -778,7 +835,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 }));
                 streaming::emit_chat_status(
                     &config.app_handle,
-                    json!({ "phase": "model", "label": "Continuing" }),
+                    json!({ "phase": "model", "label": "Continuing", "conversationId": conversation_id }),
                 );
                 continue;
             }
@@ -871,7 +928,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             if tool_calls[0].name != "decide" {
                 streaming::emit_chat_status(
                     &config.app_handle,
-                    json!({ "phase": "tool", "tool": tool_calls[0].name }),
+                    json!({ "phase": "tool", "tool": tool_calls[0].name, "conversationId": conversation_id }),
                 );
             }
 
@@ -931,6 +988,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     pty_state: config.pty_state,
                     turn_id: turn_id.clone(),
                     conversation_id: conversation_id.clone(),
+                    sealed_project: config.sealed_project,
+                    allowed_tools: Some(allowed_tool_names.as_slice()),
                 })
                 .collect();
 
@@ -994,7 +1053,6 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 }
                 if let Some(SideEffect::PageScreenshot { tag }) = &tool_outcome.side_effect {
                     let tag = tag.clone();
-                    page_shots.push(tag.clone());
                     drop_prior_page_shots(config.api_messages);
                     inject_page_screenshot(&mut config, &tag).await;
                 }
@@ -1053,7 +1111,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
 
             if call.name != "decide" {
-                let tool_status = if call.name == "render_design_previews" {
+                let mut tool_status = if call.name == "render_design_previews" {
                     json!({
                         "phase": "tool",
                         "tool": call.name,
@@ -1062,6 +1120,10 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 } else {
                     json!({ "phase": "tool", "tool": call.name })
                 };
+                if let Some(obj) = tool_status.as_object_mut() {
+                    obj.entry("conversationId")
+                        .or_insert(json!(conversation_id));
+                }
                 streaming::emit_chat_status(&config.app_handle, tool_status);
             }
 
@@ -1281,6 +1343,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 pty_state: config.pty_state,
                 turn_id: turn_id.clone(),
                 conversation_id: conversation_id.clone(),
+                sealed_project: config.sealed_project,
+                allowed_tools: Some(allowed_tool_names.as_slice()),
             };
 
             let tool_outcome = dispatch::execute_tool(&call.name, &call.arguments, &ctx).await;
@@ -1395,7 +1459,6 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     SideEffect::PageScreenshot { tag } => {
                         drop_prior_page_shots(config.api_messages);
                         inject_page_screenshot(&mut config, &tag).await;
-                        page_shots.push(tag);
                     }
                 }
             }
@@ -1486,11 +1549,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             .await;
     }
 
-    if !page_shots.is_empty() {
-        final_full_response = page_shot::place_page_screenshots(&final_full_response, &page_shots);
-    } else if final_full_response.contains("<attached_image") {
-        final_full_response = page_shot::place_page_screenshots(&final_full_response, &[]);
-    }
+    // Page JPEGs stay in the model follow-up (`inject_page_screenshot`) and the
+    // live Browser pane. Putting them in the assistant transcript froze the UI
+    // (100k+ character data URLs on every save and render).
 
     // `chat_complete` (with stats) is emitted from `send_chat_message` after the turn returns.
 
@@ -1532,13 +1593,12 @@ fn is_injected_page_shot(msg: &Value) -> bool {
     if msg.get("role").and_then(|role| role.as_str()) != Some("user") {
         return false;
     }
-    const MARKER: &str = "screenshot_page captured";
     match msg.get("content") {
-        Some(Value::String(text)) => text.contains(MARKER),
+        Some(Value::String(text)) => super::messages::is_page_shot_text(text),
         Some(Value::Array(parts)) => parts.iter().any(|part| {
             part.get("text")
                 .and_then(|text| text.as_str())
-                .is_some_and(|text| text.contains(MARKER))
+                .is_some_and(super::messages::is_page_shot_text)
         }),
         _ => false,
     }
@@ -1562,7 +1622,8 @@ async fn inject_page_screenshot(config: &mut AgentTurnConfig<'_>, tag: &str) {
             config.api_messages.push(json!({
                 "role": "user",
                 "content": format!(
-                    "screenshot_page captured this page.\n\n[image description]\n{desc}\n\nUse this description. Build Error overlays, blank/white pages, missing layout, or crash screens mean keep fixing."
+                    "{}\n\n[image description]\n{desc}\n\nUse this description. If the image does not show the goal, keep working.",
+                    super::messages::page_shot_lead(tag)
                 ),
             }));
         }
@@ -1590,10 +1651,12 @@ fn track_stream_chunk(config: &AgentTurnConfig<'_>, chunk: &str, activity_label:
     if chunk.is_empty() {
         return;
     }
-    let proj = if config.project_path.is_empty() {
+    let proj = if config.history_store.is_empty()
+        || crate::agent::commands::history::is_chat_work_dir(config.history_store)
+    {
         None
     } else {
-        Some(config.project_path)
+        Some(config.history_store)
     };
     config
         .agent_state
@@ -1625,12 +1688,12 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
         upsert_tagged_block(accumulated, chunk, "<todos", "</todos>");
         return;
     }
-    if chunk.contains("<generated_svg") {
-        upsert_tagged_block(accumulated, chunk, "<generated_svg", "</generated_svg>");
-        return;
-    }
-    if chunk.contains("<generated_image") {
-        upsert_tagged_block(accumulated, chunk, "<generated_image", "</generated_image>");
+    if chunk.contains("<generated_svg")
+        || chunk.contains("<generated_image")
+        || chunk.contains("<generated_audio")
+        || chunk.contains("<generated_model")
+    {
+        upsert_media_chunk(accumulated, chunk);
         return;
     }
     let tag = if chunk.contains("<terminal_command") {
@@ -1665,6 +1728,46 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
 
     let block_end = block_start + rel_end + tag.1.len();
     accumulated.replace_range(block_start..block_end, chunk);
+}
+
+fn upsert_media_chunk(accumulated: &mut String, chunk: &str) {
+    let Some(id) = extract_xml_attr(chunk, "media_id") else {
+        accumulated.push_str(chunk);
+        return;
+    };
+    let marker = format!("media_id=\"{id}\"");
+    let Some(marker_pos) = accumulated.rfind(&marker) else {
+        accumulated.push_str(chunk);
+        return;
+    };
+    let start_tag = if chunk.contains("<generated_svg") {
+        "<generated_svg"
+    } else if chunk.contains("<generated_audio") {
+        "<generated_audio"
+    } else if chunk.contains("<generated_model") {
+        "<generated_model"
+    } else {
+        "<generated_image"
+    };
+    let end_tag = if chunk.contains("<generated_svg") {
+        "</generated_svg>"
+    } else if chunk.contains("<generated_audio") {
+        "</generated_audio>"
+    } else if chunk.contains("<generated_model") {
+        "</generated_model>"
+    } else {
+        "</generated_image>"
+    };
+    let Some(block_start) = accumulated[..marker_pos].rfind(start_tag) else {
+        accumulated.push_str(chunk);
+        return;
+    };
+    let Some(rel_end) = accumulated[block_start..].find(end_tag) else {
+        accumulated.push_str(chunk);
+        return;
+    };
+    let block_end = block_start + rel_end + end_tag.len();
+    accumulated.replace_range(block_start..block_end, chunk.trim());
 }
 
 fn upsert_tagged_block(accumulated: &mut String, chunk: &str, start_tag: &str, end_tag: &str) {
@@ -1717,6 +1820,42 @@ mod file_cache_tests {
         assert!(cache.contains_key("c.rs"));
         assert!(cache.len() <= 2);
     }
+
+    #[test]
+    fn generated_images_append_until_the_same_id_is_revised() {
+        let mut text = String::new();
+        upsert_media_chunk(
+            &mut text,
+            "<generated_image media_id=\"a\">one</generated_image>",
+        );
+        upsert_media_chunk(
+            &mut text,
+            "<generated_image media_id=\"b\">two</generated_image>",
+        );
+        assert!(text.contains("one") && text.contains(">two<"));
+        upsert_media_chunk(
+            &mut text,
+            "<generated_image media_id=\"b\">three</generated_image>",
+        );
+        assert!(text.contains("one"));
+        assert!(text.contains("three"));
+        assert!(!text.contains(">two<"));
+    }
+
+    #[test]
+    fn generated_model_revisions_replace_the_same_media_id() {
+        let mut text = String::new();
+        upsert_media_chunk(
+            &mut text,
+            "<generated_model media_id=\"m1\" name=\"a.glb\"></generated_model>",
+        );
+        upsert_media_chunk(
+            &mut text,
+            "<generated_model media_id=\"m1\" name=\"b.glb\"></generated_model>",
+        );
+        assert!(text.contains("b.glb"));
+        assert!(!text.contains("a.glb"));
+    }
 }
 
 #[cfg(test)]
@@ -1751,6 +1890,8 @@ This IDE has a few modes, and design work lives in Visual mode.\n\
         let first = "Design mode lives in Visual mode. Switch with the mode selector.";
         let coda = "Nothing more to do here — that was a question, not a change request. The answer is up above.";
         assert!(is_redundant_coda(first, coda));
-        assert!(!is_redundant_coda("", coda));
+        assert!(is_redundant_coda("", coda));
+        assert!(is_redundant_coda("", "There's nothing left to do."));
+        assert!(!is_redundant_coda("", "The restaurant is open until 10."));
     }
 }

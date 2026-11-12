@@ -792,7 +792,58 @@ pub fn pty_available_shells() -> Result<Vec<ShellProfile>, AppError> {
         });
     }
 
+    if let Some(path) = unix_shell_path("zsh") {
+        shells.push(ShellProfile {
+            id: "zsh".to_string(),
+            label: "zsh".to_string(),
+            path,
+        });
+    }
+
+    if let Some(path) = unix_shell_path("bash") {
+        shells.push(ShellProfile {
+            id: "bash".to_string(),
+            label: "bash".to_string(),
+            path,
+        });
+    }
+
     Ok(shells)
+}
+
+fn unix_shell_path(name: &str) -> Option<String> {
+    command_exists(name).or_else(|| {
+        for candidate in [
+            format!("/bin/{name}"),
+            format!("/usr/bin/{name}"),
+            format!("/usr/local/bin/{name}"),
+            format!("/opt/homebrew/bin/{name}"),
+        ] {
+            if std::path::Path::new(&candidate).is_file() {
+                return Some(candidate);
+            }
+        }
+        None
+    })
+}
+
+fn default_pty_shell() -> String {
+    if cfg!(windows) {
+        "powershell.exe".to_string()
+    } else if cfg!(target_os = "macos") {
+        "zsh".to_string()
+    } else {
+        "bash".to_string()
+    }
+}
+
+fn unix_login_shell(name: &str) -> CommandBuilder {
+    let path = unix_shell_path(name).unwrap_or_else(|| name.to_string());
+    log::info!("Spawning unix shell from: {}", path);
+    let mut builder = CommandBuilder::new(&path);
+    builder.arg("-l");
+    builder.arg("-i");
+    builder
 }
 
 pub async fn pty_spawn(
@@ -817,11 +868,17 @@ pub async fn spawn_session(
     rows: u16,
     cols: u16,
 ) -> Result<u32, AppError> {
-    let shell_name = shell
-        .unwrap_or_else(|| "powershell.exe".to_string())
-        .to_lowercase();
+    let shell_name = shell.unwrap_or_else(default_pty_shell).to_lowercase();
 
-    let cmd = if shell_name.contains("bash") || shell_name.contains("git") {
+    let cmd = if !cfg!(windows)
+        && (shell_name == "zsh" || shell_name.ends_with("/zsh") || shell_name.contains("zsh"))
+    {
+        unix_login_shell("zsh")
+    } else if !cfg!(windows)
+        && (shell_name == "bash" || shell_name.ends_with("/bash") || shell_name.contains("bash"))
+    {
+        unix_login_shell("bash")
+    } else if cfg!(windows) && (shell_name.contains("bash") || shell_name.contains("git")) {
         let bash_path = find_git_bash().unwrap_or_else(|| "bash.exe".to_string());
         log::info!("Spawning Git Bash from: {}", bash_path);
         let mut builder = CommandBuilder::new(&bash_path);
@@ -897,6 +954,16 @@ fn common_node_bin_dirs() -> Vec<PathBuf> {
     if let Ok(appdata) = std::env::var("APPDATA") {
         push_if_dir(PathBuf::from(appdata).join("npm"));
     }
+    if let Ok(home) = std::env::var("HOME") {
+        let home = PathBuf::from(home);
+        push_if_dir(home.join(".local").join("bin"));
+        push_if_dir(home.join(".fnm"));
+        push_if_dir(home.join("Library").join("pnpm"));
+        push_if_dir(home.join(".nvm").join("current").join("bin"));
+    }
+    push_if_dir(PathBuf::from("/usr/local/bin"));
+    push_if_dir(PathBuf::from("/opt/homebrew/bin"));
+    push_if_dir(PathBuf::from("/opt/homebrew/opt/node/bin"));
     dirs
 }
 
