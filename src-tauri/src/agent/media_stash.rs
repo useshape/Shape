@@ -100,16 +100,6 @@ fn ext_for(mime: &str, kind: &str) -> &'static str {
         "wav"
     } else if kind == "audio" {
         "mp3"
-    } else if m.contains("gltf-binary") || kind == "model" || kind == "glb" {
-        "glb"
-    } else if m.contains("gltf") || kind == "gltf" {
-        "gltf"
-    } else if kind == "obj" || m.ends_with("/obj") {
-        "obj"
-    } else if kind == "stl" || m.contains("stl") {
-        "stl"
-    } else if kind == "fbx" {
-        "fbx"
     } else {
         "bin"
     }
@@ -305,20 +295,20 @@ mod tests {
     static LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
-    fn stashes_glb_with_model_extension_and_ledger() {
+    fn stashes_png_with_ledger() {
         let _g = LOCK.lock().unwrap();
         let dir = std::env::temp_dir().join(format!("shape-media-test-{}", Uuid::new_v4()));
         let _ = fs::create_dir_all(&dir);
         std::env::set_var("SHAPE_MEDIA_DIR", &dir);
         reset_index_for_tests();
-        let bytes = b"glTF\x02\x00\x00\x00";
+        let bytes = b"\x89PNG\r\n\x1a\n";
         let entry = stash_bytes_meta(
             bytes,
-            "model/gltf-binary",
-            "model",
+            "image/png",
+            "image",
             Some("conv-1"),
-            Some("low-poly sword"),
-            Some("sword.glb"),
+            Some("hero"),
+            Some("hero.png"),
             StashMeta {
                 parent_id: Some("parent-9".into()),
                 ordinal: Some(1),
@@ -326,12 +316,12 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(entry.path.ends_with(".glb"), "{}", entry.path);
-        assert_eq!(entry.kind, "model");
+        assert!(entry.path.ends_with(".png"), "{}", entry.path);
+        assert_eq!(entry.kind, "image");
         let ledger = ledger_for_conversation("conv-1");
         assert!(ledger.contains("Media in this conversation"));
         assert!(ledger.contains(&entry.id));
-        assert!(ledger.contains("kind=model"));
+        assert!(ledger.contains("kind=image"));
         let loaded = payload(&entry.id).unwrap();
         assert_eq!(loaded.bytes, bytes);
         assert_eq!(loaded.parent_id.as_deref(), Some("parent-9"));

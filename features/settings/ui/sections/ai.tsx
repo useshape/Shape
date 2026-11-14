@@ -272,7 +272,7 @@ export function AiSettingsPanel({
                     <SettingSection
                         id="settings-ai-subagents"
                         title="Subagents"
-                        description="Background agents use Auto unless you pick other models here. Named models fall back to Auto if you run out of credits."
+                        description="Background agents use a free model unless you pick other models here. Named models fall back to free usage if you run out of usage."
                     >
                         <SettingCard>
                             {displayedSubagentModels.map((model) => (
@@ -343,7 +343,7 @@ export function AiSettingsPanel({
             </SettingSection>
 
             <SettingSection title="Default">
-                <SettingRow title="Default model" description="Used when a chat is set to Auto.">
+                <SettingRow title="Default model" description="Used when a chat is set to a free model.">
                     <SettingSelect
                         value={a.defaultModel}
                         options={visibleModels.map((m) => ({ value: m.id, label: m.name }))}

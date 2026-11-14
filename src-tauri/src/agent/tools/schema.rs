@@ -87,10 +87,6 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         generate_image(),
         generate_audio(),
         edit_image(),
-        generate_3d_model(),
-        edit_3d_model(),
-        inspect_3d_model(),
-        convert_3d_model(),
         save_media(),
         send_file(),
         re_catalog(),
@@ -102,6 +98,7 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         re_callgraph(),
         re_extract(),
         ask_user(),
+        save_plan(),
         finish(),
     ]);
     tools
@@ -295,7 +292,6 @@ fn steer_pack_for(name: &str) -> Option<&'static str> {
             Some("terminal")
         }
         "generate_svg" | "generate_image" | "generate_audio" | "edit_image" | "save_media"
-        | "generate_3d_model" | "edit_3d_model" | "inspect_3d_model" | "convert_3d_model"
         | "inspect_computer" | "show_images" => Some("media"),
         "send_file" => Some("workspace"),
         "re_catalog" | "re_identify" | "re_inspect" | "re_strings" | "re_disassemble"
@@ -353,10 +349,6 @@ pub fn apply_talk_tools(tools: Vec<Value>) -> Vec<Value> {
         "edit_image",
         "generate_svg",
         "generate_audio",
-        "generate_3d_model",
-        "edit_3d_model",
-        "inspect_3d_model",
-        "convert_3d_model",
         "save_media",
         "send_file",
         "re_catalog",
@@ -419,9 +411,6 @@ const MUTATING_TOOLS: &[&str] = &[
     "git_sync",
     "git_worktree",
     "update_todos",
-    "browse",
-    "screenshot_page",
-    "inspect_runtime",
     "design_review",
     "render_design_previews",
     "plugin_run",
@@ -429,9 +418,6 @@ const MUTATING_TOOLS: &[&str] = &[
     "generate_image",
     "generate_audio",
     "edit_image",
-    "generate_3d_model",
-    "edit_3d_model",
-    "convert_3d_model",
     "save_media",
     "re_extract",
     "mcp_call",
@@ -460,7 +446,7 @@ pub fn assemble_tools(
             name != "list_chats" && name != "read_chat"
         });
     }
-    if capability.eq_ignore_ascii_case("plan") {
+    if !tools.iter().any(|tool| tool_fn_name(tool) == "save_plan") {
         insert_before_finish(&mut tools, save_plan());
     }
     if !tools.iter().any(|tool| tool_fn_name(tool) == "load_tools") {
@@ -1087,7 +1073,7 @@ fn save_plan() -> Value {
 fn spawn_subagent() -> Value {
     tool(
         "spawn_subagent",
-        "Start a background thread under this chat and return immediately. It is not a separate chat tab. You can finish this turn. A hidden <subagent_update> resumes you when the thread finishes — then use the result and reply. Default isolation is `shared` (same checkout; concurrent file edits can overwrite each other). Use `worktree` for true parallel coding (separate directory + branch). Never merge their branch yourself. Do not spawn a thread for the whole user request.",
+        "Start one background thread under this chat and return immediately. It is not a separate chat tab. You can finish this turn. A hidden <subagent_update> resumes you when the thread finishes — then use the result and reply. Call this once per user request unless they explicitly asked for more than one thread. Never split one request into extra threads, and never call this again after a thread has already started. Default isolation is `shared` (same checkout; concurrent file edits can overwrite each other). Use `worktree` for true parallel coding (separate directory + branch). Never merge their branch yourself. Do not spawn a thread for the whole user request.",
         json!({
             "type": "object",
             "properties": {
@@ -1424,72 +1410,6 @@ fn send_file() -> Value {
     )
 }
 
-fn generate_3d_model() -> Value {
-    tool(
-        "generate_3d_model",
-        "Build a 3D model locally (GLB) from a scene spec. Preview appears in chat as an interactive model with a download button. Do not write the project unless they asked — then save_media. Prefer a spec with named parts (box, sphere, cylinder, cone, plane), size, position, rotation degrees, and PBR color. If they asked for a low-poly object and you skip spec, a simple template is used. backend blender only if inspect_computer lookup found blender.",
-        json!({
-            "type": "object",
-            "properties": {
-                "prompt": {"type": "string", "description": "What to build. Used for the chat caption and as a template hint."},
-                "spec": {"type": "object", "description": "Scene: {name, parts:[{id, mesh, size[3], position[3], rotation[3], material:{color, metalness, roughness}}]}", "additionalProperties": true},
-                "backend": {"type": "string", "description": "native (default) or blender."}
-            },
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn edit_3d_model() -> Value {
-    tool(
-        "edit_3d_model",
-        "Edit a prior 3D model by media_id (or project path). Pass ops (scale/move/rotate/recolor on a part id) or a replacement spec. Returns a new media_id with parent_id set. Preview updates in chat. The previous artifact stays.",
-        json!({
-            "type": "object",
-            "properties": {
-                "prompt": {"type": "string", "description": "What changed, for the caption."},
-                "media_id": {"type": "string", "description": "Stashed model id."},
-                "path": {"type": "string", "description": "Project-relative GLB if it is already a file."},
-                "ops": {"type": "array", "items": {"type": "object", "additionalProperties": true}, "description": "[{op, part, by:[x,y,z]|color}] op is scale, move, rotate, or recolor."},
-                "spec": {"type": "object", "additionalProperties": true}
-            },
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn inspect_3d_model() -> Value {
-    tool(
-        "inspect_3d_model",
-        "Report meshes, materials, part ids, and the stored scene spec for a GLB (media_id or path). Read-only.",
-        json!({
-            "type": "object",
-            "properties": {
-                "media_id": {"type": "string"},
-                "path": {"type": "string"}
-            },
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn convert_3d_model() -> Value {
-    tool(
-        "convert_3d_model",
-        "Convert a stashed or project 3D model. format: glb, gltf, obj, stl. FBX needs Blender. Returns a new media_id. Does not delete the original.",
-        json!({
-            "type": "object",
-            "properties": {
-                "media_id": {"type": "string"},
-                "path": {"type": "string"},
-                "format": {"type": "string", "description": "glb, gltf, obj, or stl."}
-            },
-            "required": ["format"],
-            "additionalProperties": false
-        }),
-    )
-}
-
 fn re_catalog() -> Value {
     tool(
         "re_catalog",
@@ -1608,12 +1528,12 @@ fn show_map() -> Value {
 fn save_media() -> Value {
     tool(
         "save_media",
-        "Write generated or attached media into the project. Prefer `media_id` from generate_*/edit_image/generate_3d_model (already on disk). Also accepts attachment name, data: URL, or https URL. ONLY when the user asked to save, move, or use the media as a file. Never ask them to download first. Does not delete the chat artifact.",
+        "Write generated or attached media into the project. Prefer `media_id` from generate_image, generate_svg, generate_audio, or edit_image (already on disk). Also accepts attachment name, data: URL, or https URL. ONLY when the user asked to save, move, or use the media as a file. Never ask them to download first. Does not delete the chat artifact.",
         json!({
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Project-relative destination, e.g. public/hero.png, src/assets/sword.glb."},
-                "media_id": {"type": "string", "description": "Id returned by generate_svg/generate_image/generate_audio/edit_image/generate_3d_model/edit_3d_model."},
+                "path": {"type": "string", "description": "Project-relative destination, e.g. public/hero.png or notes/brief.pdf."},
+                "media_id": {"type": "string", "description": "Id returned by generate_svg, generate_image, generate_audio, or edit_image."},
                 "attachment": {"type": "string", "description": "Filename of a user-attached image in this chat."},
                 "url": {"type": "string", "description": "https or data: URL from generation."}
             },
@@ -1626,14 +1546,12 @@ fn save_media() -> Value {
 fn browse() -> Value {
     tool(
         "browse",
-        "Open a page in the in-app browser and drive it. Use this to navigate, click through, test, and debug a site, including the local app you just started. \
-A screenshot is attached when the view changes. Read it with the element list. \
+        "The visual in-app browser. Use this, not visit_url, when the user asks to browse, navigate, open, or click through a site. visit_url only fetches text and is not a browser. The user already sees the page, so do not stop to look between moves. \
 Start with action open and a full url (http://localhost:PORT/path or https://…). \
-Then action act with an element id from the last result. \
-Pass steps to run several actions in one call and get a single snapshot back. \
-action check verifies visible text with expect or absent. \
-action devtools reads console, network, css, js, or performance. \
-Also: click, type, scroll, script, shot, stop. Do not call observe between moves. If an element has an href, open that URL instead of clicking it.",
+Then pass steps: up to 8 clicks, types, and scrolls in ONE call. You get a single element list back after the batch. \
+That is the fast path. A separate call per click waits on another full generation. Do not write prose between browse calls. \
+Do not call observe or shot unless the page failed to load. If an element has an href, open that URL instead of clicking it. \
+action devtools reads console, network, css, js, or performance. Also: act, click, type, scroll, script, check, stop.",
         json!({
             "type": "object",
             "properties": {
@@ -1964,7 +1882,7 @@ If lookup finds nothing, the program is not on PATH. Do not invent a path. Text 
 fn visit_url() -> Value {
     tool(
         "visit_url",
-        "Open a public webpage and extract its text, structure, and styling cues (colors, fonts, theme). Use when the user pastes a URL, asks you to recreate/reference a site, or @-mentions a browser/site. Prefer this over web_search when you need the actual page contents.",
+        "Fetch a public page as text. This is not a browser: you cannot click, scroll, or show the page. If the user wants to browse, navigate, or look at a site, call browse instead.",
         json!({
             "type": "object",
             "properties": {

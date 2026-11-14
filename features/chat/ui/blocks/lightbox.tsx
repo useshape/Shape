@@ -4,13 +4,12 @@ import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
-import { SHAPE_OVERLAY_CLASS } from "@/lib/ui/modal-overlay";
 import type { DesignPreviewItem } from "./gallery";
-import { ModelPreview } from "./model-preview";
 
 function resolveSrc(path: string): string {
     if (path.startsWith("data:") || path.startsWith("http") || path.startsWith("asset:")) {
@@ -43,7 +42,7 @@ export function MediaLightbox({
     onClose: () => void;
     src?: string;
     title?: string;
-    kind?: "image" | "html" | "model";
+    kind?: "image" | "html";
     designs?: DesignPreviewItem[];
     images?: { src: string; title?: string }[];
     initialIndex?: number;
@@ -88,12 +87,12 @@ export function MediaLightbox({
     const showHtml = design ? isHtml(design) : kind === "html";
     const label = design?.name || galleryImage?.title || title || "Preview";
 
-    return (
+    const host = typeof document === "undefined" ? null : document.getElementById("shape-overlays") ?? document.body;
+    if (!host) return null;
+
+    return createPortal(
         <div
-            className={cn(
-                "fixed inset-0 z-[200] flex flex-col items-center justify-center gap-4 p-6",
-                SHAPE_OVERLAY_CLASS,
-            )}
+            className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-4 bg-black/70 p-6"
             role="dialog"
             aria-modal="true"
             aria-label={label}
@@ -119,11 +118,6 @@ export function MediaLightbox({
                         src={resolved}
                         className="h-[min(80vh,900px)] w-[min(92vw,1200px)] border-0 bg-white"
                         sandbox="allow-scripts"
-                    />
-                ) : kind === "model" ? (
-                    <ModelPreview
-                        src={resolved}
-                        className="h-[min(80vh,720px)] w-[min(92vw,960px)] max-w-none"
                     />
                 ) : (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -160,6 +154,7 @@ export function MediaLightbox({
                     ))}
                 </div>
             ) : null}
-        </div>
+        </div>,
+        host,
     );
 }

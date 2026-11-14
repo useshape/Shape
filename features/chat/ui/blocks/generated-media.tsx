@@ -1,22 +1,28 @@
 "use client";
 
+import { ArrowDownload20Regular } from "@fluentui/react-icons/headless/svg/arrow-download";
 import { ArrowMaximize20Regular } from "@fluentui/react-icons/headless/svg/arrow-maximize";
 import React, { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend/commands";
 import { saveDownloadBytesOrNotify, saveDownloadOrNotify } from "@/lib/ui/save-download";
 import { MediaLightbox } from "./lightbox";
-import { ModelPreview } from "./model-preview";
+import { GeneratingMediaFrame } from "./border-glow";
 
-export type GeneratedMediaKind = "svg" | "image" | "audio" | "model";
+export type GeneratedMediaKind = "svg" | "image" | "audio";
 
 function defaultName(kind: GeneratedMediaKind, prompt?: string, given?: string): string {
     if (given?.trim()) return given.trim();
     const slug = (prompt || "generated").replace(/[^\w.-]+/g, "-").slice(0, 40);
-    if (kind === "model") return `${slug}.glb`;
     if (kind === "svg") return `${slug}.svg`;
     if (kind === "audio") return `${slug}.mp3`;
     return `${slug}.png`;
@@ -24,7 +30,6 @@ function defaultName(kind: GeneratedMediaKind, prompt?: string, given?: string):
 
 function mimeFor(kind: GeneratedMediaKind, mime?: string): string {
     if (mime) return mime;
-    if (kind === "model") return "model/gltf-binary";
     if (kind === "svg") return "image/svg+xml";
     if (kind === "audio") return "audio/mpeg";
     return "image/png";
@@ -93,7 +98,6 @@ export function GeneratedMediaCard({
     const label = useMemo(() => {
         if (kind === "svg") return "SVG";
         if (kind === "audio") return "Audio";
-        if (kind === "model") return "3D model";
         return "Image";
     }, [kind]);
 
@@ -104,23 +108,37 @@ export function GeneratedMediaCard({
         return <p className="my-2 text-sm text-text-muted">{error}</p>;
     }
     if (loading) {
-        return (
-            <div
-                className="preview-shimmer my-2 h-[280px] w-full max-w-[360px] overflow-hidden rounded-[18px]"
-                aria-hidden
-            >
-                <span className="preview-shimmer-blob" />
-            </div>
-        );
+        return <GeneratingMediaFrame />;
     }
     if (!resolvedSrc) return null;
 
-    const download = () => {
-        if (bytes) {
-            void saveDownloadBytesOrNotify(fileName, bytes, mime);
+    const download = (as?: "png" | "jpeg") => {
+        const base = fileName.replace(/\.[^.]+$/, "") || "image";
+        if (!as) {
+            if (bytes) {
+                void saveDownloadBytesOrNotify(fileName, bytes, mime);
+                return;
+            }
+            void saveDownloadOrNotify(fileName, resolvedSrc, mime);
             return;
         }
-        void saveDownloadOrNotify(fileName, resolvedSrc, mime);
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth || 1;
+            canvas.height = img.naturalHeight || 1;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return;
+            if (as === "jpeg") {
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            ctx.drawImage(img, 0, 0);
+            const nextMime = as === "png" ? "image/png" : "image/jpeg";
+            const url = canvas.toDataURL(nextMime, 0.92);
+            void saveDownloadOrNotify(`${base}.${as === "png" ? "png" : "jpg"}`, url, nextMime);
+        };
+        img.src = resolvedSrc;
     };
 
     const preview =
@@ -132,8 +150,6 @@ export function GeneratedMediaCard({
                 preload="metadata"
                 aria-label={prompt || "Generated audio"}
             />
-        ) : kind === "model" ? (
-            <ModelPreview src={resolvedSrc} />
         ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -148,29 +164,48 @@ export function GeneratedMediaCard({
         );
 
     return (
-        <div className="my-2 flex max-w-[360px] flex-col gap-2">
-            <div className="relative">
-                {preview}
-                {kind === "model" || kind === "image" || kind === "svg" ? (
-                    <button
-                        type="button"
-                        className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-md bg-black/55 text-white hover:bg-black/70"
-                        aria-label="Expand"
-                        onClick={() => setOpen(true)}
-                    >
-                        <Icon icon={ArrowMaximize20Regular} />
-                    </button>
-                ) : null}
-            </div>
-            <Button type="button" variant="secondary" size="sm" className="self-start" onClick={download}>
-                Download
-            </Button>
+        <div className="group/media relative my-2 w-fit max-w-[360px] overflow-hidden rounded-[18px]">
+            {preview}
+            {kind === "image" || kind === "svg" ? (
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center">
+                    <div className="flex -translate-y-full gap-1.5 pt-2 opacity-0 transition duration-200 ease-out group-hover/media:pointer-events-auto group-hover/media:translate-y-0 group-hover/media:opacity-100">
+                        <button
+                            type="button"
+                            aria-label="Expand"
+                            className="flex size-7 items-center justify-center rounded-full bg-black/70 text-white"
+                            onClick={() => setOpen(true)}
+                        >
+                            <Icon icon={ArrowMaximize20Regular} />
+                        </button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    type="button"
+                                    aria-label="Download"
+                                    className="flex size-7 items-center justify-center rounded-full bg-black/70 text-white"
+                                >
+                                    <Icon icon={ArrowDownload20Regular} />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="center">
+                                <DropdownMenuItem onClick={() => download()}>Original</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => download("png")}>PNG</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => download("jpeg")}>JPEG</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                </div>
+            ) : (
+                <Button type="button" variant="secondary" size="sm" className="mt-2" onClick={() => download()}>
+                    Download
+                </Button>
+            )}
             <MediaLightbox
                 open={open}
                 onClose={() => setOpen(false)}
                 src={resolvedSrc}
                 title={prompt || fileName}
-                kind={kind === "model" ? "model" : "image"}
+                kind="image"
             />
         </div>
     );

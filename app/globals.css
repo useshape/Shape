@@ -1631,6 +1631,56 @@ html[data-chrome="macos"] [data-chrome-leading="true"] {
   min-height: 0;
 }
 
+/* Straight thread line. Sits in the row padding and stops at the dot. */
+.thread-link {
+  --thread-x: -16px;
+  --thread-run: 16px;
+}
+.thread-link::before,
+.thread-link::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  background: rgb(97, 97, 97);
+}
+.thread-link::before {
+  left: var(--thread-x);
+  top: calc(-0.25rem - 1px);
+  bottom: -1px;
+  width: 1.5px;
+}
+.thread-links > .thread-link:first-child::before,
+.thread-link.thread-link-first::before {
+  top: calc(50% - 0.75px);
+}
+.thread-links > .thread-link:last-child::before,
+.thread-link.thread-link-last::before {
+  bottom: calc(50% - 0.75px);
+}
+.thread-links > .thread-link:first-child:last-child::before,
+.thread-link.thread-link-first.thread-link-last::before {
+  content: none;
+}
+.thread-link::after {
+  left: var(--thread-x);
+  top: 50%;
+  width: var(--thread-run);
+  height: 1.5px;
+  margin-top: -0.75px;
+}
+
+/* Fade only after overflow is measured. Short labels stay solid. */
+.truncate.is-overflowing,
+.t-swap--block .t-swap__layer.is-overflowing,
+.t-composer-hint__text.is-overflowing,
+.ui-progressc__title.is-overflowing,
+.ui-progressc__label.is-overflowing {
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.25rem), transparent);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.25rem), transparent);
+}
+
 /* ── Allotment Split View Theme ───────────────────────────── */
 .allotment-module_allotment__1L9_Y {
   background-color: transparent !important;
@@ -1819,27 +1869,33 @@ html[data-chrome="macos"] [data-chrome-leading="true"] {
   animation: chat-name-reveal 760ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.chat-name-sheen {
+.chat-name-reveal::after {
+  content: attr(data-shine);
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  white-space: nowrap;
   pointer-events: none;
   background-image: linear-gradient(
     100deg,
     transparent 32%,
-    rgba(255, 255, 255, 0.78) 50%,
+    rgba(255, 255, 255, 0.9) 50%,
     transparent 68%
   );
   background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   animation: chat-name-sheen 760ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .chat-name-reveal,
-  .chat-name-sheen {
+  .chat-name-reveal::after {
     animation: none;
   }
-  .chat-name-sheen {
-    display: none;
+  .chat-name-reveal::after {
+    content: none;
   }
 }
 

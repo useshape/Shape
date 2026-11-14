@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { justifyImageRows } from "@/lib/chat/justify-images";
+import { MediaLightbox } from "./lightbox";
 
 export type GalleryImage = {
     url: string;
@@ -39,6 +40,7 @@ export function ImageBento({ images }: { images: GalleryImage[] }) {
     imagesRef.current = images;
     const [width, setWidth] = useState(0);
     const [measured, setMeasured] = useState<Measured[]>([]);
+    const [viewer, setViewer] = useState<number | null>(null);
     const key = images.map((image) => `${image.url}|${image.source || ""}`).join("\n");
 
     useEffect(() => {
@@ -70,14 +72,15 @@ export function ImageBento({ images }: { images: GalleryImage[] }) {
         <div ref={frame} className="flex w-full flex-col gap-1.5">
             {rows.map((row, rowIndex) => (
                 <div key={rowIndex} className="flex gap-1.5">
-                    {row.map((image) => (
-                        <a
+                    {row.map((image) => {
+                        const index = measured.findIndex((item) => item.url === image.url);
+                        return (
+                        <button
                             key={image.url}
-                            href={image.source || image.url}
-                            target="_blank"
-                            rel="noreferrer"
+                            type="button"
                             className="block shrink-0 overflow-hidden rounded-xl"
                             style={{ width: image.width, height: image.height }}
+                            onClick={() => setViewer(index >= 0 ? index : 0)}
                         >
                             <img
                                 src={image.url}
@@ -88,10 +91,17 @@ export function ImageBento({ images }: { images: GalleryImage[] }) {
                                 className="block rounded-xl"
                                 style={{ width: image.width, height: image.height }}
                             />
-                        </a>
-                    ))}
+                        </button>
+                        );
+                    })}
                 </div>
             ))}
+            <MediaLightbox
+                open={viewer != null}
+                onClose={() => setViewer(null)}
+                images={measured.map((image) => ({ src: image.url, title: image.title }))}
+                initialIndex={viewer ?? 0}
+            />
         </div>
     );
 }

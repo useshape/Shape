@@ -15,7 +15,7 @@ use super::titles::{
 use crate::agent::decide::{self, Capability};
 use crate::agent::tools::schema;
 use crate::agent::model_router;
-use crate::agent::models::{AgentState, AutoRunMode, ChatMessage, TurnPolicy};
+use crate::agent::models::{AgentState, AutoRunMode, ChatMessage, MessageStats, TurnPolicy};
 use std::collections::HashMap;
 use crate::agent::prompts;
 use crate::app_state::AppState;
@@ -734,6 +734,14 @@ pub async fn send_chat_message(
         breakdown["tools"] = json!(tools_tokens.saturating_sub(mcp_tokens));
     }
     let proxy_base = proxy_base.with_context_breakdown(Some(breakdown.clone()));
+    state.set_in_flight_menu(
+        &owned_conversation_id,
+        &model_to_use,
+        &mode_to_use,
+        &effort_norm,
+        selected_auto || talk,
+        breakdown.clone(),
+    );
 
     let project_path = current_proj_path.clone().unwrap_or_default();
     let sealed_project = if talk {
@@ -792,34 +800,46 @@ pub async fn send_chat_message(
     {
         Ok(Ok(outcome)) => outcome,
         Ok(Err(e)) => {
-            state.clear_in_flight_if(&turn_id);
-            // Always release the UI: without this a failed turn left the frontend
-            // waiting for a chat_complete that never arrived.
-            let _ = app_handle.emit(
-                "chat_complete",
-                json!({
-                    "error": e.to_string(),
-                    "model": model_to_use,
-                    "turnId": &turn_id,
-                    "conversationId": &owned_conversation_id,
-                }),
+            // Keep the tool transcript and the menu details. A failed turn used
+            // to emit chat_complete with no content, so the worked dropdown and
+            // its model/context rows disappeared.
+            seal_partial_turn(
+                &app_handle,
+                &state,
+                &turn_store,
+                &turn_id,
+                &owned_conversation_id,
+                &owned_title,
+                &model_to_use,
+                &mode_to_use,
+                &effort_norm,
+                selected_auto || talk,
+                &breakdown,
+                start_time,
+                &e.to_string(),
             );
             return Err(e);
         }
         Err(panic) => {
-            state.clear_in_flight_if(&turn_id);
             let msg = panic_message(&panic);
             logging::warn("chat", &format!("Agent turn panicked: {msg}"));
-            let _ = app_handle.emit(
-                "chat_complete",
-                json!({
-                    "error": format!("Agent turn crashed: {msg}"),
-                    "model": model_to_use,
-                    "turnId": &turn_id,
-                    "conversationId": &owned_conversation_id,
-                }),
+            let error = format!("Agent turn crashed: {msg}");
+            seal_partial_turn(
+                &app_handle,
+                &state,
+                &turn_store,
+                &turn_id,
+                &owned_conversation_id,
+                &owned_title,
+                &model_to_use,
+                &mode_to_use,
+                &effort_norm,
+                selected_auto || talk,
+                &breakdown,
+                start_time,
+                &error,
             );
-            return Err(AppError::Message(format!("Agent turn crashed: {msg}")));
+            return Err(AppError::Message(error));
         }
     };
 
@@ -1115,6 +1135,106 @@ pub fn update_turn_policy(
         state.set_turn_policy(policy);
     }
     Ok(())
+}
+
+fn seal_partial_turn(
+    app_handle: &tauri::AppHandle,
+    state: &AgentState,
+    turn_store: &str,
+    turn_id: &str,
+    conversation_id: &str,
+    title: &str,
+    model: &str,
+    mode: &str,
+    effort: &str,
+    used_auto: bool,
+    breakdown: &serde_json::Value,
+    started: std::time::Instant,
+    error: &str,
+) {
+    let partial = state.take_in_flight_content(turn_id).unwrap_or_default();
+    state.clear_in_flight_if(turn_id);
+    let (input_tokens, output_tokens) = state.turn_meter_totals(turn_id);
+    let duration_ms = started.elapsed().as_millis() as f64;
+    let billed = input_tokens + output_tokens;
+    if !partial.trim().is_empty() {
+        let assistant_message = ChatMessage {
+            role: "assistant".to_string(),
+            content: partial.clone(),
+            timestamp: now_f64(),
+            stats: Some(MessageStats {
+                time_ms: duration_ms,
+                cost: 0.0,
+                tokens: billed,
+                input_tokens,
+                output_tokens,
+                credits_charged: None,
+                used_auto: Some(used_auto),
+                reasoning_effort: Some(effort.to_string()),
+                mode: Some(mode.to_string()),
+                latency_ms: None,
+                context_breakdown: Some(breakdown.clone()),
+            }),
+            model: Some(model.to_string()),
+            feedback: None,
+            hidden: false,
+        };
+        let still_current = state
+            .current_conversation_id
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())
+            .as_deref()
+            == Some(conversation_id);
+        if still_current {
+            if let Ok(mut hist) = state.history.lock() {
+                history::replace_or_push_assistant(&mut hist, assistant_message);
+            }
+            let _ = history::save_current_conversation(state, turn_store);
+        } else {
+            let mut hist = state
+                .conversations
+                .lock()
+                .ok()
+                .and_then(|convs| {
+                    convs
+                        .get(turn_store)
+                        .and_then(|list| list.iter().find(|c| c.id == conversation_id))
+                        .map(|c| c.history.clone())
+                })
+                .unwrap_or_default();
+            history::replace_or_push_assistant(&mut hist, assistant_message);
+            let _ = history::upsert_conversation_snapshot(
+                state,
+                turn_store,
+                conversation_id,
+                &title_for_snapshot(state, turn_store, conversation_id, title),
+                hist,
+            );
+        }
+    }
+    let _ = app_handle.emit(
+        "chat_complete",
+        json!({
+            "error": error,
+            "content": partial,
+            "stats": {
+                "timeMs": duration_ms,
+                "cost": 0.0,
+                "tokens": billed,
+                "inputTokens": input_tokens,
+                "outputTokens": output_tokens,
+                "creditsCharged": null,
+                "usedAuto": used_auto,
+                "reasoningEffort": effort,
+                "mode": mode,
+                "contextBreakdown": breakdown,
+            },
+            "model": model,
+            "turnId": turn_id,
+            "conversationId": conversation_id,
+        }),
+    );
 }
 
 fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {

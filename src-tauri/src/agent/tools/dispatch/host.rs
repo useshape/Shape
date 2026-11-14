@@ -102,9 +102,20 @@ pub(super) async fn tool_http_request(args: &Value, _ctx: &ToolCtx<'_>) -> ToolO
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    match host::local_request(method, url, body, &headers) {
-        Ok(text) => text_out("http_request", &text),
-        Err(err) => error_outcome("http_request", &err),
+    let method = method.to_string();
+    let url = url.to_string();
+    let body = body.map(|value| value.to_string());
+    // `reqwest::blocking` builds its own runtime. Doing that on a tokio worker
+    // panics ("Cannot drop a runtime in a context where blocking is not allowed")
+    // and kills the whole agent turn.
+    let result = tokio::task::spawn_blocking(move || {
+        host::local_request(&method, &url, body.as_deref(), &headers)
+    })
+    .await;
+    match result {
+        Ok(Ok(text)) => text_out("http_request", &text),
+        Ok(Err(err)) => error_outcome("http_request", &err),
+        Err(err) => error_outcome("http_request", &format!("Request failed internally: {err}")),
     }
 }
 

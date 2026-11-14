@@ -729,7 +729,8 @@ export function BrowserView({
     const [tabs, setTabs] = useState<PageTab[]>([]);
     const [activeId, setActiveId] = useState<string | null>(null);
     const agentFrame = useBrowseFrame();
-    const agentActive = !!agentFrame && agentFrame.status !== "stopped";
+    const agentLive = !!agentFrame && agentFrame.status !== "stopped" && agentFrame.status !== "error";
+    const agentPage = !!agentFrame && Boolean(agentFrame.image);
     const [localActive, setLocalActive] = useState<string | null>(null);
     const [urlDraft, setUrlDraft] = useState<string | null>(null);
     const [picking, setPicking] = useState(false);
@@ -759,13 +760,12 @@ export function BrowserView({
         setBookmarkBar(loadJson<boolean>(BOOKMARK_BAR_KEY, false));
     }, []);
 
-    // Jump to the agent's tab when it starts driving; leave it when it stops.
+    // Open the agent's page when it starts. Leave that page up after the turn ends.
     const wasAgentActive = useRef(false);
     useEffect(() => {
-        if (agentActive && !wasAgentActive.current) setLocalActive(AGENT_TAB);
-        if (!agentActive) setLocalActive((cur) => (cur === AGENT_TAB ? null : cur));
-        wasAgentActive.current = agentActive;
-    }, [agentActive]);
+        if (agentLive && !wasAgentActive.current) setLocalActive(AGENT_TAB);
+        wasAgentActive.current = agentLive;
+    }, [agentLive]);
 
     useEffect(() => {
         if (controlled) return;
@@ -837,7 +837,7 @@ export function BrowserView({
         return () => unlisten?.();
     }, [noteNavigation]);
 
-    const showAgent = localActive === AGENT_TAB && agentActive;
+    const showAgent = localActive === AGENT_TAB && (agentLive || agentPage);
     const active = useMemo(() => tabs.find((t) => t.id === activeId) ?? null, [tabs, activeId]);
     const pageUrlRef = useRef("");
     pageUrlRef.current = active?.url ?? "";

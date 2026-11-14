@@ -749,8 +749,17 @@ pub async fn stream_chat(
 
             if let Some(tool_calls) = delta["tool_calls"].as_array() {
                 if !tool_calls.is_empty() {
-                    // Flush any pending live tokens, then hold further prose.
+                    // Flush the sentence already in flight, including the few bytes
+                    // held in case a tool marker was split across chunks. Prose that
+                    // arrives after this point is tool-arg chatter and stays deferred.
                     if !defer_content_emit {
+                        let (tail, mut parsed) = leak_parser.finalize();
+                        leaked_calls.append(&mut parsed);
+                        if !tail.is_empty() {
+                            content.push_str(&tail);
+                            token_buffer.push_str(&tail);
+                        }
+                        leak_parser = LeakedToolCallParser::new();
                         if !token_buffer.is_empty() {
                             emit_stream_token(app_handle, proxy_ctx, token_buffer.clone());
                             token_buffer.clear();

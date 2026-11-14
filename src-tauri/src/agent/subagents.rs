@@ -185,6 +185,85 @@ pub fn try_reserve_slot() -> Result<SlotGuard, String> {
     }
 }
 
+static TURN_SPAWNS: LazyLock<Mutex<HashMap<String, usize>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn word_number(word: &str) -> Option<usize> {
+    match word {
+        "a" | "an" | "one" | "single" => Some(1),
+        "two" | "pair" => Some(2),
+        "three" => Some(3),
+        "four" => Some(4),
+        "five" => Some(5),
+        other => other.parse::<usize>().ok().filter(|n| *n > 0),
+    }
+}
+
+/// How many threads this user message asked for. One, unless they named a count.
+pub fn requested_spawn_budget(user: &str) -> usize {
+    let t = user.to_ascii_lowercase();
+    const NOUNS: &[&str] = &[
+        "subagents",
+        "subagent",
+        "sub-agents",
+        "sub-agent",
+        "threads",
+        "thread",
+        "agents",
+    ];
+    for noun in NOUNS {
+        let Some(idx) = t.find(noun) else { continue };
+        let before = t[..idx].trim_end();
+        let last = before
+            .rsplit(|c: char| !c.is_ascii_alphanumeric())
+            .next()
+            .unwrap_or("");
+        if let Some(n) = word_number(last) {
+            return n.clamp(1, MAX_SUBAGENTS);
+        }
+    }
+    if t.contains("several")
+        || t.contains("multiple")
+        || t.contains("parallel")
+        || t.contains(" a few ")
+        || t.contains(" each ")
+    {
+        return 4.min(MAX_SUBAGENTS);
+    }
+    1
+}
+
+/// Reserve one spawn for this turn. Refuses once the request's budget is used.
+pub fn claim_turn_spawn(turn_id: &str, budget: usize) -> Result<(), String> {
+    if turn_id.is_empty() {
+        return Ok(());
+    }
+    let budget = budget.clamp(1, MAX_SUBAGENTS);
+    let mut map = TURN_SPAWNS
+        .lock()
+        .map_err(|_| "Could not track threads for this turn.".to_string())?;
+    let n = map.entry(turn_id.to_string()).or_insert(0);
+    if *n >= budget {
+        return Err(format!(
+            "This request already started {n} thread(s). Do not call spawn_subagent again. Finish your reply using the thread that is running."
+        ));
+    }
+    *n += 1;
+    Ok(())
+}
+
+pub fn release_turn_spawn(turn_id: &str) {
+    if turn_id.is_empty() {
+        return;
+    }
+    let Ok(mut map) = TURN_SPAWNS.lock() else {
+        return;
+    };
+    if let Some(n) = map.get_mut(turn_id) {
+        *n = n.saturating_sub(1);
+    }
+}
+
 pub fn can_spawn() -> Result<(), String> {
     if RUNNING.load(Ordering::SeqCst) >= MAX_SUBAGENTS {
         Err(format!(
@@ -460,9 +539,14 @@ pub fn spawn(
             .as_deref()
             .map(|b| format!("\nBranch: `{b}` (not merged)."))
             .unwrap_or_default();
-        let update = format!(
+        let mut update = format!(
             "Thread \"{title_for_task}\" ({spawn_id}) {status}.{branch_line}\n\n{transcript}"
         );
+        if status == "error" {
+            update.push_str(
+                "\n\nThis thread failed. Do not spawn another thread. Do the task in this chat and say what went wrong.",
+            );
+        }
         let clipped: String = update.chars().take(6000).collect();
         if let Some(parent) = parent_for_task.as_deref() {
             history::patch_subagent_ref_status(
@@ -728,6 +812,18 @@ mod tests {
             pick_subagent_model(None, &["z-ai/glm-5.3-flash".into()], "anthropic/claude-opus-5.5"),
             "z-ai/glm-5.3-flash"
         );
+    }
+
+    #[test]
+    fn one_request_gets_one_thread_unless_a_count_is_named() {
+        assert_eq!(requested_spawn_budget("use a subagent to audit the repo"), 1);
+        assert_eq!(requested_spawn_budget("make a thread that writes a fable"), 1);
+        assert_eq!(requested_spawn_budget("spawn 3 threads to review this"), 3);
+        assert_eq!(requested_spawn_budget("two subagents, one for tests"), 2);
+        assert!(claim_turn_spawn("turn-budget", 1).is_ok());
+        assert!(claim_turn_spawn("turn-budget", 1).is_err());
+        release_turn_spawn("turn-budget");
+        assert!(claim_turn_spawn("turn-budget", 1).is_ok());
     }
 
     #[test]

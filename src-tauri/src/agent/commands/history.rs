@@ -273,6 +273,11 @@ pub fn stash_live_conversation(state: &AgentState, proj_path: &str) -> Result<()
     let mut convs = state.conversations.lock()?;
     let list = project_conversation_list(&mut convs, proj_path);
     if let Some(existing) = list.iter_mut().find(|c| c.id == id) {
+        // A tab switch can run while the live buffer is still empty. Do not
+        // replace a saved transcript with that blank buffer.
+        if history.is_empty() && !existing.history.is_empty() {
+            return Ok(());
+        }
         existing.history = history;
         existing.title = title;
         existing.timestamp = now_f64();

@@ -23,7 +23,8 @@ import { SentFileCard } from '../blocks/sent-file';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { PersonaReviewPanel } from '../blocks/persona-review';
 import { BrowseChatCard } from '../blocks/browse-frame';
-import { ChartBlock, InsightCard } from '../blocks/chart';
+import { GeneratingMediaFrame } from '../blocks/border-glow';
+import { ChartBlock } from '../blocks/chart';
 import { ShownImages } from '../blocks/place-map';
 import { QuestionsCard, parseQuestionsPayload, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
 import { hostnameOf } from '@/lib/ui/favicon';
@@ -123,7 +124,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'plugin_connect' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'generated_model' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'plugin_connect' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
     content?: string;
     file?: string;
     query?: string;
@@ -463,7 +464,7 @@ function unescapeXml(s: string): string {
     };
 
     const parseGeneratedMediaBlock = (
-        type: "generated_svg" | "generated_image" | "generated_audio" | "generated_model",
+        type: "generated_svg" | "generated_image" | "generated_audio",
         tagFull: string,
         content: string,
         isGenerating: boolean,
@@ -554,7 +555,6 @@ function unescapeXml(s: string): string {
             { type: 'generated_svg', start: '<recraft_svg', end: '</recraft_svg>' },
             { type: 'generated_image', start: '<generated_image', end: '</generated_image>' },
             { type: 'generated_audio', start: '<generated_audio', end: '</generated_audio>' },
-            { type: 'generated_model', start: '<generated_model', end: '</generated_model>' },
             { type: 'plugin_call', start: '<plugin_call', end: '</plugin_call>' },
             { type: 'plugin_connect', start: '<plugin_connect', end: '</plugin_connect>' },
             { type: 'browse_session', start: '<browse_session', end: '</browse_session>' },
@@ -712,8 +712,8 @@ function unescapeXml(s: string): string {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_connect') {
                 chunks.push(parsePluginConnectBlock(tagFull));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio' || firstMatch.type === 'generated_model') {
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio" | "generated_model", tagFull, content, false));
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
             } else if (firstMatch.type === 'sent_file') {
                 chunks.push(parseSentFileBlock(tagFull, content));
             } else {
@@ -810,9 +810,9 @@ function unescapeXml(s: string): string {
                 chunks.push(parsePluginCallBlock(tagFull, content, true));
             } else if (firstMatch.type === 'plugin_connect') {
                 chunks.push(parsePluginConnectBlock(text.slice(firstMatch.index, contentStartIndex)));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio' || firstMatch.type === 'generated_model') {
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio" | "generated_model", tagFull, content, true));
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, true));
             } else if (firstMatch.type === 'sent_file') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseSentFileBlock(tagFull, content));
@@ -909,9 +909,9 @@ function unescapeXml(s: string): string {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_connect') {
                 chunks.push(parsePluginConnectBlock(text.slice(firstMatch.index, contentStartIndex)));
-            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio' || firstMatch.type === 'generated_model') {
+            } else if (firstMatch.type === 'generated_svg' || firstMatch.type === 'generated_image' || firstMatch.type === 'generated_audio') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
-                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio" | "generated_model", tagFull, content, false));
+                chunks.push(parseGeneratedMediaBlock(firstMatch.type as "generated_svg" | "generated_image" | "generated_audio", tagFull, content, false));
             } else if (firstMatch.type === 'sent_file') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseSentFileBlock(tagFull, content));
@@ -1073,7 +1073,6 @@ const TALK_SKIP = new Set([
     "grep",
     "inspect_runtime",
     "plugin_call",
-    "browse_session",
     "subagent",
     "subagent_ref",
     "plan",
@@ -1176,7 +1175,28 @@ export function MessageRenderer({
         )
         || contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
         || contentChunks.some((b) => b.type === 'design_previews' && b.commandStatus === 'pending');
-    const showStatusLine = !!isGenerating;
+    const mediaOnly =
+        !!isGenerating
+        && contentChunks.some((c) =>
+            (c.type === "generated_image" || c.type === "generated_svg" || c.type === "generated_audio")
+            && !c.content?.trim()
+            && !c.mediaId
+            && c.commandStatus !== "failed",
+        )
+        && !contentChunks.some((c) => c.type === "text" && (c.content || "").trim());
+    const showStatusLine = !!isGenerating && !mediaOnly;
+    const browseHost = (() => {
+        if (!isGenerating) return null;
+        const block = [...contentChunks].reverse().find((chunk) => chunk.type === "browse_session");
+        if (!block) return null;
+        const raw = (block.visitUrl || block.visitHost || "").trim();
+        if (!raw) return "the page";
+        try {
+            return new URL(raw).host.replace(/^www\./, "") || "the page";
+        } catch {
+            return raw.replace(/^https?:\/\//, "").split("/")[0] || "the page";
+        }
+    })();
     const statusPhrase = !hasPendingApproval
         ? null
         : contentChunks.some((b) => b.type === 'question' && b.commandStatus === 'pending')
@@ -1293,7 +1313,7 @@ export function MessageRenderer({
             return <ChartBlock key={`chart-${index}`} content={chunk.content} />;
         }
         if (chunk.type === 'insight_card') {
-            return <InsightCard key={`insight-${index}`} content={chunk.content} />;
+            return null;
         }
         if (chunk.type === 'browse_session') {
             if (index !== lastBrowseIndex) return null;
@@ -1380,9 +1400,11 @@ export function MessageRenderer({
                 group.push(next.chunk);
             }
             const ready = group.filter((item) => item.content?.trim() || item.mediaId || item.commandStatus === "failed");
-            if (ready.length === 0) return null;
+            const pending = !!isGenerating && group.some((item) => !item.content?.trim() && !item.mediaId && item.commandStatus !== "failed");
+            if (ready.length === 0 && !pending) return null;
             return (
                 <div key={`photos-${index}`} className="flex flex-col">
+                    {pending ? <GeneratingMediaFrame /> : null}
                     {ready.map((item, offset) => (
                         <GeneratedMediaCard
                             key={`media-${index + offset}`}
@@ -1397,9 +1419,11 @@ export function MessageRenderer({
                 </div>
             );
         }
-        if (chunk.type === 'generated_svg' || chunk.type === 'generated_audio' || chunk.type === 'generated_model') {
-            if (!chunk.content?.trim() && !chunk.mediaId && chunk.commandStatus !== "failed") return null;
-            const kind = chunk.type === "generated_svg" ? "svg" : chunk.type === "generated_audio" ? "audio" : "model";
+        if (chunk.type === 'generated_svg' || chunk.type === 'generated_audio') {
+            if (!chunk.content?.trim() && !chunk.mediaId && chunk.commandStatus !== "failed") {
+                return chunk.isGenerating ? <GeneratingMediaFrame key={`media-${index}`} /> : null;
+            }
+            const kind = chunk.type === "generated_svg" ? "svg" : "audio";
             return (
                 <GeneratedMediaCard
                     key={`media-${index}`}
@@ -1452,7 +1476,7 @@ export function MessageRenderer({
             {renderedSegments}
             {showStatusLine ? (
                 <div className="mt-1">
-                    <GeneratingIndicator label={statusPhrase ?? undefined} />
+                    <GeneratingIndicator label={statusPhrase ?? undefined} browsing={browseHost} />
                 </div>
             ) : null}
         </div>

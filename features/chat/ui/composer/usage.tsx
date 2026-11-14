@@ -13,11 +13,13 @@ export function UsageRing({
     size = 20,
     className,
     title,
+    warn = false,
 }: {
     percent: number;
     size?: number;
     className?: string;
     title?: string;
+    warn?: boolean;
 }) {
     const clamped = Math.max(0, Math.min(100, percent));
     const stroke = 1.75;
@@ -56,7 +58,7 @@ export function UsageRing({
                 strokeDashoffset={offset}
                 className={cn(
                     "transition-[stroke-dashoffset] duration-300",
-                    clamped >= 90 ? "text-warning" : "text-accent",
+                    warn || clamped >= 90 ? "text-warning" : "text-accent",
                 )}
             />
         </svg>
@@ -81,8 +83,8 @@ export function ChatUsageButton({ compact = false }: { compact?: boolean }) {
                 }
                 aria-label={usage.tooltip || "Usage"}
             >
-                <UsageRing percent={usage.percent} size={16} />
-                {compact ? null : <span className="tabular-nums">{usage.percent}%</span>}
+                {usage.showMeter ? <UsageRing percent={usage.percent} size={16} warn={usage.warn} title={usage.tooltip} /> : null}
+                {usage.title ? <span className={cn("tabular-nums", compact && "text-xs")}>{usage.title}</span> : null}
             </button>
         </Tooltip>
     );

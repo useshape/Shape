@@ -904,7 +904,7 @@ function FeedbackSection() {
     return (
         <>
             <SettingSection title="Feedback">
-                <SettingRow title="Report a problem" description="Sends to our team. Does not use AI credits. Optionally link one chat from this project.">
+                <SettingRow title="Report a problem" description="Sends to our team. Does not count toward usage. Optionally link one chat from this project.">
                     <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
                         Report
                     </Button>

@@ -1,37 +1,21 @@
 "use client";
 
-import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
-import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
+import { ArrowDownload20Regular } from "@fluentui/react-icons/headless/svg/arrow-download";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
-import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
-import { Options20Regular } from "@fluentui/react-icons/headless/svg/options";
-import { Window20Filled } from "@fluentui/react-icons/headless/svg/window";
 
-import { type IconGlyph, Icon } from "@/components/ui/icon";
-import { Button } from "@/components/ui/button";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown";
+import { Icon } from "@/components/ui/icon";
 import { saveDownloadOrNotify } from "@/lib/ui/save-download";
 
-function kindOf(mime: string, name: string): { label: string; icon: IconGlyph } {
+function kindLabel(mime: string, name: string): string {
     const ext = (name.split(".").pop() || "").toUpperCase();
-    const mark = ext || "FILE";
-    if (mime.startsWith("image/")) return { label: `Image · ${mark}`, icon: Camera20Filled };
-    if (mime.startsWith("audio/")) return { label: `Audio · ${mark}`, icon: Options20Regular };
-    if (mime.startsWith("video/")) return { label: `Video · ${mark}`, icon: Window20Filled };
-    if (mime.startsWith("text/") || mime.includes("json")) return { label: `Text · ${mark}`, icon: DocumentText20Regular };
-    return { label: ext ? `File · ${mark}` : "File", icon: Document20Regular };
+    if (mime.startsWith("image/")) return ext ? `Image · ${ext}` : "Image";
+    if (mime.startsWith("audio/")) return ext ? `Audio · ${ext}` : "Audio";
+    if (mime.startsWith("video/")) return ext ? `Video · ${ext}` : "Video";
+    if (mime.startsWith("text/") || mime.includes("json")) return ext ? `Text · ${ext}` : "Text";
+    return ext ? `File · ${ext}` : "File";
 }
 
-function download(name: string, src: string, mime: string) {
-    void saveDownloadOrNotify(name, src, mime);
-}
-
-/** A file the agent handed over: icon, title, type, and a download. */
+/** A file the agent handed over. The download icon appears on hover. */
 export function SentFileCard({
     name,
     title,
@@ -43,48 +27,29 @@ export function SentFileCard({
     mime: string;
     src: string;
 }) {
-    const kind = kindOf(mime, name);
     const heading = title?.trim() || name.replace(/\.[^.]+$/, "") || name;
     const canDownload = Boolean(src.trim());
 
     return (
-        <div className="my-2 flex max-w-md items-center gap-3 squircle-2xl border border-border-subtle/9 bg-surface-3 p-2">
-            <span className="flex size-10 shrink-0 items-center pl-2 justify-center rounded-lg text-accent">
-                <Icon icon={kind.icon} style={{ width: "28px", height: "28px" }} />
+        <div className="group/file my-2 flex max-w-md items-center gap-3 squircle-2xl border border-border bg-surface-3 px-3 py-2">
+            <span className="flex size-9 shrink-0 items-center justify-center text-text-secondary">
+                <Icon icon={Document20Regular} className="size-6" />
             </span>
-            <span className="min-w-0 flex-1 pr-3">
-                <span className="block truncate text-md text-text-primary">{heading}</span>
-                <span className="block truncate text-xs text-text-muted">{kind.label}</span>
+            <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-text-primary">{heading}</span>
+                <span className="block truncate text-xs text-text-muted">{kindLabel(mime, name)}</span>
             </span>
-            <span className="flex shrink-0 items-center pr-1">
-                <Button
-                    type="button"
-                    variant="secondary"
-                    size="lg"
-                    disabled={!canDownload}
-                    className="rounded-r-none! rounded-full bg-white/10"
-                    onClick={() => download(name, src, mime)}
-                >
-                    Download
-                </Button>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            size="lg"
-                            disabled={!canDownload}
-                            className="rounded-l-none! rounded-full border-l border-border-subtle/9 px-1.5 bg-white/10"
-                            aria-label="More"
-                        >
-                            <Icon icon={ChevronDown20Regular} />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => download(name, src, mime)}>Download</DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </span>
+            <button
+                type="button"
+                aria-label={`Download ${heading}`}
+                disabled={!canDownload}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary opacity-0 transition-opacity hover:bg-panel-hover hover:text-text-primary group-hover/file:opacity-100 disabled:pointer-events-none"
+                onClick={() => {
+                    if (canDownload) void saveDownloadOrNotify(name, src, mime);
+                }}
+            >
+                <Icon icon={ArrowDownload20Regular} />
+            </button>
         </div>
     );
 }

@@ -4,7 +4,6 @@
 
 
 import * as React from "react";
-import { Arc } from "loading-dev";
 import { type IconGlyph, Icon } from "@/components/ui/icon";
 
 
@@ -87,7 +86,7 @@ export function ButtonSpinner({
 }
 
 function LoadingGlyph({ size }: { size: ButtonSize }) {
-    return <Arc size={size === "lg" ? 18 : 14} />;
+    return <ButtonSpinner size={size} />;
 }
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

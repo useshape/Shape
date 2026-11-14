@@ -7,7 +7,7 @@ import type { Conversation } from "@/lib/backend/types";
 export const REPORT_CATEGORIES = [
   "Billing & payments",
   "Account & login",
-  "Usage & credits",
+  "Usage",
   "MCPs & Skills",
   "Dashboard UI",
   "Docs & help",

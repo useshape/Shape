@@ -4,9 +4,8 @@
 use serde_json::Value;
 use uuid::Uuid;
 
-const MAX_HOLDBACK: usize = 128;
-
-/// Markers that may appear split across SSE chunks — hold back this many trailing bytes.
+/// Markers that may appear split across SSE chunks. Only a suffix that is still
+/// a prefix of one of these is held back — never a fixed run of prose.
 const MARKER_PREFIXES: &[&str] = &[
     "<|tool_calls_begin|>",
     "<|tool_calls_end|>",
@@ -74,32 +73,21 @@ fn safe_emit_prefix_len(text: &str) -> usize {
     if text.is_empty() {
         return 0;
     }
-    let char_count = text.chars().count();
-    if char_count <= MAX_HOLDBACK {
-        return 0;
+    let max_hold = MARKER_PREFIXES.iter().map(|marker| marker.len()).max().unwrap_or(0);
+    let mut i = text.len().saturating_sub(max_hold);
+    while i > 0 && !text.is_char_boundary(i) {
+        i -= 1;
     }
-    let mut prefix_len = 0;
-    let mut idx = 0;
-    for ch in text.chars() {
-        if idx >= char_count.saturating_sub(MAX_HOLDBACK) {
-            break;
-        }
-        prefix_len += ch.len_utf8();
-        idx += 1;
-    }
-    // Shrink prefix if its suffix could be start of a marker
-    let prefix = &text[..prefix_len];
-    for marker in MARKER_PREFIXES {
-        for i in 1..marker.len() {
-            let partial = &marker[..i];
-            if prefix.ends_with(partial) {
-                if let Some(strip) = prefix_len.checked_sub(partial.len()) {
-                    return strip;
-                }
+    while i < text.len() {
+        if text.is_char_boundary(i) {
+            let suffix = &text[i..];
+            if !suffix.is_empty() && MARKER_PREFIXES.iter().any(|marker| marker.starts_with(suffix)) {
+                return i;
             }
         }
+        i += 1;
     }
-    prefix_len
+    text.len()
 }
 
 fn strip_tool_markup(text: &str) -> String {
@@ -359,6 +347,27 @@ mod tests {
         assert!(clean.contains("Here are two concepts"));
         assert!(!clean.contains("tool_code"));
         assert!(!clean.contains("render_design_previews"));
+    }
+
+    #[test]
+    fn streams_prose_without_holding_a_paragraph() {
+        let mut parser = LeakedToolCallParser::new();
+        let (clean, calls) = parser.push(
+            "I'll build a selector component for the pricing page and keep the layout tight.",
+        );
+        assert!(calls.is_empty());
+        assert!(clean.contains("selector component"));
+        assert!(clean.ends_with("tight.") || clean.len() > 60);
+    }
+
+    #[test]
+    fn holds_only_a_split_tool_marker() {
+        let mut parser = LeakedToolCallParser::new();
+        let (clean, _) = parser.push("Done.<|tool_call");
+        assert!(clean.contains("Done."));
+        assert!(!clean.contains("<|tool"));
+        let (rest, _) = parser.finalize();
+        assert!(rest.contains("<|tool_call"));
     }
 
     #[test]

@@ -238,6 +238,18 @@ pub struct InFlightTurn {
     pub partial_content: String,
     pub started_at: f64,
     pub activity_label: Option<String>,
+    /// Filled once the turn knows its model and context, so Stop can still
+    /// show the message menu after the generation is cancelled.
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
+    #[serde(default)]
+    pub used_auto: Option<bool>,
+    #[serde(default)]
+    pub context_breakdown: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -494,6 +506,11 @@ impl AgentState {
                     .map(|d| d.as_secs_f64())
                     .unwrap_or(0.0),
                 activity_label: None,
+                model: None,
+                mode: None,
+                reasoning_effort: None,
+                used_auto: None,
+                context_breakdown: None,
             },
         );
         true
@@ -504,6 +521,16 @@ impl AgentState {
             .lock()
             .map(|g| !g.is_empty())
             .unwrap_or(false)
+    }
+
+    /// Remove a turn's streamed transcript so a crash can still save it.
+    pub fn take_in_flight_content(&self, turn_id: &str) -> Option<String> {
+        let mut guard = self.in_flight.lock().ok()?;
+        let key = guard
+            .iter()
+            .find(|(_, flight)| flight.turn_id == turn_id)
+            .map(|(key, _)| key.clone())?;
+        Some(guard.remove(&key)?.partial_content)
     }
 
     pub fn in_flight_contains_turn(&self, turn_id: &str) -> bool {
@@ -540,6 +567,28 @@ impl AgentState {
     #[allow(dead_code)]
     pub fn begin_in_flight(&self, turn_id: String, conversation_id: Option<String>) {
         let _ = self.try_begin_in_flight(turn_id, conversation_id);
+    }
+
+    pub fn set_in_flight_menu(
+        &self,
+        conversation_id: &str,
+        model: &str,
+        mode: &str,
+        reasoning_effort: &str,
+        used_auto: bool,
+        context_breakdown: serde_json::Value,
+    ) {
+        let Ok(mut guard) = self.in_flight.lock() else {
+            return;
+        };
+        let Some(flight) = guard.get_mut(conversation_id) else {
+            return;
+        };
+        flight.model = Some(model.to_string());
+        flight.mode = Some(mode.to_string());
+        flight.reasoning_effort = Some(reasoning_effort.to_string());
+        flight.used_auto = Some(used_auto);
+        flight.context_breakdown = Some(context_breakdown);
     }
 
     pub fn set_in_flight_activity_label(&self, label: Option<&str>) {

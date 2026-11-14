@@ -1,5 +1,6 @@
 "use client";
 
+import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
 
@@ -13,6 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend";
 import { useBrowseFrame, type BrowseFrame } from "@/features/agent/browser/session";
+import { BorderGlow } from "./border-glow";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -25,7 +27,76 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const PAGE_W = 1280;
-const PAGE_H = 720;
+const PAGE_H = 800;
+
+/** Inset browser window on the chat card. Edit these to resize the frame. */
+const INSET = {
+    wallpaper: "/wallpapers/lake.jpg",
+    /** Outer card width. */
+    cardMaxWidth: 500,
+    /** Wallpaper showing around the window, in px. */
+    padX: 30,
+    padY: 24,
+    /** Window width as a percent of the card, after padding. */
+    windowPercent: 100,
+    /** Corner radius of the inset window, in px. The glow uses this same value. */
+    radius: 25,
+    /** Keep the page off the curved sides. Vertical pad stays smaller. */
+    pagePadX: 8,
+    pagePadY: 3,
+};
+
+function usePageEdgeColor(src: string): { color: string | null; failed: boolean } {
+    const [color, setColor] = useState<string | null>(null);
+    const [failed, setFailed] = useState(false);
+    useEffect(() => {
+        const url = src.trim();
+        setColor(null);
+        setFailed(false);
+        if (!url) return;
+        let cancel = false;
+        const img = new Image();
+        img.onload = () => {
+            if (cancel) return;
+            if (!img.naturalWidth) {
+                setFailed(true);
+                return;
+            }
+            try {
+                const canvas = document.createElement("canvas");
+                const strip = 4;
+                canvas.width = strip * 2;
+                canvas.height = 8;
+                const ctx = canvas.getContext("2d", { willReadFrequently: true });
+                if (!ctx) return;
+                ctx.drawImage(img, 0, 0, strip, img.naturalHeight, 0, 0, strip, 8);
+                ctx.drawImage(img, img.naturalWidth - strip, 0, strip, img.naturalHeight, strip, 0, strip, 8);
+                const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                let r = 0;
+                let g = 0;
+                let b = 0;
+                let n = 0;
+                for (let i = 0; i < data.length; i += 4) {
+                    r += data[i] ?? 0;
+                    g += data[i + 1] ?? 0;
+                    b += data[i + 2] ?? 0;
+                    n += 1;
+                }
+                if (n > 0) setColor(`rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`);
+            } catch {
+                // The picture itself loaded. A failed color sample must not hide the frame.
+            }
+        };
+        img.onerror = () => {
+            if (!cancel) setFailed(true);
+        };
+        img.src = url;
+        return () => {
+            cancel = true;
+        };
+    }, [src]);
+    return { color, failed };
+}
 
 function fitPage(width: number, height: number) {
     const scale = Math.min(width / PAGE_W, height / PAGE_H);
@@ -40,6 +111,7 @@ export function BrowseStage({
     interactive = false,
     fill = false,
     natural = false,
+    showCursor = false,
 }: {
     frame: Pick<BrowseFrame, "image" | "x" | "y" | "title" | "url" | "status" | "error">;
     className?: string;
@@ -47,6 +119,8 @@ export function BrowseStage({
     fill?: boolean;
     /** Size the card to the screenshot so nothing is cropped or letterboxed. */
     natural?: boolean;
+    /** Draw the agent pointer even after control has stopped. */
+    showCursor?: boolean;
 }) {
     const hostRef = useRef<HTMLDivElement>(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
@@ -114,14 +188,17 @@ export function BrowseStage({
                 className={cn(
                     natural ? "block h-auto w-full" : "absolute inset-0 h-full w-full",
                     !natural && (fill ? "object-cover" : "object-contain"),
+                    "[image-rendering:auto]",
                 )}
             />
-            {status === "controlling" && frame.image ? (
+            {(showCursor || status === "controlling") && frame.image ? (
                 <svg
                     className="pointer-events-none absolute z-10 text-text-primary"
                     style={{
                         left: spot.left,
                         top: spot.top,
+                        width: 22,
+                        height: 22,
                         transition: pointer ? "none" : "left 180ms cubic-bezier(.2,.7,.2,1), top 180ms cubic-bezier(.2,.7,.2,1)",
                         filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.45))",
                     }}
@@ -161,7 +238,9 @@ export function BrowseChatCard({
     followLive?: boolean;
 }) {
     const live = useBrowseFrame();
-    const driving = followLive && !!live && (live.status === "controlling" || live.status === "loading");
+    const driving = followLive && !!live && (
+        live.status === "controlling" || live.status === "loading" || Boolean(live.image)
+    );
     const mirror = driving ? live : null;
     const savedStatus = (status as BrowseFrame["status"]) || "stopped";
     const frame = {
@@ -176,36 +255,93 @@ export function BrowseChatCard({
     const controlling = frame.status === "controlling" || frame.status === "loading";
     const lines = (mirror?.console?.length ? mirror.console : consoleLines) || [];
     const [consoleOpen, setConsoleOpen] = useState(false);
+    const page = usePageEdgeColor(frame.image);
+    const pageUrl = frame.url.trim();
 
-    if (!frame.image.trim()) return null;
+    const visible = Boolean(frame.image.trim()) || controlling;
+    if (!visible || page.failed || frame.status === "error") return null;
+
+    const pageColor = page.color;
+    const copyLink = () => {
+        if (!pageUrl) return;
+        void navigator.clipboard.writeText(pageUrl);
+    };
 
     return (
-        <div className="w-full max-w-[300px]">
-            <div className="relative">
-                <BrowseStage frame={frame} natural className="overflow-hidden rounded-lg border border-border-subtle shadow-md/60" />
-                {controlling ? (
-                    <button
-                        type="button"
-                        aria-label="Stop the agent browser"
-                        className="absolute right-2 top-2 z-20 flex size-6 items-center justify-center rounded-md bg-surface-1/90 text-text-primary"
-                        onClick={() => {
-                            void commands.agentBrowseStop();
-                            void commands.stopChatMessage();
-                        }}
-                    >
-                        <Icon icon={Dismiss20Regular} />
-                    </button>
-                ) : null}
-                {lines.length ? (
-                    <button
-                        type="button"
-                        className="absolute bottom-2 left-2 z-20 inline-flex items-center gap-1 rounded-md bg-surface-1/90 px-1.5 py-0.5 text-xs text-text-secondary"
-                        onClick={() => setConsoleOpen((open) => !open)}
-                    >
-                        <Icon icon={WindowConsole20Regular} />
-                        Console
-                    </button>
-                ) : null}
+        <div
+            className="group/browse relative my-2 max-w-full"
+            style={{ width: INSET.cardMaxWidth }}
+        >
+            <div
+                className="relative overflow-hidden squircle-2xl"
+                style={{
+                    backgroundImage: `url(${INSET.wallpaper})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                }}
+            >
+                <div
+                    className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center overflow-hidden"
+                >
+                    <div className="flex -translate-y-full gap-1.5 pt-2 opacity-0 transition duration-200 ease-out group-hover/browse:pointer-events-auto group-hover/browse:translate-y-0 group-hover/browse:opacity-100">
+                        {pageUrl ? (
+                            <button
+                                type="button"
+                                aria-label="Copy page link"
+                                className="pointer-events-auto flex size-10 items-center justify-center rounded-full bg-black text-white"
+                                onClick={copyLink}
+                            >
+                                <Icon icon={Copy20Regular} className="icon-lg" />
+                            </button>
+                        ) : null}
+                        {controlling ? (
+                            <button
+                                type="button"
+                                aria-label="Stop the agent browser"
+                                className="pointer-events-auto flex size-10 items-center justify-center rounded-full bg-black text-white"
+                                onClick={() => {
+                                    void commands.agentBrowseStop();
+                                }}
+                            >
+                                <Icon icon={Dismiss20Regular} className="icon-lg" />
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
+                <div style={{ padding: `${INSET.padY}px ${INSET.padX}px` }}>
+                    <div className="mx-auto" style={{ width: `${INSET.windowPercent}%` }}>
+                        <BorderGlow radius={INSET.radius}>
+                            <div
+                                className="relative aspect-video"
+                                style={{
+                                    background: pageColor ?? "#0e0e10",
+                                    padding: `${INSET.pagePadY}px ${INSET.pagePadX}px`,
+                                }}
+                            >
+                                {frame.image ? (
+                                    <div className="relative h-full w-full overflow-hidden">
+                                        <BrowseStage
+                                            frame={frame}
+                                            fill
+                                            showCursor
+                                            className="absolute inset-0"
+                                        />
+                                    </div>
+                                ) : null}
+                                {lines.length ? (
+                                    <button
+                                        type="button"
+                                        className="absolute bottom-2 left-2 z-20 inline-flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-xs text-white"
+                                        onClick={() => setConsoleOpen((open) => !open)}
+                                    >
+                                        <Icon icon={WindowConsole20Regular} />
+                                        Console
+                                    </button>
+                                ) : null}
+                            </div>
+                        </BorderGlow>
+                    </div>
+                </div>
             </div>
             {consoleOpen ? (
                 <pre className="mt-1 max-h-32 overflow-auto rounded-lg bg-surface-3 p-2 font-mono text-2xs text-text-secondary">

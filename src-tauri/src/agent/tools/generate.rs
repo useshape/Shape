@@ -238,7 +238,7 @@ async fn generate_media(kind: &str, args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         .collect::<Vec<_>>()
         .join(", ");
     let result = format!(
-        "Generated {count} {label}(s) with {model} (billed {:.2} Shape credits). media_id list: {ids}. Preview is in the chat UI. Do not dump binary. Mention ordinals when referring to an option.",
+        "Generated {count} {label}(s) with {model} (billed {:.2} usage). media_id list: {ids}. Preview is in the chat UI. Do not dump binary. Mention ordinals when referring to an option.",
         total_credits
     );
     ToolOutcome {
