@@ -56,6 +56,40 @@ interface EditorAction {
 type PaletteGroup = Pick<EditorAction, "id" | "label" | "section" | "model" | "meta"> & { group: true };
 type PaletteRow = EditorAction | PaletteGroup;
 
+function isPaletteReply(row: PaletteRow | undefined): row is EditorAction {
+    return !!row && "reply" in row && !!row.reply;
+}
+
+function paletteBlocks(rows: PaletteRow[]) {
+    const out: Array<
+        | { kind: "single"; action: PaletteRow }
+        | { kind: "thread"; parent: PaletteRow; replies: PaletteRow[] }
+    > = [];
+    for (let i = 0; i < rows.length; i++) {
+        const action = rows[i]!;
+        const isReply = isPaletteReply(action);
+        if (!isReply && action.id.startsWith("agent:")) {
+            const replies: PaletteRow[] = [];
+            let j = i + 1;
+            while (j < rows.length && isPaletteReply(rows[j])) {
+                replies.push(rows[j]!);
+                j++;
+            }
+            if (replies.length > 0) {
+                out.push({ kind: "thread", parent: action, replies });
+                i = j - 1;
+                continue;
+            }
+        }
+        out.push({ kind: "single", action });
+    }
+    return out;
+}
+
+function PaletteThread({ children }: { children: React.ReactNode }) {
+    return <div className="thread-links relative">{children}</div>;
+}
+
 type PaletteFilter = "all" | "files";
 
 const PALETTE_TAB_QUERIES = new Set(["all", "agents", "files", "actions", "settings"]);
@@ -653,7 +687,9 @@ export function CommandPalette() {
                                       : "No matching results"}
                             </div>
                         )}
-                        {filtered.map((action) => {
+                        {paletteBlocks(filtered).flatMap((block) => {
+                            const actions = block.kind === "thread" ? [block.parent, ...block.replies] : [block.action];
+                            const rows = actions.map((action) => {
                             const section = showSections ? action.section : undefined;
                             const showHeader = Boolean(section && section !== lastSection);
                             if (section) lastSection = section;
@@ -689,8 +725,10 @@ export function CommandPalette() {
                                         role="button"
                                         tabIndex={0}
                                         className={cn(
-                                            "mx-1 flex min-w-0 cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-left",
-                                            action.reply && "ml-6",
+                                            "relative mx-1 flex min-w-0 cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-left",
+                                            block.kind === "thread" && action.reply && "thread-link [--thread-x:-8px] [--thread-run:8px]",
+                                            block.kind === "thread" && action.reply && action.id === block.replies[0]?.id && "thread-link-first",
+                                            block.kind === "thread" && action.reply && action.id === block.replies[block.replies.length - 1]?.id && "thread-link-last",
                                             idx === selectedIndex
                                                 ? "bg-panel-hover text-text-primary"
                                                 : "text-text-secondary hover:bg-panel-hover",
@@ -701,10 +739,7 @@ export function CommandPalette() {
                                     >
                                         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                                             {action.reply ? (
-                                                <span
-                                                    className="h-5 w-px shrink-0 bg-border-subtle"
-                                                    aria-hidden
-                                                />
+                                                <span data-thread-dot="" className="relative z-[2] size-2.5 shrink-0 squircle-md bg-accent" aria-hidden />
                                             ) : null}
                                             {(browse && (filterTab === "files" || action.id.startsWith("file:"))) || mode === "files" ? (
                                                 <FileIcon name={action.icon || action.label} className="h-4 w-4 shrink-0 opacity-70" />
@@ -776,6 +811,15 @@ export function CommandPalette() {
                                     </ContextMenu>
                                 </React.Fragment>
                             );
+                            });
+                            if (block.kind === "thread") {
+                                return [
+                                    <PaletteThread key={`thread-${block.parent.id}`}>
+                                        {rows}
+                                    </PaletteThread>,
+                                ];
+                            }
+                            return rows;
                         })}
                     </div>
 

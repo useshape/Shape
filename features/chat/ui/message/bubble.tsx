@@ -1,9 +1,8 @@
 "use client";
 
-import { Slide } from "loading-dev";
 import { cn } from "@/lib/utils";
 import { providerIcon } from "@/lib/ui/provider-icon";
-import { formatMessageModelLabel, isAutoModelId } from "@/lib/chat/usage-display";
+import { formatMessageModelLabel, isLegacyAutoId } from "@/lib/chat/usage-display";
 
 /** Grey rounded card for user messages (no blue, no iMessage tail). */
 export function UserMessageCard({
@@ -35,11 +34,15 @@ export function AssistantMark({
     size?: number;
     className?: string;
 }) {
-    const showModel = !!model && !isAutoModelId(model);
+    const showModel = !!model;
     const badge = Math.max(10, Math.round(size * 0.42));
     return (
         <span className={cn("relative inline-flex shrink-0 text-text-muted", className)} style={{ width: size, height: size }} role="status" aria-label="Typing">
-            <Slide size={Math.min(size, 14)} />
+            <span className="imsg-typing imsg-typing-sm" aria-hidden>
+                <span />
+                <span />
+                <span />
+            </span>
             {showModel ? (
                 <span className="absolute -right-1 -bottom-1" style={{ width: badge, height: badge }}>
                     <span className="relative flex size-full items-center justify-center rounded-full bg-panel">
@@ -58,7 +61,13 @@ export function TypingDots({ className, model }: { className?: string; model?: s
 
 /** Compact spinner for sidebar / chat tabs. */
 export function WorkingDots({ className }: { className?: string }) {
-    return <Slide size={12} className={className} />;
+    return (
+        <span className={cn("imsg-typing imsg-typing-sm", className)} aria-hidden>
+            <span />
+            <span />
+            <span />
+        </span>
+    );
 }
 
 /** Model mark. Auto uses the frost face. */
@@ -72,7 +81,7 @@ export function ModelAvatarStack({
     className?: string;
 }) {
     const raw = models.filter(Boolean);
-    const isAuto = raw.length === 0 || raw.every((m) => isAutoModelId(m));
+    const isAuto = raw.length === 0 || raw.every((m) => isLegacyAutoId(m));
     const id = isAuto ? "auto" : raw[0]!;
 
     return (
@@ -81,7 +90,7 @@ export function ModelAvatarStack({
                 "inline-flex shrink-0 items-center justify-center overflow-visible",
                 className,
             )}
-            title={isAuto ? "Auto" : formatMessageModelLabel(id)}
+            title={isAuto ? "Free" : formatMessageModelLabel(id)}
         >
             {providerIcon(id, size)}
         </span>

@@ -2,6 +2,7 @@
 
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
 import { useMemo } from "react";
+import { freeUsageMeter, paidUsageMeter } from "@/lib/chat/usage-display";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 
@@ -25,13 +26,8 @@ function tierLabel(tier: string) {
 export function AccountSettingsPanel() {
     const auth = useShapeAuth();
 
-    const creditPercent = useMemo(() => {
-        if (!auth.creditsIncluded || auth.creditsIncluded <= 0) return 0;
-        const used = Math.max(0, auth.creditsIncluded - auth.creditsRemaining);
-        return Math.round((used / auth.creditsIncluded) * 100);
-    }, [auth.creditsIncluded, auth.creditsRemaining]);
-
-    const freeAutoPercent = auth.freeAutoPercent ?? 0;
+    const paid = paidUsageMeter(auth.creditsRemaining, auth.creditsIncluded);
+    const free = freeUsageMeter(auth.freeAutoPercent);
     const resetLabel = useMemo(() => {
         const iso = auth.currentPeriodEnd;
         const date = iso
@@ -142,34 +138,35 @@ export function AccountSettingsPanel() {
                 </SettingCard>
             </SettingSection>
 
-            <SettingSection title="Credits">
+            <SettingSection title="Usage">
                 <SettingCard>
                     <div className="px-3.5 py-3">
-                        <div className="text-sm font-medium text-text-primary">
-                            {auth.creditsIncluded > 0 ? `${Math.max(0, 100 - creditPercent)}% remaining` : "Premium credits"}
-                        </div>
-                        <div className="mt-0.5 text-xs text-text-muted">
-                            {auth.creditsIncluded > 0
-                                ? `${auth.creditsRemaining.toLocaleString()} left. ${resetLabel}.`
-                                : auth.tier === "free"
-                                  ? "Upgrade for premium models."
-                                  : `${auth.creditsRemaining.toLocaleString()} remaining. ${resetLabel}.`}
-                        </div>
-                        <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
-                            <div
-                                className="h-full rounded-full bg-success"
-                                style={{ width: `${auth.creditsIncluded > 0 ? Math.max(0, 100 - creditPercent) : 0}%` }}
-                            />
-                        </div>
+                        <div className="text-sm font-medium text-text-primary">{paid.title}</div>
+                        <div className="mt-0.5 text-xs text-text-muted">{resetLabel}.</div>
+                        {paid.showMeter ? (
+                            <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
+                                <div
+                                    className={paid.warn ? "h-full rounded-full bg-warning" : "h-full rounded-full bg-success"}
+                                    style={{ width: `${paid.percent}%` }}
+                                />
+                            </div>
+                        ) : null}
                     </div>
                 </SettingCard>
                 <SettingCard>
-                    <div className="flex items-center justify-between gap-4 px-3.5 py-2.5">
-                        <div className="min-w-0">
-                            <div className="text-sm font-medium text-text-primary">Auto</div>
-                            <div className="mt-0.5 text-xs text-text-muted">{resetLabel}.</div>
+                    <div className="px-3.5 py-3">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                                <div className="text-sm font-medium text-text-primary">Free usage</div>
+                                <div className="mt-0.5 text-xs text-text-muted">{resetLabel}.</div>
+                            </div>
+                            <span className="text-sm text-text-muted">{free.title}</span>
                         </div>
-                        <span className="text-sm text-text-muted">{freeAutoPercent}%</span>
+                        {free.showMeter ? (
+                            <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
+                                <div className="h-full rounded-full bg-warning" style={{ width: "100%" }} />
+                            </div>
+                        ) : null}
                     </div>
                 </SettingCard>
             </SettingSection>

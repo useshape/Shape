@@ -28,7 +28,12 @@ export function RevealName({
     return (
         <span
             key={epoch}
-            className={cn("relative inline-block max-w-full", className, playing && "chat-name-reveal")}
+            data-shine={playing ? text : undefined}
+            className={cn(
+                "relative inline-block w-max max-w-full overflow-hidden align-bottom",
+                className,
+                playing && "chat-name-reveal",
+            )}
             style={style}
             onAnimationEnd={(event) => {
                 if (event.animationName !== "chat-name-sheen") return;
@@ -36,7 +41,6 @@ export function RevealName({
             }}
         >
             {text}
-            {playing ? <span aria-hidden className="chat-name-sheen" /> : null}
         </span>
     );
 }

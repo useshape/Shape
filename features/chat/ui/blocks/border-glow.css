@@ -1,0 +1,13 @@
+/* The beam's own clip is a plain rounded rect. Force the same squircle as the window. */
+.inset-squircle-glow,
+.inset-squircle-glow::before,
+.inset-squircle-glow::after,
+.inset-squircle-glow [data-beam-bloom] {
+  corner-shape: squircle;
+}
+
+.inset-squircle-glow::before,
+.inset-squircle-glow::after,
+.inset-squircle-glow [data-beam-bloom] {
+  clip-path: none !important;
+}

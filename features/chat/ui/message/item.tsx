@@ -1,3 +1,4 @@
+import { ArrowClockwise20Regular } from "@fluentui/react-icons/headless/svg/arrow-clockwise";
 import { ArrowShuffle24Regular } from "@fluentui/react-icons/headless/svg/arrow-shuffle";
 import { BranchFork20Regular } from "@fluentui/react-icons/headless/svg/branch-fork";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
@@ -5,7 +6,9 @@ import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard
 import { SelectAllOn20Regular } from "@fluentui/react-icons/headless/svg/select-all-on";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
+import { Flag20Regular } from "@fluentui/react-icons/headless/svg/flag";
 import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
+import { Speaker220Regular } from "@fluentui/react-icons/headless/svg/speaker";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
 
 import React from "react";
@@ -49,8 +52,8 @@ import { WorkerMark } from "@/features/agent/sidebar/worker-mark";
 import { isAutoModelId } from "@/lib/chat/usage-display";
 import { commands } from "@/lib/backend/commands";
 import { parseUserAttachments } from "../../lib/user-attachments";
-import type { ParsedUserAttachment } from "../../lib/user-attachments";
-import { MessageAttachmentPill } from "../composer/attachments";
+import * as Sentry from "@sentry/react";
+import { redactText } from "@/lib/diagnostics/scrub";
 import { PhotoStack } from "../blocks/photo-stack";
 import { isLooseTalkBubble, talkSegments } from "../../lib/talk-segments";
 import { ContextWindowMenu, hasContextWindowData } from "./context-window";
@@ -87,8 +90,30 @@ type ChatMessageItemProps = {
     talkName?: string;
 };
 
-function SentAttachment({ att }: { att: ParsedUserAttachment }) {
-    return <MessageAttachmentPill name={att.name} />;
+function anonymizeReport(text: string): string {
+    return redactText(text, 6000)
+        .replace(/[A-Za-z]:\\(?:[^\\\s"'<>]+\\)*[^\\\s"'<>]+/g, "[path]")
+        .replace(/(?:^|[\s"'`(])\/(?:[\w.-]+\/)+[\w.-]+/g, " [path]")
+        .replace(/\b[\w.-]+\.(?:py|ts|tsx|js|jsx|go|rs|txt|json|md|css|html|toml|yml|yaml|svg|png|jpg)\b/g, "[file]");
+}
+
+function spokenReply(raw: string): string {
+    return raw
+        .replace(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]{80,}/gi, " ")
+        .replace(/<([a-z][\w:-]*)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+        .replace(/<\/?[a-z][\w:-]*\b[^>]*>/gi, " ")
+        .replace(/!\[[^\]]*]\([^)]*\)/g, " ")
+        .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+        .replace(/[*_`#]+/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function speakMessage(text: string) {
+    const plain = spokenReply(text);
+    if (!plain || typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(plain.slice(0, 4000)));
 }
 
 function MentionRichText({ text }: { text: string }) {
@@ -313,7 +338,7 @@ function ChatMessageItemInner({
 }: ChatMessageItemProps) {
     const talk = surface === "talk";
     const [expanded, setExpanded] = React.useState(false);
-    const [forkOpen, setForkOpen] = React.useState(false);
+    const [reportOpen, setReportOpen] = React.useState(false);
     const [menuOpen, setMenuOpen] = React.useState(false);
     const [menuStats, setMenuStats] = React.useState(stats);
     const [menuModel, setMenuModel] = React.useState(model);
@@ -436,13 +461,6 @@ function ChatMessageItemInner({
                                     .map((att) => ({ src: att.dataUrl!, alt: att.name }))}
                             />
                         ) : null}
-                        {userParts.attachments.some((att) => att.kind !== "image") ? (
-                            <div className="flex flex-wrap justify-end gap-1.5">
-                                {userParts.attachments.filter((att) => att.kind !== "image").map((att, i) => (
-                                    <SentAttachment key={`${att.name}-file-${i}`} att={att} />
-                                ))}
-                            </div>
-                        ) : null}
                         {displayText.trim() ? (
                         <UserMessageCard className="w-full">
                             <div
@@ -464,6 +482,14 @@ function ChatMessageItemInner({
                                 </div>
                             </div>
                         </UserMessageCard>
+                        ) : null}
+                        {userParts.attachments.some((att) => att.kind !== "image") ? (
+                            <p className="text-xs text-text-muted">
+                                {(() => {
+                                    const count = userParts.attachments.filter((att) => att.kind !== "image").length;
+                                    return `${count} attached file${count === 1 ? "" : "s"}`;
+                                })()}
+                            </p>
                         ) : null}
                     </div>
                 </div>
@@ -577,7 +603,7 @@ function ChatMessageItemInner({
                     ) : showTypingOnly ? (
                         <GeneratingIndicator
                             label="Thinking"
-                            model={shownStats?.usedAuto || isAutoModelId(shownModel) ? undefined : shownModel}
+                            model={shownModel}
                         />
                     ) : (
                         <div className="chat-markdown prose-compact w-fit max-w-full min-w-0 wrap-break-word select-text overflow-visible">
@@ -654,16 +680,35 @@ function ChatMessageItemInner({
                                         className="text-md font-medium"
                                         onClick={() => onRedo?.(index)}
                                     >
+                                        <Icon icon={ArrowClockwise20Regular} />
                                         Regenerate
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-md font-medium" onClick={() => setForkOpen(true)}>
-                                        Fork chat
+                                    <DropdownMenuItem
+                                        className="text-md font-medium"
+                                        onClick={() => void navigator.clipboard.writeText(String(timestamp))}
+                                    >
+                                        <Icon icon={Clipboard20Regular} />
+                                        Copy message ID
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="text-md font-medium"
+                                        onClick={() => speakMessage(content)}
+                                    >
+                                        <Icon icon={Speaker220Regular} />
+                                        Read aloud
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        className="text-md font-medium"
+                                        onClick={() => setReportOpen(true)}
+                                    >
+                                        <Icon icon={Flag20Regular} />
+                                        Report message
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                 </>
                             ) : null}
                             <div className="relative overflow-hidden">
-                                <div className="flex flex-col gap-2 p-1 chat-text">
+                                <div className="flex flex-col gap-2 px-3 py-2 chat-text">
                                 {formatMessageModelLabel(shownModel, shownStats) ? (
                                     <DetailRow label="Model" value={formatMessageModelLabel(shownModel, shownStats)} />
                                 ) : null}
@@ -672,7 +717,7 @@ function ChatMessageItemInner({
                                         label="Routing"
                                         value={
                                             shownStats?.usedAuto || isAutoModelId(shownModel)
-                                                ? "Auto"
+                                                ? "Free"
                                                 : "Explicit"
                                         }
                                     />
@@ -701,7 +746,7 @@ function ChatMessageItemInner({
                                 {hasContextWindowData(shownStats?.contextBreakdown, shownStats?.inputTokens, shownStats?.outputTokens) ? (
                                     <>
                                         <div
-                                            className="grid transition-[grid-template-rows] duration-500 ease-out"
+                                            className="grid transition-[grid-template-rows] duration-500 px-2 ease-out"
                                             style={{ gridTemplateRows: advanced ? "1fr" : "0fr" }}
                                             onTransitionEnd={(e) => {
                                                 if (e.propertyName !== "grid-template-rows") return;
@@ -759,23 +804,41 @@ function ChatMessageItemInner({
             </ContextMenuItem>
         </ContextMenuContent>
         </ContextMenu>
-        <AlertDialog open={forkOpen} onOpenChange={setForkOpen}>
+        <AlertDialog open={reportOpen} onOpenChange={setReportOpen}>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>Fork this chat?</AlertDialogTitle>
+                    <AlertDialogTitle>Report this message?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        A new chat starts from this message. Earlier turns stay as context for the AI but are not shown in the thread. The original chat is unchanged.
+                        This sends the message, the tool log, and your prompt. File names and paths are removed first.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                         onClick={() => {
-                            setForkOpen(false);
-                            onFork?.(index);
+                            setReportOpen(false);
+                            const tools = (content.match(/<[a-z_]+[\s\S]*?<\/[a-z_]+>/gi) || []).join("\n");
+                            void commands.getChatHistory().then((history) => {
+                                const prior = [...history.slice(0, typeof index === "number" ? index : history.length)]
+                                    .reverse()
+                                    .find((msg) => msg.role === "user");
+                                Sentry.captureMessage("User reported a chat message", {
+                                    level: "info",
+                                    extra: {
+                                        prompt: anonymizeReport(prior?.content || ""),
+                                        message: anonymizeReport(content),
+                                        tools: anonymizeReport(tools),
+                                    },
+                                });
+                            }).catch(() => {
+                                Sentry.captureMessage("User reported a chat message", {
+                                    level: "info",
+                                    extra: { message: anonymizeReport(content) },
+                                });
+                            });
                         }}
                     >
-                        Fork chat
+                        Send report
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>

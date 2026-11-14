@@ -136,8 +136,8 @@ pub(super) async fn tool_mcp_call(name: &str, args_json: &str, ctx: &ToolCtx<'_>
     }
 }
 pub(super) fn tool_save_plan(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
-    if !ctx.mode.eq_ignore_ascii_case("plan") {
-        return blocked_outcome("save_plan", "save_plan is only available in Plan mode.");
+    if ctx.mode.eq_ignore_ascii_case("ask") {
+        return blocked_outcome("save_plan", "Saving a plan is not available in Ask mode.");
     }
     if ctx.project_path.is_empty() {
         return error_outcome("save_plan", "No project is open.");

@@ -126,7 +126,62 @@ fn stopped() -> bool {
     STOP.load(Ordering::SeqCst)
 }
 
+const NEXT_HINT: &str = "\nNext: put the following clicks, typing, and scrolls in one browse call as steps (max 8). One element list comes back after the batch. Do not write between calls. Do not call observe or shot unless the page failed to load.";
+
+fn browse_steps_arg(args: &Value) -> Option<Vec<Value>> {
+    let steps = args.get("steps")?.as_array()?;
+    let taken: Vec<Value> = steps.iter().filter(|step| step.is_object()).take(8).cloned().collect();
+    if taken.is_empty() { None } else { Some(taken) }
+}
+
 pub async fn tool_browse(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let action = args.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    if !action.eq_ignore_ascii_case("stop") {
+        if let Some(steps) = browse_steps_arg(args) {
+            return run_browse_steps(ctx, steps).await;
+        }
+    }
+    browse_once(args, ctx, true).await
+}
+
+async fn run_browse_steps(ctx: &ToolCtx<'_>, steps: Vec<Value>) -> ToolOutcome {
+    let mut notes = Vec::new();
+    let last = steps.len() - 1;
+    for (i, step) in steps.iter().enumerate() {
+        let outcome = browse_once(step, ctx, i == last).await;
+        let failed = outcome.tool_result.starts_with("BLOCKED:")
+            || outcome.tool_result.contains("can't be reached");
+        if failed {
+            if notes.is_empty() {
+                return outcome;
+            }
+            return ToolOutcome {
+                tool_result: format!("{}\n{}", notes.join("\n"), outcome.tool_result),
+                ui_chunk: outcome.ui_chunk,
+                side_effect: outcome.side_effect,
+            };
+        }
+        if i == last {
+            let prefix = if notes.is_empty() {
+                String::new()
+            } else {
+                format!("Completed earlier steps:\n{}\n", notes.join("\n"))
+            };
+            return ToolOutcome {
+                tool_result: format!("{prefix}{}", outcome.tool_result),
+                ui_chunk: outcome.ui_chunk,
+                side_effect: outcome.side_effect,
+            };
+        }
+        let line = outcome.tool_result.lines().next().unwrap_or("").trim();
+        if !line.is_empty() {
+            notes.push(line.to_string());
+        }
+    }
+    fail("No browse steps to run.")
+}
+
+async fn browse_once(args: &Value, ctx: &ToolCtx<'_>, publish: bool) -> ToolOutcome {
     if stopped() && args.get("action").and_then(|v| v.as_str()) != Some("open") {
         return fail("The user stopped browser control. Call browse with action open if they ask you to continue.");
     }
@@ -271,6 +326,9 @@ pub async fn tool_browse(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     let summary = match act_result {
         Ok(summary) => summary,
         Err(err) => {
+            if stopped() {
+                return fail("The user stopped browser control. Continue the task without the browser unless they ask you to open it again.");
+            }
             if action == "open" {
                 let url = args.get("url").and_then(|v| v.as_str()).unwrap_or("");
                 let message = friendly_nav_error(&err);
@@ -280,11 +338,29 @@ pub async fn tool_browse(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         }
     };
 
+    if stopped() {
+        return fail("The user stopped browser control. Continue the task without the browser unless they ask you to open it again.");
+    }
+
     if action == "open" {
         let _ = eval_script(&ws, CONSOLE_HOOK).await;
-        wait_for_page(&ws, "").await;
+        wait_for_page_for(
+            &ws,
+            "",
+            if publish { Duration::from_secs(4) } else { Duration::from_secs(2) },
+        )
+        .await;
     } else if action == "act" || action == "click" {
-        wait_for_page(&ws, &href_before).await;
+        wait_for_page_for(
+            &ws,
+            &href_before,
+            if publish { Duration::from_millis(900) } else { Duration::from_millis(400) },
+        )
+        .await;
+    }
+
+    if !publish {
+        return ok(&summary, String::new(), None);
     }
 
     let snap = eval_script(&ws, SNAPSHOT_JS).await.unwrap_or_else(|_| "{}".into());
@@ -340,7 +416,7 @@ pub async fn tool_browse(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         String::new()
     };
     let tool_result = format!(
-        "{summary}\nPage: {title}\nURL: {href}\nElements (act on an id, no separate observe call):\n{elements}{script_note}"
+        "{summary}\nPage: {title}\nURL: {href}\nElements (act on an id, no separate observe call):\n{elements}{script_note}{NEXT_HINT}"
     );
     ok(&tool_result, ui, None)
 }
@@ -591,7 +667,7 @@ async fn run_screencast(app: &tauri::AppHandle, gen: u64) -> Result<(), String> 
         "method": "Page.startScreencast",
         "params": {
             "format": "jpeg",
-            "quality": 55,
+            "quality": 82,
             "maxWidth": VIEW_W as u32,
             "maxHeight": VIEW_H as u32,
             "everyNthFrame": 2
@@ -914,12 +990,16 @@ fn friendly_nav_error(raw: &str) -> String {
 /// Wait until the document has actually moved, so a click is not snapshotted
 /// on the previous page.
 async fn wait_for_page(ws: &str, previous: &str) {
-    let start = Instant::now();
     let limit = if previous.is_empty() {
-        Duration::from_secs(6)
+        Duration::from_secs(4)
     } else {
-        Duration::from_millis(2500)
+        Duration::from_millis(900)
     };
+    wait_for_page_for(ws, previous, limit).await;
+}
+
+async fn wait_for_page_for(ws: &str, previous: &str, limit: Duration) {
+    let start = Instant::now();
     while start.elapsed() < limit {
         if stopped() {
             return;
@@ -940,10 +1020,10 @@ async fn wait_for_page(ws: &str, previous: &str) {
             }
         } else if href != previous && (ready == "complete" || ready == "interactive") {
             return;
-        } else if href == previous && (ready == "complete" || ready == "interactive") && start.elapsed() > Duration::from_millis(160) {
+        } else if href == previous && (ready == "complete" || ready == "interactive") && start.elapsed() > Duration::from_millis(80) {
             return;
         }
-        tokio::time::sleep(Duration::from_millis(120)).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
 
@@ -978,7 +1058,7 @@ async fn capture_jpeg(ws: &str) -> Result<String, String> {
     let v = drive(
         ws,
         "Page.captureScreenshot",
-        json!({ "format": "jpeg", "quality": 40, "fromSurface": true }),
+        json!({ "format": "jpeg", "quality": 82, "fromSurface": true, "optimizeForSpeed": false }),
     )
     .await?;
     v.get("data")
@@ -1046,6 +1126,17 @@ pub fn list_browse_wallpapers(_app: tauri::AppHandle) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn steps_are_capped_at_eight() {
+        let args = json!({
+            "action": "batch",
+            "steps": (0..12).map(|i| json!({"action": "scroll", "dy": i})).collect::<Vec<_>>()
+        });
+        let steps = browse_steps_arg(&args).unwrap();
+        assert_eq!(steps.len(), 8);
+        assert!(browse_steps_arg(&json!({"action": "open"})).is_none());
+    }
 
     #[test]
     fn percent_maps_into_the_viewport() {

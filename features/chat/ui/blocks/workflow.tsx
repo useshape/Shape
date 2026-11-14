@@ -13,6 +13,7 @@ import { type IconGlyph, Icon } from "@/components/ui/icon";
 
 
 import { FileIcon } from "@/components/ui/file-icon";
+import { DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
 import { countChangedLines } from "@/lib/ui/diff-count";
@@ -36,7 +37,6 @@ export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "plugin_call",
     "subagent",
     "subagent_ref",
-    "browse_session",
 ]);
 
 function resolvePath(filePath: string): string {
@@ -265,6 +265,81 @@ export function coalesceConsecutiveSameFileEdits(blocks: Chunk[]): Chunk[] {
         out.push(block);
     }
     return out;
+}
+
+/** Short lookups like "pricing" or "home". A sentence is not one of these. */
+export function isSimpleSearch(query: string): boolean {
+    const text = query.trim();
+    if (!text || text.length > 24 || /[\n,]/.test(text)) return false;
+    return text.split(/\s+/).length <= 3;
+}
+
+/** Two simple lookups of about the same length. A short one next to a long one stays split. */
+export function searchesAreAlike(a: string, b: string): boolean {
+    if (!isSimpleSearch(a) || !isSimpleSearch(b)) return false;
+    const left = a.trim().length;
+    const right = b.trim().length;
+    return Math.max(left, right) / Math.min(left, right) <= 2;
+}
+
+/**
+ * Join only a run of adjacent, similar, simple searches.
+ * Two become "pricing and home". Three or more become "pricing and more".
+ */
+export function condenseSearchQueries(queries: string[]): { label: string; items: string[] }[] {
+    const out: { label: string; items: string[] }[] = [];
+    let run: string[] = [];
+    const flush = () => {
+        if (run.length === 0) return;
+        const items = [...run];
+        const label = items.length === 1
+            ? items[0]!
+            : items.length === 2
+              ? `${items[0]} and ${items[1]}`
+              : `${items[0]} and more`;
+        out.push({ label, items });
+        run = [];
+    };
+    for (const raw of queries) {
+        const text = raw.trim();
+        if (!text) continue;
+        if (run.length > 0 && searchesAreAlike(run[run.length - 1]!, text)) {
+            run.push(text);
+            continue;
+        }
+        flush();
+        run.push(text);
+    }
+    flush();
+    return out;
+}
+
+/** Menu body for a grouped tool call. The whole row is the trigger. */
+export function MoreMenu({ items, paths }: { items: string[]; paths?: string[] }) {
+    return (
+        <DropdownMenuContent align="start" sideOffset={6} className="min-w-56 max-w-80">
+            {items.map((item, index) => {
+                const path = paths?.[index] || (item.includes("/") || item.includes("\\") ? item : undefined);
+                const label = path ? path.split(/[\\/]/).pop() || path : item;
+                return (
+                    <DropdownMenuItem
+                        key={`${item}-${index}`}
+                        title={path || item}
+                        onSelect={() => {
+                            if (path) void openProjectFile(path);
+                        }}
+                    >
+                        {path ? (
+                            <FileIcon name={label} className="size-4 shrink-0" />
+                        ) : (
+                            <Icon icon={Search20Regular} className="icon-sm shrink-0" />
+                        )}
+                        <span className="min-w-0 truncate">{label}</span>
+                    </DropdownMenuItem>
+                );
+            })}
+        </DropdownMenuContent>
+    );
 }
 
 export function groupWorkflowRows(blocks: Chunk[]): WorkflowRow[] {
@@ -1085,16 +1160,22 @@ export function AgentWorkflow({
                             key={`reads-${i}`}
                             action="Explored"
                             detail={detail}
+                            menu={names.length > 1 ? <MoreMenu items={row.files.map((file) => file.path)} paths={row.files.map((file) => file.path)} /> : undefined}
                         />
                     );
                 }
                 if (row.kind === "search_group") {
                     return (
-                        <ActionLine
-                            key={`searches-${i}`}
-                            action="Searched"
-                            detail={row.count > 1 ? `${row.count} times` : undefined}
-                        />
+                        <div key={`searches-${i}`} className="flex flex-col">
+                            {condenseSearchQueries(row.queries).map((group, n) => (
+                                <ActionLine
+                                    key={`searches-${i}-${n}`}
+                                    action="Searched"
+                                    detail={group.label}
+                                    menu={group.items.length > 1 ? <MoreMenu items={group.items} /> : undefined}
+                                />
+                            ))}
+                        </div>
                     );
                 }
                 if (row.kind === "web_trail") {
@@ -1141,6 +1222,7 @@ export function AgentWorkflow({
                             key={`writes-${i}`}
                             action="Edited"
                             detail={detail}
+                            menu={names.length > 1 ? <MoreMenu items={row.paths} paths={row.paths} /> : undefined}
                         />
                     );
                 }

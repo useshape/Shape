@@ -25,6 +25,7 @@ import { PromoCardHost } from "@/features/promo/host";
 import { DesignPreviewCaptureHost } from "@/features/chat/ui/design-capture";
 import { WebviewReconnect } from "@/components/layout/webview-reconnect";
 import { applyChromeDataset, useChromeKind } from "@/lib/ui/chrome-platform";
+import { useOverflowFade } from "@/components/ui/overflow-fade";
 
 function pathMatches(pathname: string | null, base: string) {
     if (!pathname) return false;
@@ -34,6 +35,7 @@ function pathMatches(pathname: string | null, base: string) {
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const chrome = useChromeKind();
+    useOverflowFade();
     useLayoutEffect(() => {
         applyChromeDataset(document.documentElement, chrome);
     }, [chrome]);

@@ -68,10 +68,16 @@ pub(super) async fn tool_spawn_subagent(args: &Value, ctx: &ToolCtx<'_>) -> Tool
         && super::common::honor_spawn_skip(&user_task)
     {
         return ToolOutcome {
-            tool_result: "Do this yourself with the listed tools. It is not an independent parallel thread.".into(),
+            tool_result: "Do not spawn a thread. Do the task in this chat, and do not call spawn_subagent again.".into(),
             ui_chunk: String::new(),
             side_effect: None,
         };
+    }
+
+    let budget = subagents::requested_spawn_budget(&user_task);
+    let turn_key = ctx.turn_id.clone().unwrap_or_default();
+    if let Err(e) = subagents::claim_turn_spawn(&turn_key, budget) {
+        return error_outcome("spawn_subagent", &e);
     }
 
     let history_store = if history::is_chat_work_dir(ctx.project_path)
@@ -98,7 +104,10 @@ pub(super) async fn tool_spawn_subagent(args: &Value, ctx: &ToolCtx<'_>) -> Tool
         history_store,
     ) {
         Ok(spawned) => spawned,
-        Err(e) => return error_outcome("spawn_subagent", &e),
+        Err(e) => {
+            subagents::release_turn_spawn(&turn_key);
+            return error_outcome("spawn_subagent", &e);
+        }
     };
     let id = spawned.id;
     let isolation = spawned.isolation;

@@ -2,13 +2,15 @@
 
 import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
 
-import { useState, type ReactNode } from "react";
+import { useState, type AnimationEvent, type ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Favicon } from "@/components/ui/favicon";
 import { ShimmerText } from "@/components/ui/shimmer-text";
 import { cn } from "@/lib/utils";
 import { hostnameOf } from "@/lib/ui/favicon";
 import { Collapse } from "./collapse";
+import { FadeTruncate } from "@/components/ui/fade-truncate";
+import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown";
 
 const MARK_LIMIT = 4;
 
@@ -22,6 +24,38 @@ function uniqueFaviconHosts(urls: string[]): string[] {
         out.push(url);
     }
     return out;
+}
+
+/** Fade and sheen a label the first time its row mounts, same motion as a new chat tab. */
+export function ArriveLabel({ text, className, children }: { text: string; className?: string; children: ReactNode }) {
+    const [shown, setShown] = useState(text);
+    const [epoch, setEpoch] = useState(0);
+    const [done, setDone] = useState(false);
+    if (text !== shown) {
+        // A label that only grows ("Reading ap" → "Reading app.tsx") should not
+        // restart the sheen on every token. A new verb ("Reading" → "Generating") should.
+        const grew = shown.length > 0 && text.startsWith(shown) && text.length - shown.length < 32;
+        setShown(text);
+        if (!grew) {
+            setEpoch((n) => n + 1);
+            setDone(false);
+        }
+    }
+    const finish = (event: AnimationEvent<HTMLSpanElement>) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.animationName !== "chat-name-sheen" && event.animationName !== "chat-name-reveal") return;
+        setDone(true);
+    };
+    return (
+        <span
+            key={epoch}
+            data-shine={done ? undefined : text}
+            className={cn("inline-block max-w-full", className, !done && "chat-name-reveal relative")}
+            onAnimationEnd={finish}
+        >
+            {children}
+        </span>
+    );
 }
 
 /** First word of a sentence is the action; the rest is muted detail. */
@@ -46,6 +80,7 @@ export function ActionLine({
     extra,
     onClick,
     children,
+    menu,
     open,
     defaultOpen = false,
     onOpenChange,
@@ -62,6 +97,8 @@ export function ActionLine({
     extra?: ReactNode;
     onClick?: () => void;
     children?: ReactNode;
+    /** Real menu for this whole row. The row is the trigger. */
+    menu?: ReactNode;
     open?: boolean;
     defaultOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
@@ -70,9 +107,11 @@ export function ActionLine({
     title?: string;
 }) {
     const [uncontrolled, setUncontrolled] = useState(defaultOpen);
+    const [hovered, setHovered] = useState(false);
     const isOpen = open ?? uncontrolled;
-    const collapsible = children != null && children !== false;
-    const interactive = collapsible || Boolean(onClick);
+    const hasMenu = menu != null;
+    const collapsible = !hasMenu && children != null && children !== false;
+    const interactive = collapsible || Boolean(onClick) || hasMenu;
     const marks = uniqueFaviconHosts(favicons ?? []).slice(0, MARK_LIMIT);
 
     const toggle = () => {
@@ -82,34 +121,40 @@ export function ActionLine({
     };
 
     const Tag = interactive ? "button" : "div";
-
-    return (
-        <div className="w-full min-w-0">
+    const rowClass = cn(
+        "group/line flex w-fit max-w-full items-center gap-1.5 py-0.5 text-left chat-text font-normal text-text-muted",
+        interactive && "cursor-pointer",
+        shimmer && "tool-arrive",
+        className,
+    );
+    const row = (
             <Tag
                 type={interactive ? "button" : undefined}
                 title={title}
                 onClick={
-                    interactive
-                        ? () => {
-                              if (collapsible) toggle();
-                              else onClick?.();
-                          }
-                        : undefined
+                    hasMenu
+                        ? undefined
+                        : interactive
+                          ? () => {
+                                if (collapsible) toggle();
+                                else onClick?.();
+                            }
+                          : undefined
                 }
-                className={cn(
-                    "group/line flex w-fit max-w-full items-center gap-1.5 py-0.5 text-left chat-text font-normal text-text-muted",
-                    interactive && "cursor-pointer",
-                    shimmer && "tool-arrive",
-                    className,
-                )}
+                className={rowClass}
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
             >
                 {icon}
-                <span className="min-w-0 truncate">
-                    <span className={cn("text-text-secondary", interactive && "group-hover/line:text-text-primary")}>
+                <FadeTruncate expanded={hovered} className="min-w-0 max-w-full">
+                    <ArriveLabel
+                        text={typeof detail === "string" && detail ? `${action} ${detail}` : action}
+                        className={cn("text-text-secondary", interactive && "group-hover/line:text-text-primary")}
+                    >
                         {shimmer ? <ShimmerText>{action}</ShimmerText> : action}
-                    </span>
-                    {detail ? <span className="text-text-muted"> {detail}</span> : null}
-                </span>
+                        {detail ? <span className="text-text-muted"> {detail}</span> : null}
+                    </ArriveLabel>
+                </FadeTruncate>
                 {marks.length > 0 ? (
                     <span className="inline-flex shrink-0 items-center -space-x-1.5">
                         {marks.map((url) => (
@@ -139,6 +184,18 @@ export function ActionLine({
                     />
                 ) : null}
             </Tag>
+    );
+
+    return (
+        <div className="w-full min-w-0">
+            {hasMenu ? (
+                <DropdownMenu modal={false}>
+                    <DropdownMenuTrigger asChild>{row}</DropdownMenuTrigger>
+                    {menu}
+                </DropdownMenu>
+            ) : (
+                row
+            )}
             {collapsible ? <Collapse open={isOpen}>{children}</Collapse> : null}
         </div>
     );

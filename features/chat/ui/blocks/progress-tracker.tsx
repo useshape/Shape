@@ -1,5 +1,7 @@
 "use client";
 
+import "./progress-tracker.css";
+
 export type ProgressStep = {
     id: string;
     label: string;
@@ -51,7 +53,7 @@ export function ProgressTracker({
                             data-active={step.active || undefined}
                         >
                             <span className="ui-progressc__check" aria-hidden="true">
-                                <svg viewBox="0 0 24 24">
+                                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" aria-hidden>
                                     <path d="M6.5 12.5l3.5 3.5 7.5-8" pathLength={1} />
                                 </svg>
                             </span>

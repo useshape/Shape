@@ -78,7 +78,7 @@ pub(super) async fn tool_check_done(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
     if let Err(e) = evidence_ok(&claim, &evidence) {
         return ToolOutcome {
             tool_result: format!("FAIL. {e}"),
-            ui_chunk: format!("\n<insight_card title=\"Checked\">FAIL. {e}</insight_card>\n"),
+            ui_chunk: String::new(),
             side_effect: None,
         };
     }
@@ -100,13 +100,13 @@ pub(super) async fn tool_check_done(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
             .unwrap_or("Evidence does not support the claim.");
         return ToolOutcome {
             tool_result: format!("FAIL. {reason}"),
-            ui_chunk: format!("\n<insight_card title=\"Checked\">FAIL. {reason}</insight_card>\n"),
+            ui_chunk: String::new(),
             side_effect: None,
         };
     }
     ToolOutcome {
         tool_result: "PASS. The evidence is concrete. You may tell the user, and mention what you checked.".into(),
-        ui_chunk: "\n<insight_card title=\"Checked\">PASS</insight_card>\n".into(),
+        ui_chunk: String::new(),
         side_effect: None,
     }
 }

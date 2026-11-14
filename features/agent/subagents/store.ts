@@ -116,6 +116,70 @@ export function extractSubagentsFromText(text: string, parentId?: string): Array
     return out;
 }
 
+export function hydrateSubagentsFromConversations(
+    rows: Array<{
+        id: string;
+        title?: string;
+        kind?: string;
+        parent_id?: string | null;
+        history?: Array<{ content?: string }>;
+    }>,
+) {
+    const threads = new Map<string, {
+        id: string;
+        title: string;
+        parentId: string;
+        task?: string;
+        model?: string;
+        transcript?: string;
+        status: SubagentStatus;
+    }>();
+    const isThread = (row: { id: string; kind?: string }) =>
+        row.kind === "thread" || row.id.startsWith("thread-") || row.id.startsWith("sub-run-");
+
+    for (const row of rows) {
+        if (!isThread(row) || !row.parent_id) continue;
+        threads.set(row.id, {
+            id: row.id,
+            title: row.title?.trim() || "Thread",
+            parentId: row.parent_id,
+            status: "done",
+        });
+    }
+    for (const row of rows) {
+        if (isThread(row)) continue;
+        for (const message of row.history ?? []) {
+            for (const item of extractSubagentsFromText(message.content || "", row.id)) {
+                const saved = threads.get(item.id);
+                const savedTitle = saved?.title?.trim() || "";
+                threads.set(item.id, {
+                    id: item.id,
+                    title: savedTitle && !/^thread$/i.test(savedTitle) ? savedTitle : item.title,
+                    parentId: row.id,
+                    task: item.task,
+                    model: item.model,
+                    transcript: item.transcript,
+                    status: item.status === "error" ? "error" : "done",
+                });
+            }
+        }
+    }
+    for (const item of threads.values()) {
+        const existing = cards.find((card) => card.id === item.id);
+        if (existing?.status === "running" || existing?.status === "pending") continue;
+        upsertSubagent({
+            id: item.id,
+            title: item.title,
+            activity: existing?.activity || item.task || "Done",
+            status: item.status,
+            parentId: item.parentId,
+            task: item.task ?? existing?.task,
+            model: item.model ?? existing?.model,
+            transcript: item.transcript ?? existing?.transcript,
+        });
+    }
+}
+
 export function subagentWorkflowContent(card: SubagentCard): string {
     const transcript = card.transcript?.trim() ?? "";
     if (transcript) return transcript;

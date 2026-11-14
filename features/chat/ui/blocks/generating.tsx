@@ -1,22 +1,29 @@
 "use client";
 
-import { Slide } from "loading-dev";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 /** Phrases for the live tail. Waiting states stay literal; everything else rotates. */
 const PHRASES = [
-    "Thinking",
-    "Generating",
-    "Discombobulating",
-    "Mulling it over",
-    "Connecting dots",
-    "Pondering",
-    "Noodling",
-    "Piecing it together",
-    "Looking closer",
-    "Warming up",
+    "Figuring it out.",
+    "Looking this over.",
+    "Putting it together.",
+    "Checking the details.",
+    "Working through it.",
+    "Reading the files.",
+    "Thinking it through.",
+    "Piecing this together.",
 ] as const;
+
+function browsePhrases(host: string): readonly string[] {
+    const site = host.replace(/^www\./, "") || "the page";
+    return [
+        `Opening ${site}.`,
+        `Looking at ${site}.`,
+        `Reading ${site}.`,
+        `Clicking through ${site}.`,
+    ];
+}
 
 const LONGEST = PHRASES.reduce((a, b) => (a.length >= b.length ? a : b));
 const SWAP_MS = 180;
@@ -33,11 +40,12 @@ function waitingPhrase(label?: string | null): string | null {
  * One quiet status line: a small Slide mark and a crossfading phrase.
  * Width is reserved for the longest phrase so swaps do not move the thread.
  */
-export function AgentStatus({ label }: { label?: string | null }) {
+export function AgentStatus({ label, browsing }: { label?: string | null; browsing?: string | null }) {
     const fixed = waitingPhrase(label);
+    const phrases = browsing ? browsePhrases(browsing) : PHRASES;
     const [index, setIndex] = useState(0);
     const [shown, setShown] = useState(true);
-    const text = fixed ?? PHRASES[index];
+    const text = fixed ?? phrases[index % phrases.length];
 
     useEffect(() => {
         if (fixed) return;
@@ -45,7 +53,7 @@ export function AgentStatus({ label }: { label?: string | null }) {
         const timer = window.setInterval(() => {
             setShown(false);
             swap = window.setTimeout(() => {
-                setIndex((n) => (n + 1) % PHRASES.length);
+                setIndex((n) => (n + 1) % phrases.length);
                 setShown(true);
             }, SWAP_MS);
         }, HOLD_MS);
@@ -53,14 +61,18 @@ export function AgentStatus({ label }: { label?: string | null }) {
             window.clearInterval(timer);
             window.clearTimeout(swap);
         };
-    }, [fixed]);
+    }, [fixed, browsing, phrases.length]);
 
     return (
         <div className="flex h-5 items-center gap-1.5 text-sm text-text-muted" aria-live="polite">
-            <Slide size={10} className="shrink-0 text-text-muted" />
+            <span className="imsg-typing imsg-typing-sm shrink-0" aria-hidden>
+                <span />
+                <span />
+                <span />
+            </span>
             <span className="relative inline-flex h-5 items-center">
                 <span className="invisible whitespace-nowrap" aria-hidden>
-                    {fixed ?? LONGEST}
+                    {fixed ?? (browsing ? browsePhrases(browsing).reduce((a, b) => (a.length >= b.length ? a : b)) : LONGEST)}
                 </span>
                 <span
                     className={cn(
@@ -78,13 +90,15 @@ export function AgentStatus({ label }: { label?: string | null }) {
 /** @deprecated Use AgentStatus. Kept so existing call sites share one indicator. */
 export function GeneratingIndicator({
     label,
+    browsing,
 }: {
     label?: string;
+    browsing?: string | null;
     showTimer?: boolean;
     variantSeed?: string;
     model?: string;
 }) {
-    return <AgentStatus label={label} />;
+    return <AgentStatus label={label} browsing={browsing} />;
 }
 
 export function ThinkShimmer({ text }: { text: string }) {
