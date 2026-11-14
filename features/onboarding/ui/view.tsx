@@ -1,6 +1,7 @@
 "use client";
 
 import { ShapeLogo } from "@/components/ui/shape-logo";
+import { BorderGlow } from "@/features/chat/ui/blocks/border-glow";
 import { LoginPanel } from "./login-panel";
 import { OnboardingWindowChrome } from "./window-chrome";
 
@@ -9,14 +10,17 @@ export default function Onboarding() {
     return (
         <div
             id="shape-onboarding"
-            className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-text-primary select-none"
+            className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-text-primary select-none"
         >
+            <div className="pointer-events-none absolute inset-0 z-0">
+                <BorderGlow transparent radius={10} glowSize={10} className="h-full opacity-30" />
+            </div>
             <OnboardingWindowChrome />
-            <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 py-10">
+            <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-hidden px-8 py-10">
                 <div className="flex w-full max-w-sm flex-col items-center text-center">
-                    <ShapeLogo size={44} />
+                    <ShapeLogo size={90} />
                     <h1 className="mt-6 text-3xl font-normal tracking-tight text-text-primary">
-                        Continue to use shape
+                        Get started with Shape
                     </h1>
                     <div className="w-full">
                         <LoginPanel finishing={false} onSignedIn={() => {}} />

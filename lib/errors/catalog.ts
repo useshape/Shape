@@ -79,10 +79,10 @@ const CATALOG: Record<number, ShapeErrorEntry> = {
     },
     [SHAPE_ERRORS.AI_CREDITS]: {
         code: SHAPE_ERRORS.AI_CREDITS,
-        name: "Usage or credits",
+        name: "Usage",
         title: "Usage limit reached",
         description:
-            "This request hit a credit or quota limit on the provider that served it.",
+            "This request hit a usage or quota limit on the provider that served it.",
     },
     [SHAPE_ERRORS.AI_BILLING_HOLD]: {
         code: SHAPE_ERRORS.AI_BILLING_HOLD,

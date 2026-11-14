@@ -1,7 +1,6 @@
 "use client";
 
 import { PanelBottom20Filled } from "@fluentui/react-icons/headless/svg/panel-bottom";
-import { People20Filled } from "@fluentui/react-icons/headless/svg/people";
 
 
 
@@ -19,18 +18,16 @@ import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch"
 import {
     DropdownMenu,
     DropdownMenuContent,
-    DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { providerIcon } from "@/lib/ui/provider-icon";
-import { getCatalogModels } from "@/lib/catalog/store";
-import { isIncludedModel } from "@/lib/settings/models";
 import {
     getSubagents,
-    subagentDisplayTitle,
+    openSubagent,
     subscribeSubagents,
+    upsertSubagent,
     type SubagentCard,
 } from "@/features/agent/subagents/store";
+import { ThreadReplies } from "@/features/agent/sidebar/chats";
 import { cn } from "@/lib/utils";
 import { RevealName } from "@/components/ui/reveal-name";
 
@@ -70,36 +67,6 @@ export function resolveChatCrumbTitle(opts: {
     return picks.find((title) => !isGenericChatTitle(title))?.trim() || "New chat";
 }
 
-function freeModelId(): string {
-    return getCatalogModels().find((model) => isIncludedModel(model))?.id || "";
-}
-
-function resolvedModelId(model?: string): string {
-    const id = (model || "").trim();
-    if (id && id !== "auto" && !id.endsWith("/auto")) return id;
-    return freeModelId();
-}
-
-function shortModelName(model?: string): string {
-    const id = resolvedModelId(model);
-    if (!id) return "";
-    const leaf = id.split("/").pop() || id;
-    if (/\s/.test(leaf)) return leaf;
-    return leaf.replace(/[-_]+/g, " ");
-}
-
-function ModelMark({ model, pin = false }: { model?: string; pin?: boolean }) {
-    const id = resolvedModelId(model);
-    const label = shortModelName(id);
-    if (!id || !label) return null;
-    return (
-        <span className={cn("flex shrink-0 items-center gap-1 text-xs text-text-muted", pin && "ml-auto")}>
-            {providerIcon(id, 12)}
-            <span className="max-w-[7rem] truncate">{label}</span>
-        </span>
-    );
-}
-
 function chatSubagents(parentId: string | null, extra: SubagentCard[]): SubagentCard[] {
     const live = getSubagents();
     const map = new Map<string, SubagentCard>();
@@ -119,7 +86,6 @@ export function ChatTitlebar({
     conversationId,
     onSelect,
     subagentTitle,
-    subagentModel,
     onCloseSubagent,
     extractedSubagents = [],
 }: {
@@ -129,7 +95,6 @@ export function ChatTitlebar({
     timestamp?: number | null;
     onSelect?: (id: string) => void;
     subagentTitle?: string | null;
-    subagentModel?: string | null;
     onCloseSubagent?: () => void;
     extractedSubagents?: SubagentCard[];
 }) {
@@ -138,6 +103,7 @@ export function ChatTitlebar({
     const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
     const [tabsSlot, setTabsSlot] = useState<HTMLElement | null>(null);
     const [terminalOpen, setTerminalOpen] = useState(false);
+    const [threadMenuOpen, setThreadMenuOpen] = useState(false);
     useSyncExternalStore(subscribeSubagents, getSubagents, getSubagents);
     const subagents = chatSubagents(conversationId, extractedSubagents);
 
@@ -197,9 +163,28 @@ export function ChatTitlebar({
         </div>
     );
 
+    const openListedThread = (card: SubagentCard) => {
+        const parent = card.parentId || conversationId || undefined;
+        upsertSubagent({
+            id: card.id,
+            title: card.title,
+            activity: card.activity || card.task || "Done",
+            status: card.status,
+            parentId: parent,
+            task: card.task,
+            model: card.model,
+            transcript: card.transcript,
+        });
+        openSubagent(card.id);
+        window.dispatchEvent(new CustomEvent("shape-open-subagent", {
+            detail: { id: card.id, parentId: parent },
+        }));
+        setThreadMenuOpen(false);
+    };
+
     const chatCrumb = subagents.length > 0 ? (
         <li className="flex min-w-0 items-center">
-            <DropdownMenu>
+            <DropdownMenu open={threadMenuOpen} onOpenChange={setThreadMenuOpen}>
                 <DropdownMenuTrigger asChild>
                     <button
                         type="button"
@@ -213,27 +198,25 @@ export function ChatTitlebar({
                         <RevealName text={title} className="min-w-0 truncate" />
                     </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-52">
-                    <DropdownMenuItem
-                        onClick={() => onCloseSubagent?.()}
+                <DropdownMenuContent align="start" className="w-64 overflow-visible p-1.5">
+                    <button
+                        type="button"
+                        className="relative z-10 flex h-8 w-full items-center rounded-md bg-sidebar px-2 text-left text-sm text-text-secondary hover:bg-panel-hover hover:text-text-primary"
+                        onClick={() => {
+                            onCloseSubagent?.();
+                            setThreadMenuOpen(false);
+                        }}
                     >
-                        {title}
-                    </DropdownMenuItem>
-                    {subagents.map((card) => (
-                        <DropdownMenuItem
-                            key={card.id}
-                            onClick={() => {
-                                window.dispatchEvent(new CustomEvent("shape-open-subagent", {
-                                    detail: { id: card.id, parentId: card.parentId || conversationId },
-                                }));
-                            }}
-                            className="gap-2"
-                        >
-                            <Icon icon={People20Filled} className="text-text-muted" />
-                            <span className="min-w-0 flex-1 truncate">{subagentDisplayTitle(card)}</span>
-                            <ModelMark model={card.model} pin />
-                        </DropdownMenuItem>
-                    ))}
+                        <span className="min-w-0 flex-1 truncate">{title}</span>
+                    </button>
+                    <ThreadReplies
+                        cards={subagents}
+                        color={null}
+                        onOpen={(id) => {
+                            const card = subagents.find((item) => item.id === id);
+                            if (card) openListedThread(card);
+                        }}
+                    />
                 </DropdownMenuContent>
             </DropdownMenu>
         </li>
@@ -259,11 +242,7 @@ export function ChatTitlebar({
                     {chatCrumb}
                     {subagentTitle ? (
                         <BreadcrumbItem current className="min-w-0 max-w-[24rem]">
-                            <span className="flex min-w-0 items-center gap-1.5">
-                                <Icon icon={People20Filled} className="shrink-0 text-text-muted" />
-                                <RevealName text={subagentTitle} appear className="min-w-0 truncate" />
-                                <ModelMark model={subagentModel || undefined} />
-                            </span>
+                            <RevealName text={subagentTitle} appear className="min-w-0 truncate" />
                         </BreadcrumbItem>
                     ) : null}
                 </Breadcrumb>

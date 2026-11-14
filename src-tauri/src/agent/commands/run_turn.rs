@@ -1001,7 +1001,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 .collect();
             let executed = futures::future::join_all(run_indices.iter().map(|&i| {
                 let call = &tool_calls[i];
-                dispatch::execute_tool(&call.name, &call.arguments, &ctxs[i])
+                dispatch::execute_tool_safe(&call.name, &call.arguments, &ctxs[i])
             }))
             .await;
 
@@ -1347,7 +1347,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 allowed_tools: Some(allowed_tool_names.as_slice()),
             };
 
-            let tool_outcome = dispatch::execute_tool(&call.name, &call.arguments, &ctx).await;
+            let tool_outcome = dispatch::execute_tool_safe(&call.name, &call.arguments, &ctx).await;
 
             // Writing to disk can change what read-only tools would return, so repeated
             // reads become legitimate again.
@@ -1691,7 +1691,6 @@ fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
     if chunk.contains("<generated_svg")
         || chunk.contains("<generated_image")
         || chunk.contains("<generated_audio")
-        || chunk.contains("<generated_model")
     {
         upsert_media_chunk(accumulated, chunk);
         return;
@@ -1744,8 +1743,6 @@ fn upsert_media_chunk(accumulated: &mut String, chunk: &str) {
         "<generated_svg"
     } else if chunk.contains("<generated_audio") {
         "<generated_audio"
-    } else if chunk.contains("<generated_model") {
-        "<generated_model"
     } else {
         "<generated_image"
     };
@@ -1753,8 +1750,6 @@ fn upsert_media_chunk(accumulated: &mut String, chunk: &str) {
         "</generated_svg>"
     } else if chunk.contains("<generated_audio") {
         "</generated_audio>"
-    } else if chunk.contains("<generated_model") {
-        "</generated_model>"
     } else {
         "</generated_image>"
     };
@@ -1840,21 +1835,6 @@ mod file_cache_tests {
         assert!(text.contains("one"));
         assert!(text.contains("three"));
         assert!(!text.contains(">two<"));
-    }
-
-    #[test]
-    fn generated_model_revisions_replace_the_same_media_id() {
-        let mut text = String::new();
-        upsert_media_chunk(
-            &mut text,
-            "<generated_model media_id=\"m1\" name=\"a.glb\"></generated_model>",
-        );
-        upsert_media_chunk(
-            &mut text,
-            "<generated_model media_id=\"m1\" name=\"b.glb\"></generated_model>",
-        );
-        assert!(text.contains("b.glb"));
-        assert!(!text.contains("a.glb"));
     }
 }
 

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Button, type ButtonStatus } from "@/components/ui/button";
-import { loginShape, useShapeAuth } from "@/lib/cloud/store";
+import { cancelLoginShape, loginShape, useShapeAuth } from "@/lib/cloud/store";
 import { commands } from "@/lib/backend";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 
@@ -42,17 +42,22 @@ export function LoginPanel({
 
     return (
         <div className="flex w-full flex-col items-center text-center">
-            <button
-                type="button"
-                className="mt-8 h-12 w-full rounded-full bg-white text-black hover:bg-white/90 font-normal"
-                disabled={busy || shapeAuth.loggedIn}
+            <Button
+                status={continueStatus}
+                aria-label={busy ? "Cancel sign-in" : "Authorize your account"}
+                className="mt-8 h-13! min-h-13! w-90! text-lg! font-normal squircle-full!"
+                disabled={shapeAuth.loggedIn}
+                variant="default"
+                onPointerDown={() => {
+                    if (busy) cancelLoginShape();
+                }}
                 onClick={() => void start()}
             >
-                Sign in with shape
-            </button>
+                Authorize your account
+            </Button>
             <button
                 type="button"
-                className="mt-5 text-sm font-light text-text-muted underline-offset-2 underline hover:text-text-primary hover:underline"
+                className="mt-5 text-lg font-regular text-text-muted hover:text-text-primary hover:underline"
                 onClick={() => void commands.openUrlExternal(`${SHAPE_API_BASE}/signup`)}
             >
                 Sign up

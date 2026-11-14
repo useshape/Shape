@@ -13,7 +13,6 @@ import React from "react";
 import { type IconGlyph, Icon } from "@/components/ui/icon";
 
 
-import { FileIcon } from "@/components/ui/file-icon";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 const IMAGE_EXTENSIONS = new Set([
@@ -207,8 +206,8 @@ const KIND_ICON: Record<Exclude<AttachmentKind, "file">, IconGlyph> = {
     code: Code20Regular,
 };
 
-function KindIcon({ kind, name }: { kind: AttachmentKind; name: string }) {
-    if (kind === "file") return <FileIcon name={name} className="size-3.5" />;
+function KindIcon({ kind }: { kind: AttachmentKind; name: string }) {
+    if (kind === "file" || kind === "image") return <Icon icon={Document20Regular} className="text-text-muted" />;
     const Glyph = KIND_ICON[kind];
     return <Icon icon={Glyph} className="text-text-muted" />;
 }
@@ -232,29 +231,41 @@ function RemoveButton({ name, onRemove }: { name: string; onRemove: () => void }
 export function ComposerFileTile({
     kind,
     name,
+    src,
+    size,
     busy,
     failed,
 }: {
     kind: AttachmentKind;
     name: string;
     src?: string | null;
+    size?: number;
     busy?: boolean;
     failed?: boolean;
 }) {
     return (
         <div
             className={cn(
-                "inline-flex h-7 max-w-56 items-center gap-1.5 rounded-md bg-surface-1 px-2 text-sm text-text-primary",
+                "inline-flex h-14 max-w-56 items-center gap-2 rounded-xl bg-surface-3 pr-3 text-sm text-text-primary",
+                kind === "image" && src ? "pl-1" : "px-3",
                 failed && "text-error",
             )}
             title={name}
         >
             {busy ? (
-                <span className="size-3 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : kind === "image" && src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt="" className="size-12 shrink-0 rounded-lg object-cover" />
             ) : (
-                <KindIcon kind={kind} name={name} />
+                <KindIcon kind="file" name={name} />
             )}
-            <span className="min-w-0 truncate">{failed ? "Failed" : name}</span>
+            <span className="min-w-0">
+                <span className="block truncate">{failed ? "Failed" : name}</span>
+                {size != null ? (
+                    <span className="block text-xs text-text-muted">{formatAttachmentSize(size)}</span>
+                ) : null}
+            </span>
         </div>
     );
 }
@@ -290,6 +301,7 @@ function AttachmentPill({
                 kind={attachment.kind}
                 name={attachment.name}
                 src={preview}
+                size={attachment.size}
                 busy={busy}
                 failed={failed}
             />

@@ -9,6 +9,26 @@ import { NEW_CHAT_TAB_ID } from "../ui/shell/tabs";
 import { upsertTaggedBlockInContent } from "./upsert-stream-blocks";
 import { isPlaceholderView, isThreadConversationId, resolveLiveTurnKey, streamVisibleToView } from "./live-turn-key";
 
+function stampLastAssistant(
+    messages: ChatMessage[],
+    stats: ChatMessage["stats"],
+    model?: string,
+): ChatMessage[] {
+    if (!stats && !model) return messages;
+    const updated = [...messages];
+    for (let i = updated.length - 1; i >= 0; i--) {
+        const msg = updated[i];
+        if (!msg || msg.role !== "assistant") continue;
+        updated[i] = {
+            ...msg,
+            stats: stats ?? msg.stats,
+            model: model ?? msg.model,
+        };
+        break;
+    }
+    return updated;
+}
+
 function isForeignConversation(id?: string | null) {
     return Boolean(id && id.startsWith("mw-worker-"));
 }
@@ -565,19 +585,23 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                     );
                 }
                 // Cancelled turns are persisted server-side — resync so Stop
-                // doesn't leave a wiped/empty assistant bubble.
+                // doesn't leave a wiped/empty assistant bubble. The stop event
+                // carries the menu stats; keep them if history was saved first.
                 if (error === "Cancelled") {
                     void (async () => {
+                        let history: Awaited<ReturnType<typeof commands.getChatHistory>> | null = null;
                         try {
-                            const history = await commands.getChatHistory();
-                            if (!viewingIdRef.current || viewingIdRef.current === conversationId) {
-                                setMessages(history);
-                                setIsLoading(false);
-                                setActivityLabel(null);
-                            }
+                            history = await commands.getChatHistory();
                         } catch {
-                            /* ignore */
+                            history = null;
                         }
+                        if (viewingIdRef.current && viewingIdRef.current !== conversationId) return;
+                        setMessages((prev) => {
+                            const base = history && history.some((m) => m.role === "assistant") ? history : prev;
+                            return stampLastAssistant(base, stats, model);
+                        });
+                        setIsLoading(false);
+                        setActivityLabel(null);
                     })();
                     return;
                 }

@@ -79,10 +79,13 @@ function BrandIcon({ icon, size }: { icon: IconModule; size: number }) {
 }
 
 function providerFromModelId(modelId: string): string {
-    if (modelId === "auto" || modelId === "openrouter/auto") return "shape";
     const prefix = modelId.split("/")[0]?.toLowerCase() || "";
+    if (prefix === "auto" || prefix === "openrouter") return "deepseek";
     if (prefix === "meta-llama") return "meta";
-    return prefix || "shape";
+    if (prefix === "moonshot") return "moonshotai";
+    if (prefix === "mistral") return "mistralai";
+    if (prefix === "xai") return "x-ai";
+    return prefix;
 }
 
 function BrandMark({ name, size }: { name: string; size: number }) {
@@ -121,8 +124,6 @@ export function providerLabel(modelId: string): string {
         case "mistralai": return "Mistral";
         case "meta": return "Meta";
         case "cohere": return "Cohere";
-        case "amazon": return "Amazon";
-        case "nvidia": return "Nvidia";
         case "shape": return "Shape";
         default: return provider.replace(/(^|-)([a-z])/g, (_, gap: string, letter: string) => `${gap}${letter.toUpperCase()}`);
     }

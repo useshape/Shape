@@ -312,6 +312,19 @@ pub(crate) fn apply_focus_conversation(
     preferred_proj: Option<String>,
 ) -> Result<(), AppError> {
     if state.current_conversation_id.lock()?.as_deref() == Some(id) {
+        let empty = state.history.lock().map(|h| h.is_empty()).unwrap_or(true);
+        if !empty {
+            return Ok(());
+        }
+        // The id is current but the transcript is blank. Reload from disk when
+        // a saved copy exists, so opening that chat does not show an empty thread.
+        if let Some((disk_proj, disk_conv)) =
+            history::find_conversation_by_id(id, preferred_proj.as_deref())
+        {
+            if !disk_conv.history.is_empty() {
+                install_conversation(state, id, disk_proj, disk_conv);
+            }
+        }
         return Ok(());
     }
     let persist_path = state
@@ -345,6 +358,13 @@ pub(crate) fn apply_focus_conversation(
     } else {
         history::find_conversation_by_id(id, preferred.as_deref())
             .ok_or_else(|| AppError::Message("Conversation not found".to_string()))?
+    };
+    let (load_proj, conv) = if conv.history.is_empty() {
+        history::find_conversation_by_id(id, preferred.as_deref())
+            .filter(|(_, disk)| !disk.history.is_empty())
+            .unwrap_or((load_proj, conv))
+    } else {
+        (load_proj, conv)
     };
     install_conversation(state, id, load_proj, conv);
     Ok(())

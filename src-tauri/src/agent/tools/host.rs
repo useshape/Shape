@@ -3,6 +3,7 @@
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use flate2::read::GzDecoder;
@@ -225,6 +226,17 @@ pub fn inspect_sqlite(path: &Path, action: &str, table: &str, sql: &str, limit: 
     Ok(clip(&format!("{}\n{body}", path.display())))
 }
 
+fn local_http_client() -> &'static reqwest::blocking::Client {
+    static CLIENT: OnceLock<reqwest::blocking::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(15))
+            .redirect(reqwest::redirect::Policy::limited(3))
+            .build()
+            .unwrap_or_else(|_| reqwest::blocking::Client::new())
+    })
+}
+
 pub fn local_request(
     method: &str,
     url: &str,
@@ -236,12 +248,8 @@ pub fn local_request(
     if !matches!(method.as_str(), "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD") {
         return Err("method must be GET, POST, PUT, PATCH, DELETE, or HEAD.".into());
     }
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(15))
-        .redirect(reqwest::redirect::Policy::limited(3))
-        .build()
-        .map_err(|err| err.to_string())?;
-    let mut req = client.request(method.parse().map_err(|_| "Bad method".to_string())?, url.clone());
+    let mut req = local_http_client()
+        .request(method.parse().map_err(|_| "Bad method".to_string())?, url.clone());
     for (name, value) in headers {
         if name.eq_ignore_ascii_case("host") || name.eq_ignore_ascii_case("cookie") {
             continue;

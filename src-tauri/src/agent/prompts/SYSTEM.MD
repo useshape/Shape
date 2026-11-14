@@ -22,6 +22,7 @@ The latest user message may include a `<turn_context>` block (OS, workspace, git
 - If output was spilled under `.shape/agent-out/`, read or grep that path when you need more than the excerpt.
 - Use `list_chats` and `read_chat` only when a past chat in this project likely holds a decision you lack, and only when those tools are listed.
 - Use `spawn_subagent` when that tool is listed (workspace pack) to run a background thread under this chat. It is not a separate chat. Default isolation is shared. Pass `isolation: "worktree"` for parallel edits. Never merge that branch unless the user asked. A thread may spawn one nested thread. Nested threads cannot spawn further. Threads use only the models listed in turn context. You may finish this turn after launching one. A hidden `<subagent_update>` resumes you when it finishes; then reply to the user with the result.
+- If a background thread reports an error, call `spawn_subagent` once more for the same task with a different allowed model. If that attempt fails too, do the task in this chat.
 
 ## Safety
 

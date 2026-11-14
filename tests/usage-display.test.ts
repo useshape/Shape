@@ -15,18 +15,18 @@ describe("usage-display", () => {
     });
 
     it("formats model labels", () => {
-        expect(formatModelLabel("auto")).toBe("Auto");
-        expect(formatModelLabel("openrouter/auto")).toBe("Auto");
+        expect(formatModelLabel("auto")).toBe("Free");
+        expect(formatModelLabel("openrouter/auto")).toBe("Free");
         expect(formatModelLabel("anthropic/claude-sonnet-4")).toBe("Claude Sonnet 4");
         expect(formatModelLabel("")).toBe("");
         expect(formatModelLabel(null)).toBe("");
     });
 
-    it("shows Auto when Auto was selected, otherwise the concrete model name", () => {
+    it("shows Free when Free was selected, otherwise the concrete model name", () => {
         expect(
             formatMessageModelLabel("google/gemini-2.5-flash", { usedAuto: true }),
-        ).toBe("Auto");
-        expect(formatMessageModelLabel("auto", { usedAuto: true })).toBe("Auto");
+        ).toBe("Gemini 2.5 Flash");
+        expect(formatMessageModelLabel("auto", { usedAuto: true })).toBe("Free");
         expect(formatMessageModelLabel("anthropic/claude-sonnet-4", { usedAuto: false })).toBe(
             "Claude Sonnet 4",
         );
@@ -76,7 +76,7 @@ describe("usage-display", () => {
         expect(formatMessageUsageRows(undefined, "auto")).toEqual([]);
     });
 
-    it("resolves chat ring from monthly Auto or credits usage", () => {
+    it("resolves free usage as percent used and paid usage as remaining past 100%", () => {
         expect(
             resolveChatUsageDisplay(
                 "auto",
@@ -90,29 +90,12 @@ describe("usage-display", () => {
                 null,
             ),
         ).toMatchObject({
-            mode: "auto",
+            mode: "free",
             percent: 18,
             title: "18% used",
-            tooltip: "18% used this month (Auto)",
-        });
-
-        expect(
-            resolveChatUsageDisplay(
-                "auto",
-                {
-                    loggedIn: true,
-                    tier: "pro",
-                    freeAutoPercent: 18,
-                    creditsIncluded: 1500,
-                    creditsRemaining: 1200,
-                },
-                { tokens: 100_000, creditsCharged: 0, usedAuto: true, at: 1 },
-            ),
-        ).toMatchObject({
-            mode: "auto",
-            percent: 18,
-            title: "18% used",
-            tooltip: "18% used this month (Auto)",
+            headline: "18%",
+            tooltip: "18% of free usage used",
+            showMeter: false,
         });
 
         expect(
@@ -128,10 +111,30 @@ describe("usage-display", () => {
                 { tokens: 0, creditsCharged: 75, usedAuto: false, at: 1 },
             ),
         ).toMatchObject({
-            mode: "credits",
-            percent: 20,
-            title: "300.00 out of 1,500.00",
-            tooltip: "300.00 out of 1,500.00 this month",
+            mode: "usage",
+            percent: 0,
+            title: "1200% usage remaining",
+            headline: "1200%",
+            showMeter: false,
+        });
+
+        expect(
+            resolveChatUsageDisplay(
+                "anthropic/claude-sonnet-4",
+                {
+                    loggedIn: true,
+                    tier: "plus",
+                    freeAutoPercent: 0,
+                    creditsIncluded: 450,
+                    creditsRemaining: 0,
+                },
+                null,
+            ),
+        ).toMatchObject({
+            mode: "usage",
+            title: "Usage limit reached",
+            showMeter: true,
+            warn: true,
         });
     });
 });

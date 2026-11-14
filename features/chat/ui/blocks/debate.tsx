@@ -1,12 +1,11 @@
 "use client";
 
-import { Orbit } from "loading-dev";
 import React, { useMemo, useState } from "react";
 import { ChatMarkdown } from "../md/view";
 import { Collapse } from "./collapse";
 import { ActionLine } from "./action-line";
 import { providerIcon } from "@/lib/ui/provider-icon";
-import { isAutoModelId } from "@/lib/chat/usage-display";
+import { isLegacyAutoId } from "@/lib/chat/usage-display";
 
 function formatReviewContent(raw: string): string | null {
     const trimmed = raw
@@ -77,13 +76,17 @@ export function ReviewDebatePanel({
 }) {
     const [open, setOpen] = useState(false);
     const display = useMemo(() => formatReviewContent(content), [content]);
-    const iconModel = model && !isAutoModelId(model) ? model : "auto";
+    const iconModel = model && !isLegacyAutoId(model) ? model : "auto";
     const state = (status || "done").toLowerCase();
 
     if (state === "running") {
         return (
             <div className="my-0.5 flex h-5 items-center gap-1.5 text-sm text-text-muted">
-                <Orbit size={14} className="shrink-0" />
+                <span className="imsg-typing imsg-typing-sm shrink-0" aria-hidden>
+                    <span />
+                    <span />
+                    <span />
+                </span>
                 <span>Reviewing changes</span>
             </div>
         );

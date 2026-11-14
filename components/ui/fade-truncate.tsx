@@ -11,10 +11,13 @@ export function FadeTruncate({
     children,
     className,
     title,
+    expanded = false,
 }: {
     children: React.ReactNode;
     className?: string;
     title?: string;
+    /** Drop the fade and show the full text, used while the row is hovered. */
+    expanded?: boolean;
 }) {
     const ref = useRef<HTMLSpanElement>(null);
     const [overflowing, setOverflowing] = useState(false);
@@ -40,8 +43,10 @@ export function FadeTruncate({
         <span
             ref={ref}
             className={cn(
-                "block min-w-0 overflow-hidden whitespace-nowrap",
+                "block min-w-0",
+                expanded ? "whitespace-normal" : "overflow-hidden whitespace-nowrap",
                 overflowing &&
+                    !expanded &&
                     "[mask-image:linear-gradient(to_right,black_0%,black_calc(100%-1.25rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,black_0%,black_calc(100%-1.25rem),transparent_100%)] rtl:[mask-image:linear-gradient(to_left,black_0%,black_calc(100%-1.25rem),transparent_100%)] rtl:[-webkit-mask-image:linear-gradient(to_left,black_0%,black_calc(100%-1.25rem),transparent_100%)]",
                 className,
             )}

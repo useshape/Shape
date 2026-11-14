@@ -19,7 +19,10 @@ import { TerminalCommandStep } from "./terminal-live";
 import {
     ActionItem,
     GitStageGroup,
+    MoreMenu,
+    condenseSearchQueries,
     groupWorkflowRows,
+    isSimpleSearch,
     coalesceConsecutiveSameFileEdits,
     coalesceConsecutiveSameTasks,
     isRenderableWorkflowBlock,
@@ -54,16 +57,22 @@ function GroupActionLabel({
     action,
     detail,
     path,
+    items,
+    paths,
 }: {
     action: string;
     detail?: string | null;
     path?: string;
+    items?: string[];
+    paths?: string[];
 }) {
+    const list = items && items.length > 1 ? items : null;
     return (
         <ActionLine
             action={action}
             detail={detail}
-            onClick={path ? () => void openProjectFile(path) : undefined}
+            menu={list ? <MoreMenu items={list} paths={paths} /> : undefined}
+            onClick={!list && path ? () => void openProjectFile(path) : undefined}
         />
     );
 }
@@ -77,7 +86,7 @@ function groupDetail(names: string[]): string | null {
 
 function modelChipLabel(model?: string): string {
     const bare = (model || "").split("/").pop()?.trim() || "";
-    if (!bare || bare === "auto") return bare === "auto" ? "Auto" : "";
+    if (!bare || bare === "auto") return bare === "auto" ? "Free" : "";
     return bare.replace(/[-_]/g, " ");
 }
 
@@ -686,6 +695,32 @@ function StepRow({ block }: { block: Chunk }) {
     return <ActionItem block={block} />;
 }
 
+const HEAVY_WORK = new Set<Chunk["type"]>([
+    "edit", "edit_pending", "terminal_command", "git_operation", "run",
+    "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
+    "tool_result", "plugin_call", "subagent", "subagent_ref", "inspect_runtime",
+]);
+
+/** A thought, or one or two short lookups, is not enough to open a worked list. */
+function isLightWorkflow(blocks: Chunk[]): boolean {
+    const steps = blocks.filter((block) => block.type !== "think" && block.type !== "thought" && block.type !== "status");
+    if (steps.length === 0) return true;
+    if (steps.some((block) => HEAVY_WORK.has(block.type))) return false;
+    const lookups = steps.filter((block) =>
+        block.type === "search"
+        || block.type === "grep"
+        || block.type === "search_result"
+        || block.type === "web_search"
+        || block.type === "web_result"
+        || block.type === "web_visit",
+    );
+    if (lookups.length !== steps.length || lookups.length > 2) return false;
+    return lookups.every((block) => {
+        const query = (block.query || block.visitTitle || block.visitHost || block.content || "").trim();
+        return !query || isSimpleSearch(query);
+    });
+}
+
 function turnSummary(blocks: Chunk[], stats: ReturnType<typeof computeTurnStats>, isActive?: boolean, activityLabel?: string | null) {
     const status = [...blocks].reverse().find((b) => b.type === "status" && b.content?.trim());
     if (status?.content?.trim()) return status.content.trim();
@@ -767,7 +802,9 @@ export function TurnWorkflowSummary({
         setOpen(!!isActive);
     }
 
-    if (visible.length === 0) return <>{children}</>;
+    if (visible.length === 0 || (pendingBlocks.length === 0 && isLightWorkflow(visible))) {
+        return <>{children}</>;
+    }
 
     const coalesced = coalesceConsecutiveSameTasks(coalesceConsecutiveSameFileEdits(visible));
     const stats = computeTurnStats(coalesced);
@@ -849,16 +886,23 @@ export function TurnWorkflowSummary({
                                                 action="Explored"
                                                 detail={groupDetail(row.files.map((f) => f.path))}
                                                 path={row.files[0]?.path}
+                                                items={row.files.map((f) => f.path)}
+                                                paths={row.files.map((f) => f.path)}
                                             />
                                         );
                                     }
                                     if (row.kind === "search_group") {
                                         return (
-                                            <GroupActionLabel
-                                                key={`searches-${i}`}
-                                                action="Searched"
-                                                detail={row.count > 1 ? `${row.count} times` : groupDetail(row.queries)}
-                                            />
+                                            <div key={`searches-${i}`} className="flex flex-col">
+                                                {condenseSearchQueries(row.queries).map((group, n) => (
+                                                    <GroupActionLabel
+                                                        key={`searches-${i}-${n}`}
+                                                        action="Searched"
+                                                        detail={group.label}
+                                                        items={group.items}
+                                                    />
+                                                ))}
+                                            </div>
                                         );
                                     }
                                     if (row.kind === "write_group") {
@@ -868,6 +912,8 @@ export function TurnWorkflowSummary({
                                                 action="Edited"
                                                 detail={groupDetail(row.paths)}
                                                 path={row.paths[0]}
+                                                items={row.paths}
+                                                paths={row.paths}
                                             />
                                         );
                                     }

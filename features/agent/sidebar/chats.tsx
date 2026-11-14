@@ -13,7 +13,6 @@ import { MailInbox20Regular } from "@fluentui/react-icons/headless/svg/mail-inbo
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
-import { Eclipse } from "loading-dev";
 
 import {
     Fragment,
@@ -32,7 +31,7 @@ import { RevealName } from "@/components/ui/reveal-name";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
-import { isThreadTabId, NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
+import { DEMO_CHAT_TAB_ID, isThreadTabId, NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
 import {
     clearChatUnread,
     getUnreadChatIds,
@@ -62,6 +61,7 @@ import {
     applySubagentEvent,
     closeSubagent,
     getSubagents,
+    hydrateSubagentsFromConversations,
     subagentDisplayTitle,
     subscribeSubagents,
     type SubagentCard,
@@ -136,6 +136,43 @@ function nestedDot(status: string, column?: string): string {
     return "bg-accent";
 }
 
+export function ThreadReplies({
+    cards,
+    color,
+    onOpen,
+}: {
+    cards: SubagentCard[];
+    color: ChatColor | null;
+    onOpen: (id: string) => void;
+}) {
+    return (
+        <div className="thread-links relative z-0">
+            {cards.map((card) => (
+                <button
+                    key={`s-${card.id}`}
+                    type="button"
+                    onClick={() => onOpen(card.id)}
+                    className={cn(
+                        "thread-link relative flex h-9 w-full items-center gap-2 squircle-2xl mt-1 pr-2 pl-8 text-left text-sm text-text-secondary",
+                        color
+                            ? "hover:bg-[color-mix(in_oklch,var(--chat-tint)_16%,transparent)] hover:text-text-primary"
+                            : "hover:bg-panel-hover hover:text-text-primary",
+                    )}
+                >
+                    <span
+                        data-thread-dot=""
+                        className={cn("relative z-[2] size-2.5 shrink-0 squircle-md", nestedDot(card.status))}
+                        aria-hidden
+                    />
+                    <span className="block min-w-0 flex-1 truncate text-sm">
+                        <RevealName text={subagentDisplayTitle(card)} appear={sidebarNamesReady} />
+                    </span>
+                </button>
+            ))}
+        </div>
+    );
+}
+
 function ChatRow({
     id,
     title,
@@ -147,6 +184,7 @@ function ChatRow({
     edge = "none",
     selecting = false,
     selected = false,
+    fresh = false,
     onToggleSelect,
 }: {
     id: string;
@@ -160,6 +198,7 @@ function ChatRow({
     edge?: "none" | "only" | "first" | "mid" | "last";
     selecting?: boolean;
     selected?: boolean;
+    fresh?: boolean;
     onToggleSelect?: () => void;
 }) {
     const generating = useIsChatGenerating(id);
@@ -188,6 +227,7 @@ function ChatRow({
     const openChat = () => {
         closeSubagent();
         clearChatUnread(id);
+        window.dispatchEvent(new CustomEvent("shape-chat-active", { detail: { id } }));
         window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id } }));
     };
 
@@ -249,8 +289,6 @@ function ChatRow({
             </Fragment>
         ));
 
-    const fade = "1.25rem";
-
     return (
         <div
             className={cn(
@@ -264,11 +302,11 @@ function ChatRow({
                 <ContextMenuTrigger asChild>
                     <div
                         className={cn(
-                            "group/chat relative flex h-10 w-full items-center gap-1 pr-2 text-sm",
+                            "group/chat relative z-10 flex h-10 w-full items-center gap-1 pr-2 text-sm",
                             !color && "squircle-2xl",
                             "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
-                            !color && (active ? "bg-panel-hover text-text-primary" : "text-text-primary hover:bg-panel-hover"),
-                            color && "text-text-primary hover:bg-[color-mix(in_oklch,var(--chat-tint)_12%,transparent)]",
+                            !color && (active ? "bg-panel-hover text-text-primary" : "bg-sidebar text-text-primary hover:bg-panel-hover"),
+                            color && "bg-[color-mix(in_oklch,var(--chat-tint)_22%,var(--sidebar))] text-text-primary hover:bg-[color-mix(in_oklch,var(--chat-tint)_30%,var(--sidebar))]",
                         )}
                     >
                         {renaming ? (
@@ -317,18 +355,17 @@ function ChatRow({
                                             />
                                         </span>
                                     </span>
-                                    <span
-                                        className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm font-normal text-text-primary"
-                                        style={{
-                                            maskImage: `linear-gradient(to right, #000 0, #000 calc(100% - ${fade}), transparent)`,
-                                        }}
-                                    >
-                                        <RevealName text={title} appear={sidebarNamesReady} />
+                                    <span className="block min-w-0 flex-1 truncate text-sm font-normal text-text-primary">
+                                        <RevealName text={title} appear={fresh} />
                                     </span>
                                 </button>
                                 <span className="flex shrink-0 items-center gap-1">
                                     {generating ? (
-                                        <Eclipse size={12} className="text-text-muted" aria-hidden />
+                                        <span className="imsg-typing imsg-typing-sm text-text-muted" aria-hidden>
+                                            <span />
+                                            <span />
+                                            <span />
+                                        </span>
                                     ) : null}
                                     {unread ? (
                                         <span className="size-2 shrink-0 rounded-full bg-accent" aria-label="Unread" />
@@ -388,44 +425,16 @@ function ChatRow({
                 </ContextMenuContent>
             </ContextMenu>
             {expanded && nestedCount > 0 ? (
-                <div className="ml-3.5 flex flex-col">
-                    {subagents.map((card, index) => {
-                        const last = index === subagents.length - 1;
-                        return (
-                            <button
-                                key={`s-${card.id}`}
-                                type="button"
-                                onClick={() => {
-                                    clearChatUnread(id);
-                                    window.dispatchEvent(new CustomEvent("shape-open-subagent", {
-                                        detail: { id: card.id, parentId: id },
-                                    }));
-                                }}
-                                className={cn(
-                                    "relative flex h-8 w-full items-center gap-2 pr-2 pl-4 text-left text-sm text-text-secondary",
-                                    color
-                                        ? "hover:bg-[color-mix(in_oklch,var(--chat-tint)_16%,transparent)] hover:text-text-primary"
-                                        : "hover:bg-panel-hover hover:text-text-primary",
-                                )}
-                            >
-                                <span
-                                    aria-hidden
-                                    className="pointer-events-none absolute left-0 top-0 h-1/2 w-3.5 rounded-bl-[10px] border-b-2 border-l-2 border-text-secondary"
-                                />
-                                {last ? null : (
-                                    <span
-                                        aria-hidden
-                                        className="pointer-events-none absolute bottom-0 left-0 top-1/2 border-l-2 border-text-secondary"
-                                    />
-                                )}
-                                <span className={cn("size-1.5 shrink-0 rounded-full", nestedDot(card.status))} aria-hidden />
-                                <span className="block min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm [mask-image:linear-gradient(to_right,#000_0,#000_calc(100%-1.5rem),transparent)]">
-                                    <RevealName text={subagentDisplayTitle(card)} appear={sidebarNamesReady} />
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
+                <ThreadReplies
+                    cards={subagents}
+                    color={color}
+                    onOpen={(threadId) => {
+                        clearChatUnread(id);
+                        window.dispatchEvent(new CustomEvent("shape-open-subagent", {
+                            detail: { id: threadId, parentId: id },
+                        }));
+                    }}
+                />
             ) : null}
         </div>
     );
@@ -441,6 +450,7 @@ function SessionRow({
     edge = "none",
     selecting,
     selected,
+    fresh = false,
     onToggleSelect,
 }: {
     chat: Conversation;
@@ -452,6 +462,7 @@ function SessionRow({
     edge?: "none" | "only" | "first" | "mid" | "last";
     selecting: boolean;
     selected: boolean;
+    fresh?: boolean;
     onToggleSelect: () => void;
 }) {
     return (
@@ -466,6 +477,7 @@ function SessionRow({
             edge={edge}
             selecting={selecting}
             selected={selected}
+            fresh={fresh}
             onToggleSelect={onToggleSelect}
         />
     );
@@ -480,6 +492,13 @@ export function ChatList({
 }) {
     const { project_path } = useProjectState();
     const [chats, setChats] = useState<Conversation[]>([]);
+    const seenChatIds = useRef<Set<string> | null>(null);
+    const freshChatIds = useRef(new Set<string>());
+    if (seenChatIds.current) {
+        for (const chat of chats) {
+            if (!seenChatIds.current.has(chat.id)) freshChatIds.current.add(chat.id);
+        }
+    }
     const [sort, setSort] = useState<ChatSort>("recent");
     const [filter, setFilter] = useState<ChatFilter>("all");
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -496,6 +515,10 @@ export function ChatList({
         setSort(loadSort());
         sidebarNamesReady = true;
     }, []);
+
+    useEffect(() => {
+        seenChatIds.current = new Set(chats.map((chat) => chat.id));
+    }, [chats]);
 
     useEffect(() => {
         let unlisten: (() => void) | undefined;
@@ -522,7 +545,9 @@ export function ChatList({
             return;
         }
         try {
-            setChats(await commands.getConversations(project_path));
+            const next = await commands.getConversations(project_path);
+            hydrateSubagentsFromConversations(next);
+            setChats(next);
         } catch {
             setChats([]);
         }
@@ -533,11 +558,9 @@ export function ChatList({
         const onRefresh = () => void loadChats();
         window.addEventListener("shape-chat-refresh", onRefresh);
         window.addEventListener("shape-chats-changed", onRefresh);
-        window.addEventListener("shape-chat-active", onRefresh);
         return () => {
             window.removeEventListener("shape-chat-refresh", onRefresh);
             window.removeEventListener("shape-chats-changed", onRefresh);
-            window.removeEventListener("shape-chat-active", onRefresh);
         };
     }, [loadChats]);
 
@@ -616,6 +639,7 @@ export function ChatList({
         subagents: allSubagents.filter((card) => card.parentId === chat.id),
         selecting: selectedIds.length > 0,
         selected: selected.has(chat.id),
+        fresh: freshChatIds.current.has(chat.id),
         onToggleSelect: () => toggleSelect(chat.id),
     });
 
@@ -688,6 +712,21 @@ export function ChatList({
                     </button>
                 ) : (
                     <div className="space-y-0.5">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                window.dispatchEvent(new CustomEvent("shape-chat-active", { detail: { id: DEMO_CHAT_TAB_ID } }));
+                                window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id: DEMO_CHAT_TAB_ID } }));
+                            }}
+                            className={cn(
+                                "flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm",
+                                activeId === DEMO_CHAT_TAB_ID
+                                    ? "bg-panel-hover text-text-primary"
+                                    : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
+                            )}
+                        >
+                            <span className="min-w-0 flex-1 truncate">UI</span>
+                        </button>
                         {filtered.map((c) => (
                             <SessionRow key={c.id} {...rowProps(c)} />
                         ))}

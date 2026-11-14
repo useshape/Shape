@@ -2,11 +2,55 @@
 use super::history;
 use super::journals;
 use super::logging;
-use crate::agent::models::AgentState;
+use crate::agent::models::{AgentState, MessageStats};
 use crate::app_state::AppState;
 use crate::commands::preview_render::PreviewCaptureState;
 use crate::core::error::AppError;
 use tauri::{Emitter, Manager};
+
+fn cancel_menu(state: &AgentState, conversation_id: &str) -> Option<(MessageStats, Option<String>)> {
+    let flight = state
+        .in_flight
+        .lock()
+        .ok()?
+        .get(conversation_id)
+        .cloned()?;
+    let (input_tokens, output_tokens) = state.turn_meter_totals(&flight.turn_id);
+    let now = history::now_f64();
+    let duration_ms = ((now - flight.started_at) * 1000.0).max(0.0);
+    Some((
+        MessageStats {
+            time_ms: duration_ms,
+            cost: 0.0,
+            tokens: input_tokens + output_tokens,
+            input_tokens,
+            output_tokens,
+            credits_charged: None,
+            used_auto: flight.used_auto,
+            reasoning_effort: flight.reasoning_effort,
+            mode: flight.mode,
+            latency_ms: None,
+            context_breakdown: flight.context_breakdown,
+        },
+        flight.model,
+    ))
+}
+
+fn stamp_last_assistant(
+    history: &mut [crate::agent::models::ChatMessage],
+    stats: MessageStats,
+    model: Option<String>,
+) {
+    let Some(last) = history.iter_mut().rev().find(|m| m.role == "assistant") else {
+        return;
+    };
+    if last.stats.is_none() {
+        last.stats = Some(stats);
+    }
+    if last.model.is_none() {
+        last.model = model;
+    }
+}
 
 #[tauri::command]
 pub async fn stop_chat_message(
@@ -126,6 +170,9 @@ pub async fn stop_chat_message(
         }
         turn_id.zip(conv_id)
     };
+    let stopped_menu = target_id
+        .as_deref()
+        .and_then(|id| cancel_menu(state.inner(), id));
     let stopping_current = target_id.as_deref() == current_id.as_deref();
     if stopping_current {
         // Commit streamed assistant text into history *before* clearing in-flight.
@@ -135,6 +182,9 @@ pub async fn stop_chat_message(
                 if last.role == "assistant" && last.content.contains("<browse_session") {
                     last.content = crate::agent::tools::browse::seal_browse_markup(&last.content);
                 }
+            }
+            if let Some((stats, model)) = stopped_menu.clone() {
+                stamp_last_assistant(&mut merged, stats, model);
             }
             if let Ok(mut hist) = state.history.lock() {
                 *hist = merged;
@@ -156,7 +206,10 @@ pub async fn stop_chat_message(
                 let hist = stored.map(|c| c.history.clone()).unwrap_or_default();
                 (title, hist)
             };
-            let hist = state.merge_in_flight_into_history_for(hist, Some(id));
+            let mut hist = state.merge_in_flight_into_history_for(hist, Some(id));
+            if let Some((stats, model)) = stopped_menu.clone() {
+                stamp_last_assistant(&mut hist, stats, model);
+            }
             let _ = history::upsert_conversation_snapshot(&state, &path, id, &title, hist);
         }
     }
@@ -166,12 +219,18 @@ pub async fn stop_chat_message(
         state.clear_in_flight();
     }
     if let Some((turn_id, conv_id)) = aborted {
+        let (stats, model) = stopped_menu
+            .clone()
+            .map(|(stats, model)| (Some(stats), model))
+            .unwrap_or((None, None));
         let _ = app.emit(
             "chat_complete",
             serde_json::json!({
                 "turnId": turn_id,
                 "conversationId": conv_id,
                 "error": "Cancelled",
+                "stats": stats,
+                "model": model,
             }),
         );
     }

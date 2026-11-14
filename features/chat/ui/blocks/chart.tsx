@@ -43,9 +43,9 @@ export function ChartBlock({ content }: { content?: string }) {
     const gap = 8;
     const barWidth = (width - gap * (points.length - 1)) / points.length;
     return (
-        <figure className="my-2 w-full max-w-sm rounded-xl border border-border bg-surface-2 px-3 py-2">
-            <figcaption className="mb-2 text-xs font-medium text-text-secondary">{title}</figcaption>
-            <svg viewBox={`0 0 ${width} ${height}`} className="h-24 w-full" role="img" aria-label={title}>
+        <figure className="my-2 w-full squircle-2xl border border-border p-3">
+            <figcaption className="mb-2 text-sm align-middle text-center text-text-secondary">{title}</figcaption>
+            <svg viewBox={`0 0 ${width} ${height}`} className="h-40 w-full" role="img" aria-label={title}>
                 {points.map((point, index) => {
                     const bar = Math.max(4, (point.value / max) * (height - 18));
                     const x = index * (barWidth + gap);
@@ -53,16 +53,16 @@ export function ChartBlock({ content }: { content?: string }) {
                         <g key={`${point.label}-${index}`}>
                             <rect
                                 x={x}
-                                y={height - 16 - bar}
+                                y={height - 15 - bar}
                                 width={barWidth}
                                 height={bar}
-                                rx={4}
+                                rx={5}
                                 className="fill-text-primary"
                                 opacity={0.85}
                             />
                             <text
                                 x={x + barWidth / 2}
-                                y={height - 4}
+                                y={height - 2}
                                 textAnchor="middle"
                                 className="fill-text-muted"
                                 fontSize="10"
@@ -81,7 +81,7 @@ export function InsightCard({ content }: { content?: string }) {
     const text = (content || "").trim();
     if (!text) return null;
     return (
-        <aside className="my-2 rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-text-primary">
+        <aside className="my-2 squircle-2xl border border-border p-3 text-sm text-text-primary">
             {text}
         </aside>
     );

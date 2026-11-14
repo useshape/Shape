@@ -13,6 +13,7 @@ mod persona;
 mod subagent;
 mod terminal;
 
+use futures::FutureExt;
 use reqwest::Client;
 use serde_json::Value;
 use tauri::{Emitter, Manager};
@@ -49,9 +50,6 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "generate_image",
     "generate_audio",
     "edit_image",
-    "generate_3d_model",
-    "edit_3d_model",
-    "convert_3d_model",
     "re_extract",
 ];
 
@@ -147,9 +145,6 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
             || name == "generate_image"
             || name == "generate_audio"
             || name == "edit_image"
-            || name == "generate_3d_model"
-            || name == "edit_3d_model"
-            || name == "convert_3d_model"
             || name == "save_media"
             || name == "re_extract"
             || name == "browse")
@@ -256,10 +251,6 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "generate_image" => crate::agent::tools::generate::tool_generate_image(&args, ctx).await,
         "generate_audio" => crate::agent::tools::generate::tool_generate_audio(&args, ctx).await,
         "edit_image" => crate::agent::tools::generate::tool_edit_image(&args, ctx).await,
-        "generate_3d_model" => crate::agent::tools::model3d::tool_generate_3d_model(&args, ctx).await,
-        "edit_3d_model" => crate::agent::tools::model3d::tool_edit_3d_model(&args, ctx).await,
-        "inspect_3d_model" => crate::agent::tools::model3d::tool_inspect_3d_model(&args, ctx).await,
-        "convert_3d_model" => crate::agent::tools::model3d::tool_convert_3d_model(&args, ctx).await,
         "re_catalog" => crate::agent::tools::reverse::tool_re_catalog(&args, ctx),
         "re_identify" => crate::agent::tools::reverse::tool_re_identify(&args, ctx),
         "re_inspect" => crate::agent::tools::reverse::tool_re_inspect(&args, ctx),
@@ -371,6 +362,32 @@ fn tool_load_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
         tool_result: msg,
         ui_chunk: String::new(),
         side_effect: None,
+    }
+}
+
+/// Runs a tool and turns a panic into a tool error so one bad call cannot
+/// abort the turn (the UI then loses the worked-dropdown transcript).
+pub async fn execute_tool_safe(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> ToolOutcome {
+    let label = name.to_string();
+    match std::panic::AssertUnwindSafe(execute_tool(name, args_json, ctx))
+        .catch_unwind()
+        .await
+    {
+        Ok(outcome) => outcome,
+        Err(payload) => {
+            let msg = if let Some(text) = payload.downcast_ref::<&str>() {
+                (*text).to_string()
+            } else if let Some(text) = payload.downcast_ref::<String>() {
+                text.clone()
+            } else {
+                "unknown panic".to_string()
+            };
+            crate::agent::commands::logging::warn(
+                "dispatch",
+                &format!("tool {label} panicked: {msg}"),
+            );
+            error_outcome(&label, &format!("This tool crashed and was skipped: {msg}"))
+        }
     }
 }
 

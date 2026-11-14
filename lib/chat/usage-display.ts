@@ -18,16 +18,20 @@ export type MessageUsageStats = {
     contextBreakdown?: Record<string, number> | null;
 };
 
+export function isLegacyAutoId(model?: string | null): boolean {
+    return !model || model === "auto" || model === "openrouter/auto";
+}
+
 export function isAutoModelId(model?: string | null): boolean {
     if (!model) return false;
-    if (model === "auto" || model === "openrouter/auto") return true;
+    if (isLegacyAutoId(model)) return true;
     const catalog = getShapeCatalog();
     return Boolean(catalog?.models.some((item) => item.id === model && (item.minTier === "free" || item.provider === "Free Models")));
 }
 
 export function formatModelLabel(model?: string | null): string {
     if (!model?.trim()) return "";
-    if (isAutoModelId(model) && (model === "auto" || model === "openrouter/auto")) return "Included";
+    if (model === "auto" || model === "openrouter/auto") return "Free";
     const slug = model.includes("/") ? model.split("/").pop()! : model;
     return slug
         .split("-")
@@ -40,7 +44,7 @@ export function formatMessageModelLabel(
     model?: string | null,
     stats?: MessageUsageStats,
 ): string {
-    if ((model === "auto" || model === "openrouter/auto") && (stats?.usedAuto || isAutoModelId(model))) return "Included";
+    if ((model === "auto" || model === "openrouter/auto") && (stats?.usedAuto || isAutoModelId(model))) return "Free";
     return formatModelLabel(model);
 }
 
@@ -73,7 +77,7 @@ export function formatMessageUsageRows(
             value: tokens.toLocaleString(),
         });
     } else if (!usedAuto && credits > 0) {
-        rows.push({ label: "Credits", value: credits.toFixed(2) });
+        rows.push({ label: "Usage", value: credits.toFixed(2) });
     }
 
     if (input != null && input > 0) {
@@ -87,21 +91,91 @@ export function formatMessageUsageRows(
 }
 
 export type ChatUsageDisplay = {
-    mode: "auto" | "credits";
-    /** Ring fill for monthly account usage (switches with Auto vs premium model). */
+    mode: "free" | "usage";
+    /** Free-usage ring fill, 0–100. Paid usage does not use this as a cap. */
     percent: number;
-    /** Short primary line, e.g. "18% used". */
+    /** Short primary line, e.g. "18% used" or "300% usage remaining". */
     title: string;
+    /** Number shown beside the ring, e.g. "300%". */
+    headline: string;
     /** Secondary line — kept for API compat; prefer empty / same as title. */
     detail: string;
     /** Single-line tooltip. */
     tooltip: string;
-    used?: number;
-    included?: number;
+    /** Draw the meter only after the limit is actually reached. */
+    showMeter: boolean;
+    warn: boolean;
 };
 
-function formatCredits(n: number): string {
-    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** Same number the balance already is. 1,200 usage left reads as 1,200%. */
+function formatUsageAmount(n: number): string {
+    return String(Math.round(Math.max(0, n) * 100) / 100);
+}
+
+export function freeUsageMeter(percent: number | null | undefined): ChatUsageDisplay {
+    const used = Math.max(0, Math.round(percent ?? 0));
+    if (used >= 100) {
+        return {
+            mode: "free",
+            percent: 100,
+            title: "Free usage limit reached",
+            headline: "100%",
+            detail: "Free usage limit reached",
+            tooltip: "Free usage limit reached",
+            showMeter: true,
+            warn: true,
+        };
+    }
+    const title = `${used}% used`;
+    return {
+        mode: "free",
+        percent: used,
+        title,
+        headline: `${used}%`,
+        detail: title,
+        tooltip: `${used}% of free usage used`,
+        showMeter: false,
+        warn: false,
+    };
+}
+
+export function paidUsageMeter(remaining: number, included: number): ChatUsageDisplay {
+    if (included <= 0 && remaining <= 0) {
+        return {
+            mode: "usage",
+            percent: 0,
+            title: "No usage on this plan",
+            headline: "—",
+            detail: "Upgrade for named models.",
+            tooltip: "No usage on this plan",
+            showMeter: false,
+            warn: false,
+        };
+    }
+    if (remaining <= 0) {
+        return {
+            mode: "usage",
+            percent: 100,
+            title: "Usage limit reached",
+            headline: "0%",
+            detail: "Usage limit reached",
+            tooltip: "Usage limit reached",
+            showMeter: true,
+            warn: true,
+        };
+    }
+    const pct = formatUsageAmount(remaining);
+    const title = `${pct}% usage remaining`;
+    return {
+        mode: "usage",
+        percent: 0,
+        title,
+        headline: `${pct}%`,
+        detail: title,
+        tooltip: title,
+        showMeter: false,
+        warn: false,
+    };
 }
 
 export function resolveChatUsageDisplay(
@@ -121,57 +195,29 @@ export function resolveChatUsageDisplay(
     if (!auth.loggedIn) {
         if (auth.isLoading || auth.revalidating) {
             return {
-                mode: "credits",
+                mode: "usage",
                 percent: 0,
                 title: "",
+                headline: "",
                 detail: "",
                 tooltip: "",
+                showMeter: false,
+                warn: false,
             };
         }
         return {
-            mode: "credits",
+            mode: "usage",
             percent: 0,
             title: "Sign in",
+            headline: "Sign in",
             detail: "to view usage",
             tooltip: "Sign in to view usage",
+            showMeter: false,
+            warn: false,
         };
     }
 
-    const usingAuto = selectedModel === "auto" || isAutoModelId(selectedModel) || auth.tier === "free";
-
-    if (usingAuto) {
-        const percent = Math.max(0, Math.min(100, Math.round(auth.freeAutoPercent ?? 0)));
-        const title = `${percent}% used`;
-        return {
-            mode: "auto",
-            percent,
-            title,
-            detail: title,
-            tooltip: `${title} of included usage this month`,
-        };
-    }
-
-    const included = auth.creditsIncluded;
-    if (included > 0) {
-        const used = Math.max(0, included - Math.max(0, auth.creditsRemaining));
-        const percent = Math.max(0, Math.min(100, Math.round((used / included) * 100)));
-        const title = `${formatCredits(used)} out of ${formatCredits(included)}`;
-        return {
-            mode: "credits",
-            percent,
-            title,
-            detail: title,
-            tooltip: `${title} this month`,
-            used,
-            included,
-        };
-    }
-
-    return {
-        mode: "credits",
-        percent: 0,
-        title: "Credits",
-        detail: "none on this plan",
-        tooltip: "Credits: none on this plan",
-    };
+    const usingFree = selectedModel === "auto" || isAutoModelId(selectedModel) || auth.tier === "free";
+    if (usingFree) return freeUsageMeter(auth.freeAutoPercent);
+    return paidUsageMeter(auth.creditsRemaining, auth.creditsIncluded);
 }

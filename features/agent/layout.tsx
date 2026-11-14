@@ -100,8 +100,7 @@ function SidebarPeek({
 }
 
 /**
- * Agent View — left sidebar (agent / settings / git / files nav),
- * center chrome + content; expanded workspace is full-height; rail under chrome.
+ * Agent View — left sidebar, top chrome, then chat and the right panel side by side.
  */
 export function AgentLayout({ children }: { children: React.ReactNode }) {
     const { project_path, active_file } = useProjectState();
@@ -181,8 +180,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                     /* ignore */
                 }
                 setSplash(false);
-            }, 280);
-        }, 700);
+            }, 420);
+        }, 1600);
         return () => {
             cancelAnimationFrame(raf);
             if (t1 !== undefined) window.clearTimeout(t1);
@@ -497,7 +496,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             {splash ? (
                 <div
                     className={cn(
-                        "pointer-events-none absolute inset-0 z-[100] flex items-center justify-center bg-transparent",
+                        "absolute inset-0 z-[100] flex items-center justify-center bg-sidebar",
                         "transition-opacity duration-300 ease-[var(--ease-out)]",
                         splashVisible ? "opacity-100" : "opacity-0",
                     )}
@@ -602,7 +601,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                             }}
                             className={cn(
                                 "h-full min-w-0 overflow-hidden",
-                                rightExpanded ? "py-2 pr-2" : "pointer-events-none p-0",
+                                rightExpanded ? "pr-1" : "pointer-events-none p-0",
                                 !isResizing &&
                                     "transition-[width] duration-200 ease-[var(--ease-out)]",
                             )}
@@ -611,7 +610,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                             {rightExpanded ? (
                                 <div
                                     style={{ width: workspaceWidth }}
-                                    className="relative flex h-full overflow-hidden rounded-xl bg-sidebar border border-border-subtle"
+                                    className="relative flex h-full flex-col overflow-hidden bg-white"
                                 >
                                     <AgentWorkspace
                                         projectPath={project_path}

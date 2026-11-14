@@ -292,7 +292,7 @@ function WorkflowDialog({
                     </div>
                     <Field label="Mode">
                         <div className="flex flex-wrap gap-1.5">
-                            {([undefined, "Ask", "Code", "Plan", "Visual"] as const).map((id) => (
+                            {([undefined, "Ask", "Code", "Visual"] as const).map((id) => (
                                 <button
                                     key={id ?? "any"}
                                     type="button"

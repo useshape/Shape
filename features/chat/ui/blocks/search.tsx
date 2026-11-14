@@ -3,12 +3,15 @@
 import { Globe20Regular } from "@fluentui/react-icons/headless/svg/globe";
 
 
+import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 
 import { Favicon } from "@/components/ui/favicon";
 import { cn } from "@/lib/utils";
 import { hostnameOf } from "@/lib/ui/favicon";
-import { splitActionLabel } from "./action-line";
+import { ArriveLabel, splitActionLabel } from "./action-line";
+import { FadeTruncate } from "@/components/ui/fade-truncate";
+import { condenseSearchQueries, searchesAreAlike } from "./workflow";
 import type { WebSearchResultItem } from "../md/renderer";
 type WebSearchResult = WebSearchResultItem;
 
@@ -163,7 +166,41 @@ function resultMeta(step: TrailStep): string | null {
     return `${count} ${noun}`;
 }
 
+function condenseTrailSteps(steps: TrailStep[]): TrailStep[] {
+    const out: TrailStep[] = [];
+    let run: TrailStep[] = [];
+    const flush = () => {
+        if (run.length === 0) return;
+        const first = run[0]!;
+        const label = condenseSearchQueries(run.map((step) => step.query))[0]?.label;
+        out.push({
+            ...first,
+            query: label || first.query,
+            sources: run.flatMap((step) => step.sources),
+        });
+        run = [];
+    };
+    for (const step of steps) {
+        if (step.kind !== "search") {
+            flush();
+            out.push(step);
+            continue;
+        }
+        const prev = run[run.length - 1];
+        const sameBrand = !prev || (prev.brand?.id ?? "") === (step.brand?.id ?? "");
+        if (prev && sameBrand && searchesAreAlike(prev.query, step.query)) {
+            run.push(step);
+            continue;
+        }
+        flush();
+        run.push(step);
+    }
+    flush();
+    return out;
+}
+
 function TrailStepRow({ step }: { step: TrailStep }) {
+    const [hovered, setHovered] = useState(false);
     const meta = resultMeta(step);
     const verb = step.kind === "visit"
         ? "Opened"
@@ -174,13 +211,15 @@ function TrailStepRow({ step }: { step: TrailStep }) {
     const parts = splitActionLabel(sentence);
     const icon = step.brand ? <SiteMark brand={step.brand} size={14} /> : null;
     return (
-        <div className="py-0.5">
+        <div className="py-0.5" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
             <div className="flex w-full min-w-0 items-center gap-1.5 chat-text text-text-muted">
                 {icon ? <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span> : null}
-                <span className="min-w-0 flex-1 truncate">
-                    <span className="text-text-secondary">{parts.action}</span>
-                    {parts.detail ? <span className="text-text-muted"> {parts.detail}</span> : null}
-                </span>
+                <FadeTruncate expanded={hovered} className="min-w-0 flex-1">
+                    <ArriveLabel text={sentence} className="text-text-secondary">
+                        {parts.action}
+                        {parts.detail ? <span className="text-text-muted"> {parts.detail}</span> : null}
+                    </ArriveLabel>
+                </FadeTruncate>
                 {meta ? <span className="shrink-0 text-text-muted">{meta}</span> : null}
             </div>
         </div>
@@ -195,7 +234,7 @@ export function WebSearchTrail({
     blocks: TrailBlock[];
     isActive?: boolean;
 }) {
-    const steps = buildTrailSteps(blocks);
+    const steps = condenseTrailSteps(buildTrailSteps(blocks));
     const searches = steps.filter((step) => step.kind === "search").length;
 
     if (steps.length === 0) {

@@ -139,6 +139,9 @@ pub fn decide(
     hint: Option<Capability>,
 ) -> TurnDecision {
     let text = message.trim().to_ascii_lowercase();
+    // Plan is a tool, not a mode. A stored Plan capability must not lock the turn.
+    let sticky = sticky.filter(|cap| !matches!(cap, Capability::Plan));
+    let hint = hint.filter(|cap| !matches!(cap, Capability::Plan));
     if is_internal_continuation(&text) {
         if let Some(stuck) = sticky {
             return TurnDecision {
@@ -155,7 +158,6 @@ pub fn decide(
         }
     }
     let change = !is_internal_continuation(&text) && has_change_verb(&text);
-    let plan = has_plan_signal(&text);
     let go_ahead = is_go_ahead(&text);
     let question = is_question(&text);
     let browse = has_browse_signal(&text);
@@ -166,20 +168,10 @@ pub fn decide(
     let plugins = has_plugin_signal(&text);
     let web = has_web_signal(&text);
 
-    let (capability, confident) = if go_ahead && matches!(sticky, Some(Capability::Plan) | None) && matches!(hint, Some(Capability::Plan) | None) && (sticky == Some(Capability::Plan) || hint == Some(Capability::Plan)) {
-        (Capability::Code, true)
-    } else if hint == Some(Capability::Ask) && !go_ahead {
+    let (capability, confident) = if hint == Some(Capability::Ask) && !go_ahead {
         (Capability::Ask, true)
-    } else if hint == Some(Capability::Plan) && !go_ahead {
-        (Capability::Plan, true)
-    } else if plan && !change {
-        (Capability::Plan, true)
     } else if change {
-        if sticky == Some(Capability::Plan) && !locks.allow_upgrade && !go_ahead {
-            (Capability::Plan, true)
-        } else {
-            (Capability::Code, true)
-        }
+        (Capability::Code, true)
     } else if question {
         (Capability::Ask, true)
     } else if let Some(stuck) = sticky {
@@ -266,9 +258,6 @@ pub fn decide(
             if packs.reverse {
                 push_skill(&mut skills, "reverse");
             }
-            if packs.media && has_model_signal(&text) {
-                push_skill(&mut skills, "models");
-            }
             if skills.is_empty() {
                 push_skill(&mut skills, "edits");
             }
@@ -307,14 +296,6 @@ fn has_change_verb(text: &str) -> bool {
     const WORDS: &[&str] = &[
         "fix", "implement", "refactor", "add ", "create", "build", "edit", "update", "change",
         "write", "remove", "delete", "install", "wire", "rename", "replace", "debug", "generate",
-    ];
-    WORDS.iter().any(|w| text.contains(w))
-}
-
-fn has_plan_signal(text: &str) -> bool {
-    const WORDS: &[&str] = &[
-        "plan", "how should", "outline", "don't code", "do not code", "before you code",
-        "approach should",
     ];
     WORDS.iter().any(|w| text.contains(w))
 }
@@ -361,8 +342,18 @@ fn has_browse_signal(text: &str) -> bool {
         || text.contains("localhost")
         || text.contains("screenshot")
         || text.contains("open the page")
+        || text.contains("open the site")
         || text.contains("website")
-        || text.contains("browse ")
+        || text.contains("brows")
+        || text.contains("navigat")
+        || text.contains("click through")
+        || text.contains("go to the site")
+        || text.contains("go to this site")
+        || text.contains(".com")
+        || text.contains(".org")
+        || text.contains(".dev")
+        || text.contains(".io")
+        || text.contains(".app")
 }
 
 fn has_git_signal(text: &str) -> bool {
@@ -380,18 +371,6 @@ fn has_media_signal(text: &str) -> bool {
         || text.contains("generate an image")
         || text.contains("generate image")
         || text.contains("audio")
-        || has_model_signal(text)
-}
-
-fn has_model_signal(text: &str) -> bool {
-    text.contains("3d")
-        || text.contains("3-d")
-        || text.contains("glb")
-        || text.contains("gltf")
-        || text.contains("low-poly")
-        || text.contains("low poly")
-        || text.contains("3d model")
-        || text.contains("mesh")
 }
 
 fn has_reverse_signal(text: &str) -> bool {
@@ -476,11 +455,24 @@ mod tests {
     }
 
     #[test]
-    fn plan_requests_do_not_enable_writes() {
-        let d = decide("Plan how we should split the settings page", None, locks(), None);
-        assert_eq!(d.capability, Capability::Plan);
-        assert!(!d.packs.workspace);
-        assert!(d.skills.contains(&"plan"));
+    fn mentioning_a_plan_does_not_enter_plan_mode() {
+        let perks = decide(
+            "Go to useshape.org and tell me the free plan perks",
+            None,
+            locks(),
+            None,
+        );
+        assert_ne!(perks.capability, Capability::Plan);
+        assert!(perks.packs.browse);
+
+        let asked = decide(
+            "Plan how we should split the settings page",
+            None,
+            locks(),
+            Some(Capability::Plan),
+        );
+        assert_ne!(asked.capability, Capability::Plan);
+        assert!(!asked.packs.workspace);
     }
 
     #[test]
@@ -491,12 +483,12 @@ mod tests {
     }
 
     #[test]
-    fn cautious_lock_holds_a_plan() {
+    fn a_stored_plan_does_not_block_the_next_edit() {
         let mut held = locks();
         held.allow_upgrade = false;
         let d = decide("Also fix the empty state", Some(Capability::Plan), held, None);
-        assert_eq!(d.capability, Capability::Plan);
-        assert!(!d.packs.workspace);
+        assert_eq!(d.capability, Capability::Code);
+        assert!(d.packs.workspace);
     }
 
     #[test]
@@ -508,11 +500,10 @@ mod tests {
     }
 
     #[test]
-    fn scheduled_followup_keeps_plan() {
+    fn scheduled_followup_does_not_stay_in_plan_mode() {
         let body = "<scheduled_followup>create the missing tests</scheduled_followup>";
         let d = decide(body, Some(Capability::Plan), locks(), None);
-        assert_eq!(d.capability, Capability::Plan);
-        assert!(!d.packs.workspace);
+        assert_ne!(d.capability, Capability::Plan);
     }
 
     #[test]
@@ -522,13 +513,6 @@ mod tests {
         assert!(d.confident);
         assert!(d.packs.workspace);
         assert!(d.packs.terminal);
-    }
-
-    #[test]
-    fn low_poly_model_request_loads_media() {
-        let d = decide("Generate a low-poly medieval sword", None, locks(), None);
-        assert!(d.packs.media);
-        assert_eq!(d.capability, Capability::Code);
     }
 
     #[test]
@@ -542,6 +526,13 @@ mod tests {
         let d = decide("Open https://example.com and screenshot the header", None, locks(), None);
         assert!(d.packs.browse);
         assert_ne!(d.capability, Capability::Ask);
+    }
+
+    #[test]
+    fn asking_to_browse_or_navigate_loads_the_browser() {
+        assert!(decide("why isn't direct browsing working?", None, locks(), None).packs.browse);
+        assert!(decide("maybe just actually navigate the site, dont just tool call", None, locks(), None).packs.browse);
+        assert!(decide("use the visual browser tool", None, locks(), None).packs.browse);
     }
 
     #[test]

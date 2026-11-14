@@ -21,7 +21,6 @@ import { Image20Regular } from "@fluentui/react-icons/headless/svg/image";
 
 
 import React from "react";
-import { Arc } from "loading-dev";
 import { Icon } from "@/components/ui/icon";
 
 
@@ -1281,8 +1280,10 @@ export function ChatInput({
                             }
                         >
                             {isLoading && !inputValue.trim() ? (
-                                <span role="status" aria-label="Generating" className="text-text-primary">
-                                    <Arc size={16} />
+                                <span role="status" aria-label="Generating" className="imsg-typing imsg-typing-sm text-text-primary">
+                                    <span />
+                                    <span />
+                                    <span />
                                 </span>
                             ) : (
                                 <Icon icon={ArrowUp20Regular} />
@@ -1415,7 +1416,7 @@ export function ChatInput({
                                                                     onSelect={setSelectedModel}
                                                                     effort={reasoningEffort}
                                                                     disabled={!allowed}
-                                                                    disabledReason="This model is not available on your plan. Upgrade on the website or keep Auto selected."
+                                                                    disabledReason="This model is not available on your plan. Upgrade on the website or keep a free model selected."
                                                                 />
                                                             );
                                                         })}
