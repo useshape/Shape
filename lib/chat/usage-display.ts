@@ -134,7 +134,7 @@ export function freeUsageMeter(percent: number | null | undefined): ChatUsageDis
         headline: `${used}%`,
         detail: title,
         tooltip: `${used}% of free usage used`,
-        showMeter: false,
+        showMeter: true,
         warn: false,
     };
 }
@@ -166,14 +166,17 @@ export function paidUsageMeter(remaining: number, included: number): ChatUsageDi
     }
     const pct = formatUsageAmount(remaining);
     const title = `${pct}% usage remaining`;
+    const used = included > 0
+        ? Math.max(0, Math.min(100, Math.round(((included - Math.min(remaining, included)) / included) * 100)))
+        : 0;
     return {
         mode: "usage",
-        percent: 0,
+        percent: used,
         title,
         headline: `${pct}%`,
         detail: title,
         tooltip: title,
-        showMeter: false,
+        showMeter: true,
         warn: false,
     };
 }

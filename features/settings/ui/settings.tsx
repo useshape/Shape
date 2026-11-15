@@ -371,7 +371,7 @@ function AiSettings({
     page,
 }: {
     settings: ShapeSettings;
-    page: "models" | "rules" | "workflows" | "context" | "subagents";
+    page: "models" | "rules" | "workflows" | "context" | "subagents" | "access";
 }) {
     return <AiSettingsPanel settings={settings} page={page} />;
 }
@@ -772,6 +772,15 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
     return (
         <>
             <SettingSection title="Startup">
+                <SettingRow title="Open Shape at login" description="Start Shape when you sign in to this computer. Routines only run while Shape is open.">
+                    <SettingSwitch
+                        checked={p.openAtLogin}
+                        onChange={(v) => {
+                            updateSettingSection("privacy", { openAtLogin: v });
+                            void commands.setOpenAtLogin(v).catch(() => {});
+                        }}
+                    />
+                </SettingRow>
                 <SettingRow title="Show welcome page on startup">
                     <SettingSwitch
                         checked={p.showWelcomeOnStartup}
@@ -1086,6 +1095,7 @@ export function SettingsView({
         if (section === "rules") return "settings-ai-rules";
         if (section === "workflows") return "settings-ai-workflows";
         if (section === "subagents" || section === "subagent") return "settings-ai-subagents";
+        if (section === "access" || section === "permissions") return "settings-ai-access";
         // Legacy deep link: "memories" (System Instructions) merged into Rules.
         if (section === "memories") return "settings-ai-rules";
         switch (category) {
@@ -1286,6 +1296,7 @@ export function SettingsView({
                             </h1>
                             {activeLeafId === "account-profile" ? <AccountSettingsPanel /> : null}
                             {activeLeafId === "ai-models" ? <AiSettings settings={settings} page="models" /> : null}
+                            {activeLeafId === "ai-access" ? <AiSettings settings={settings} page="access" /> : null}
                             {activeLeafId === "ai-subagents" ? <AiSettings settings={settings} page="subagents" /> : null}
                             {activeLeafId === "ai-rules" ? <AiSettings settings={settings} page="rules" /> : null}
                             {activeLeafId === "ai-workflows" ? <AiSettings settings={settings} page="workflows" /> : null}

@@ -4,7 +4,7 @@ You are in **PLAN** mode. Research the codebase, then save a real implementation
 
 ## Research
 
-Call read-only tools (`list_dir`, `read_file`, `grep`, `search_codebase`, `search_files`; `web_search` if docs matter). Keep it proportional.
+Call read-only tools (`list_dir`, `read_file`, `grep`, `search_codebase`, `search_files`; `web_search` if docs matter; `browse` when a live page matters). Keep it proportional.
 
 Do not write a draft outline or fake todo list in the chat first. When you have enough context, call `save_plan` immediately.
 
