@@ -105,6 +105,8 @@ export interface ShapeSettings {
         customRules: string;
         mcpServers: McpServerConfig[];
         reviewAdversarialEnabled: boolean;
+        /** Fresh design check for new systems. On by default. */
+        goldfishEnabled: boolean;
         /** Trigger phrase → prompt (+ optional plugin tool) injected on send. */
         workflows: AgentWorkflow[];
         /** Ask before the first Multiwork send. */
@@ -130,12 +132,18 @@ export interface ShapeSettings {
          * Off by default — memories are never injected into every prompt.
          */
         chatMemoryEnabled: boolean;
-        computerUse?: boolean;
-        shellAutomation?: boolean;
-        browseEnabled?: boolean;
-        networkCommands?: string;
-        commandTimeoutSec?: number;
-        allowCapabilityUpgrade?: boolean;
+        /** When false, browse tools stay unloaded and blocked. */
+        browseEnabled: boolean;
+        /** Shell programs that open the network. There is no unrestricted allow. */
+        networkCommands: "off" | "ask";
+        /** Kill a one-shot command that is still running after this many seconds. */
+        commandTimeoutSec: number;
+        /** When false, a plan does not become an edit because the next message has a fix verb. */
+        allowCapabilityUpgrade: boolean;
+        /** How often Shape asks before it edits or runs a command. */
+        autonomy: "cautious" | "balanced" | "autonomous" | "custom";
+        computerUse: boolean;
+        shellAutomation: boolean;
     };
     files: {
         exclude: string;
@@ -197,6 +205,8 @@ export interface ShapeSettings {
         showLoginPromptOnLaunch: boolean;
         /** Show the welcome page when the main window opens with no editor. */
         showWelcomeOnStartup: boolean;
+        /** Start Shape when you sign in to this computer. */
+        openAtLogin: boolean;
         /** Skip the confirm dialog when restoring a chat checkpoint (rolls back file edits). */
         skipCheckpointRestoreConfirm: boolean;
     };
@@ -288,6 +298,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         customRules: "",
         mcpServers: [],
         reviewAdversarialEnabled: true,
+        goldfishEnabled: true,
         workflows: [],
         multiworkConfirm: true,
         multiworkShowChips: true,
@@ -299,6 +310,13 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         pluginDisabledActions: {},
         indexEmbeddings: true,
         chatMemoryEnabled: false,
+        autonomy: "balanced",
+        browseEnabled: true,
+        networkCommands: "ask",
+        commandTimeoutSec: 600,
+        allowCapabilityUpgrade: true,
+        computerUse: true,
+        shellAutomation: true,
     },
     files: {
         exclude: "**/node_modules,**/.git,**/dist,**/build,**/.next",
@@ -354,6 +372,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         telemetryEnabled: false,
         showLoginPromptOnLaunch: true,
         showWelcomeOnStartup: true,
+        openAtLogin: false,
         skipCheckpointRestoreConfirm: false,
     },
     notifications: {

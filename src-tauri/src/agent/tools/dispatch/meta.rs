@@ -713,12 +713,6 @@ fn design_previews_ui(id: &str, status: &str, selected: &str, inner: &str) -> St
 
 
 pub(super) async fn tool_screenshot_page(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
-    if is_read_only_mode(ctx.mode) {
-        return blocked_outcome(
-            "screenshot_page",
-            "Screenshots are not taken in Ask or Plan mode.",
-        );
-    }
     let url_arg = args.get("url").and_then(|v| v.as_str());
     let path_arg = args.get("path").and_then(|v| v.as_str());
     let resolved = match page_shot::resolve_page_url(url_arg, path_arg) {
@@ -777,12 +771,6 @@ pub(super) async fn tool_screenshot_page(args: &Value, ctx: &ToolCtx<'_>) -> Too
 }
 
 pub(super) async fn tool_inspect_runtime(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
-    if is_read_only_mode(ctx.mode) {
-        return blocked_outcome(
-            "inspect_runtime",
-            "Runtime inspect is not available in Ask or Plan mode.",
-        );
-    }
     let kind = crate::agent::tools::runtime_inspect::detect_runtime_kind(ctx.project_path);
     if !kind.inspectable() {
         return error_outcome(

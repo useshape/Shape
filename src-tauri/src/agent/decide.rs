@@ -187,7 +187,8 @@ pub fn decide(
     };
 
     let mut packs = Packs::default();
-    packs.browse = browse;
+    // A web lookup is research. The browser stays with it, including in Ask and Plan.
+    packs.browse = browse || web;
     packs.git = git;
     packs.media = media;
     packs.reverse = reverse;
@@ -332,6 +333,7 @@ fn has_web_signal(text: &str) -> bool {
         "from the internet",
         "latest version of",
         "latest release of",
+        "research",
     ];
     WORDS.iter().any(|w| text.contains(w))
 }
@@ -519,6 +521,48 @@ mod tests {
     fn reverse_request_loads_reverse_pack() {
         let d = decide("Disassemble this PE binary and list imports", None, locks(), None);
         assert!(d.packs.reverse);
+    }
+
+    #[test]
+    #[test]
+    fn site_research_in_ask_keeps_the_browser() {
+        let d = decide(
+            "Look at sentry.io and tell me what the product actually does.",
+            Some(Capability::Ask),
+            locks(),
+            Some(Capability::Ask),
+        );
+        assert_eq!(d.capability, Capability::Ask);
+        assert!(d.packs.browse);
+        assert!(d.packs.web);
+        assert!(!d.packs.workspace);
+    }
+
+    #[test]
+    fn web_lookup_also_offers_the_browser() {
+        let d = decide(
+            "What is the latest DeepSeek release? Search the web.",
+            Some(Capability::Ask),
+            locks(),
+            Some(Capability::Ask),
+        );
+        assert!(d.packs.web);
+        assert!(d.packs.browse);
+    }
+
+    #[test]
+    fn read_only_still_offers_browser_research() {
+        let d = decide(
+            "I want you to conduct a hands-on browser research task.",
+            Some(Capability::Ask),
+            locks(),
+            Some(Capability::Ask),
+        );
+        assert_eq!(d.capability, Capability::Ask);
+        assert!(d.packs.browse);
+        assert!(d.packs.web);
+        assert!(!d.packs.workspace);
+        assert!(!d.packs.terminal);
     }
 
     #[test]

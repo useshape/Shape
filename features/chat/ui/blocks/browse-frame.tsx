@@ -13,7 +13,7 @@ import { Icon } from "@/components/ui/icon";
 
 import { cn } from "@/lib/utils";
 import { commands } from "@/lib/backend";
-import { useBrowseFrame, type BrowseFrame } from "@/features/agent/browser/session";
+import { useBrowseFrame, useControllingBrowseFrame, type BrowseFrame } from "@/features/agent/browser/session";
 import { BorderGlow } from "./border-glow";
 import {
     AlertDialog,
@@ -26,8 +26,12 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+/** Captured page. The stage scales this to the frame instead of letterboxing it. */
 const PAGE_W = 1280;
-const PAGE_H = 800;
+const PAGE_H = 720;
+
+/** macOS arrow. The tip sits at (11, 10) inside the 32px art. */
+const MAC_CURSOR = { size: 22, tipX: 11, tipY: 10, art: 32 };
 
 /** Inset browser window on the chat card. Edit these to resize the frame. */
 const INSET = {
@@ -41,75 +45,46 @@ const INSET = {
     windowPercent: 100,
     /** Corner radius of the inset window, in px. The glow uses this same value. */
     radius: 25,
-    /** Keep the page off the curved sides. Vertical pad stays smaller. */
-    pagePadX: 8,
-    pagePadY: 3,
 };
 
-function usePageEdgeColor(src: string): { color: string | null; failed: boolean } {
-    const [color, setColor] = useState<string | null>(null);
-    const [failed, setFailed] = useState(false);
-    useEffect(() => {
-        const url = src.trim();
-        setColor(null);
-        setFailed(false);
-        if (!url) return;
-        let cancel = false;
-        const img = new Image();
-        img.onload = () => {
-            if (cancel) return;
-            if (!img.naturalWidth) {
-                setFailed(true);
-                return;
-            }
-            try {
-                const canvas = document.createElement("canvas");
-                const strip = 4;
-                canvas.width = strip * 2;
-                canvas.height = 8;
-                const ctx = canvas.getContext("2d", { willReadFrequently: true });
-                if (!ctx) return;
-                ctx.drawImage(img, 0, 0, strip, img.naturalHeight, 0, 0, strip, 8);
-                ctx.drawImage(img, img.naturalWidth - strip, 0, strip, img.naturalHeight, strip, 0, strip, 8);
-                const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-                let r = 0;
-                let g = 0;
-                let b = 0;
-                let n = 0;
-                for (let i = 0; i < data.length; i += 4) {
-                    r += data[i] ?? 0;
-                    g += data[i + 1] ?? 0;
-                    b += data[i + 2] ?? 0;
-                    n += 1;
-                }
-                if (n > 0) setColor(`rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`);
-            } catch {
-                // The picture itself loaded. A failed color sample must not hide the frame.
-            }
-        };
-        img.onerror = () => {
-            if (!cancel) setFailed(true);
-        };
-        img.src = url;
-        return () => {
-            cancel = true;
-        };
-    }, [src]);
-    return { color, failed };
+/** Scale the 1280×720 capture to the frame's width so the page fills the sides. */
+function scalePage(width: number, height: number) {
+    const scale = width > 0 ? width / PAGE_W : 0;
+    return { left: 0, top: 0, width, height: PAGE_H * scale, frameHeight: height, scale };
 }
 
-function fitPage(width: number, height: number) {
-    const scale = Math.min(width / PAGE_W, height / PAGE_H);
-    const w = PAGE_W * scale;
-    const h = PAGE_H * scale;
-    return { left: (width - w) / 2, top: (height - h) / 2, width: w, height: h, scale };
+function useWeightedPoint(x: number, y: number, weighted: boolean) {
+    const state = useRef({ x, y, vx: 0, vy: 0 });
+    const [pos, setPos] = useState({ x, y });
+    useEffect(() => {
+        if (!weighted) {
+            state.current = { x, y, vx: 0, vy: 0 };
+            setPos({ x, y });
+            return;
+        }
+        let frame = 0;
+        const step = () => {
+            const cursor = state.current;
+            cursor.vx = cursor.vx * 0.62 + (x - cursor.x) * 0.16;
+            cursor.vy = cursor.vy * 0.62 + (y - cursor.y) * 0.16;
+            cursor.x += cursor.vx;
+            cursor.y += cursor.vy;
+            setPos({ x: cursor.x, y: cursor.y });
+            const left = Math.hypot(x - cursor.x, y - cursor.y);
+            const speed = Math.hypot(cursor.vx, cursor.vy);
+            if (left > 0.15 || speed > 0.06) frame = requestAnimationFrame(step);
+        };
+        frame = requestAnimationFrame(step);
+        return () => cancelAnimationFrame(frame);
+    }, [x, y, weighted]);
+    return weighted ? pos : { x, y };
 }
 
 export function BrowseStage({
     frame,
     className,
     interactive = false,
-    fill = false,
+    fill: _fill = false,
     natural = false,
     showCursor = false,
 }: {
@@ -127,6 +102,7 @@ export function BrowseStage({
     const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
     const status = frame.status || (frame.image ? "controlling" : "loading");
     const cursor = pointer ?? { x: frame.x, y: frame.y };
+    const point = useWeightedPoint(cursor.x, cursor.y, !pointer);
 
     useEffect(() => {
         const el = hostRef.current;
@@ -138,33 +114,33 @@ export function BrowseStage({
         return () => obs.disconnect();
     }, []);
 
-    const fitted = fitPage(box.w, box.h);
-    const place = (percentX: number, percentY: number) => ({
-        left: fitted.left + (percentX / 100) * fitted.width,
-        top: fitted.top + (percentY / 100) * fitted.height,
-    });
+    const fitted = scalePage(box.w, box.h);
 
     const readPoint = (event: React.PointerEvent<HTMLDivElement>) => {
         const host = hostRef.current;
         if (!host) return null;
         const bounds = host.getBoundingClientRect();
-        const rect = fitPage(bounds.width, bounds.height);
+        const rect = scalePage(bounds.width, bounds.height);
         const x = event.clientX - bounds.left - rect.left;
         const y = event.clientY - bounds.top - rect.top;
         if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
         return { x: (x / rect.width) * 100, y: (y / rect.height) * 100 };
     };
 
-    const spot = (fill || natural) && box.w > 0
-        ? { left: (cursor.x / 100) * box.w, top: (cursor.y / 100) * box.h }
-        : place(cursor.x, cursor.y);
+    const spot = fitted.width > 0
+        ? {
+            left: fitted.left + (point.x / 100) * fitted.width,
+            top: fitted.top + (point.y / 100) * fitted.height,
+        }
+        : { left: 0, top: 0 };
     if (!frame.image) return null;
+    const cursorScale = MAC_CURSOR.size / MAC_CURSOR.art;
 
     return (
         <div
             ref={hostRef}
             className={cn(
-                natural ? "relative w-full" : "relative overflow-hidden bg-editor",
+                natural ? "relative w-full" : "relative overflow-hidden",
                 interactive && status === "controlling" && "cursor-none",
                 className,
             )}
@@ -185,33 +161,30 @@ export function BrowseStage({
                 src={frame.image}
                 alt=""
                 draggable={false}
-                className={cn(
-                    natural ? "block h-auto w-full" : "absolute inset-0 h-full w-full",
-                    !natural && (fill ? "object-cover" : "object-contain"),
-                    "[image-rendering:auto]",
-                )}
+                className={cn(natural ? "block h-auto w-full" : "absolute max-w-none", "[image-rendering:auto]")}
+                style={natural || fitted.width <= 0 ? undefined : {
+                    left: fitted.left,
+                    top: fitted.top,
+                    width: fitted.width,
+                    height: fitted.height,
+                }}
             />
-            {(showCursor || status === "controlling") && frame.image ? (
+            {(showCursor || status === "controlling") && frame.image && !natural ? (
                 <svg
-                    className="pointer-events-none absolute z-10 text-text-primary"
+                    className="pointer-events-none absolute z-10"
                     style={{
-                        left: spot.left,
-                        top: spot.top,
-                        width: 22,
-                        height: 22,
-                        transition: pointer ? "none" : "left 180ms cubic-bezier(.2,.7,.2,1), top 180ms cubic-bezier(.2,.7,.2,1)",
-                        filter: "drop-shadow(0 1px 1.5px rgba(0,0,0,0.45))",
+                        left: spot.left - MAC_CURSOR.tipX * cursorScale,
+                        top: spot.top - MAC_CURSOR.tipY * cursorScale,
+                        width: MAC_CURSOR.size,
+                        height: MAC_CURSOR.size,
                     }}
-                    width="22"
-                    height="22"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    stroke="white"
-                    strokeWidth="1.4"
-                    strokeLinejoin="round"
+                    viewBox="0 0 32 32"
                     aria-hidden
                 >
-                    <path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z" />
+                    <g fill="none" fillRule="evenodd" transform="translate(10 7)">
+                        <path d="m6.148 18.473 1.863-1.003 1.615-.839-2.568-4.816h4.332l-11.379-11.408v16.015l3.316-3.221z" fill="#fff" />
+                        <path d="m6.431 17 1.765-.941-2.775-5.202h3.604l-8.025-8.043v11.188l2.53-2.442z" fill="#000" />
+                    </g>
                 </svg>
             ) : null}
         </div>
@@ -227,6 +200,7 @@ export function BrowseChatCard({
     y,
     consoleLines,
     followLive = false,
+    conversationId,
 }: {
     url?: string;
     title?: string;
@@ -236,10 +210,12 @@ export function BrowseChatCard({
     y?: number;
     consoleLines?: string[];
     followLive?: boolean;
+    conversationId?: string | null;
 }) {
-    const live = useBrowseFrame();
-    const driving = followLive && !!live && (
-        live.status === "controlling" || live.status === "loading" || Boolean(live.image)
+    const live = useBrowseFrame(conversationId);
+    const savedImage = image?.trim() || "";
+    const driving = Boolean(conversationId) && followLive && !!live && (
+        live.status === "controlling" || live.status === "loading" || !savedImage
     );
     const mirror = driving ? live : null;
     const savedStatus = (status as BrowseFrame["status"]) || "stopped";
@@ -255,13 +231,10 @@ export function BrowseChatCard({
     const controlling = frame.status === "controlling" || frame.status === "loading";
     const lines = (mirror?.console?.length ? mirror.console : consoleLines) || [];
     const [consoleOpen, setConsoleOpen] = useState(false);
-    const page = usePageEdgeColor(frame.image);
     const pageUrl = frame.url.trim();
 
     const visible = Boolean(frame.image.trim()) || controlling;
-    if (!visible || page.failed || frame.status === "error") return null;
-
-    const pageColor = page.color;
+    if (!visible || frame.status === "error") return null;
     const copyLink = () => {
         if (!pageUrl) return;
         void navigator.clipboard.writeText(pageUrl);
@@ -311,22 +284,14 @@ export function BrowseChatCard({
                 <div style={{ padding: `${INSET.padY}px ${INSET.padX}px` }}>
                     <div className="mx-auto" style={{ width: `${INSET.windowPercent}%` }}>
                         <BorderGlow radius={INSET.radius}>
-                            <div
-                                className="relative aspect-video"
-                                style={{
-                                    background: pageColor ?? "#0e0e10",
-                                    padding: `${INSET.pagePadY}px ${INSET.pagePadX}px`,
-                                }}
-                            >
+                            <div className="relative aspect-video overflow-hidden">
                                 {frame.image ? (
-                                    <div className="relative h-full w-full overflow-hidden">
-                                        <BrowseStage
-                                            frame={frame}
-                                            fill
-                                            showCursor
-                                            className="absolute inset-0"
-                                        />
-                                    </div>
+                                    <BrowseStage
+                                        frame={frame}
+                                        fill
+                                        showCursor
+                                        className="absolute inset-0"
+                                    />
                                 ) : null}
                                 {lines.length ? (
                                     <button
@@ -353,7 +318,7 @@ export function BrowseChatCard({
 }
 
 export function AgentControlBar() {
-    const frame = useBrowseFrame();
+    const frame = useControllingBrowseFrame();
     const [confirm, setConfirm] = useState(false);
     if (!frame || frame.status === "stopped") return null;
 

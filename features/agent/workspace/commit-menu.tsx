@@ -351,8 +351,13 @@ export function CommitMenu({
             plus += row.plus;
             minus += row.minus;
         }
+        for (const edit of edits) {
+            const diff = countChangedLines(edit.original, edit.replacement);
+            plus += diff.add;
+            minus += diff.del;
+        }
         return { plus, minus };
-    }, [files, stats]);
+    }, [files, stats, edits]);
 
     const messageBody = () => {
         const head = title.trim();
@@ -361,7 +366,12 @@ export function CommitMenu({
     };
 
     const commitPaths = async (paths: string[], message: string, amend = false) => {
-        if (!repo || !message.trim()) {
+        if (!repo) {
+            setMenuOpen(false);
+            setSetupOpen(true);
+            return;
+        }
+        if (!message.trim()) {
             notify.error("Git", "Enter a commit title");
             return;
         }
@@ -438,6 +448,11 @@ export function CommitMenu({
     const selectedPaths = files.map((file) => file.path).filter((path) => picked.includes(path));
 
     const commitAll = () => {
+        if (!repo) {
+            setMenuOpen(false);
+            setSetupOpen(true);
+            return;
+        }
         void commitPaths(selectedPaths, messageBody());
     };
 
@@ -451,7 +466,11 @@ export function CommitMenu({
     };
 
     const push = async () => {
-        if (!repo) return;
+        if (!repo) {
+            setMenuOpen(false);
+            setSetupOpen(true);
+            return;
+        }
         const ok = await confirm(
             ahead > 0 ? `Push ${ahead} commit${ahead === 1 ? "" : "s"} to the remote?` : "Push to the remote?",
             {
@@ -476,7 +495,11 @@ export function CommitMenu({
     };
 
     const stageAll = async () => {
-        if (!repo) return;
+        if (!repo) {
+            setMenuOpen(false);
+            setSetupOpen(true);
+            return;
+        }
         setBusy(true);
         try {
             await commands.gitStageAll(repo);
@@ -490,7 +513,11 @@ export function CommitMenu({
     };
 
     const runGit = async (label: string, task: () => Promise<unknown>) => {
-        if (!repo) return;
+        if (!repo) {
+            setMenuOpen(false);
+            setSetupOpen(true);
+            return;
+        }
         setBusy(true);
         try {
             await task();
@@ -505,7 +532,12 @@ export function CommitMenu({
     };
 
     const discardAll = async () => {
-        if (!repo || files.length === 0) return;
+        if (!repo) {
+            setMenuOpen(false);
+            setSetupOpen(true);
+            return;
+        }
+        if (files.length === 0) return;
         const ok = await confirm("Discard every uncommitted change in this repo?", {
             title: "Discard changes",
             kind: "warning",
@@ -519,7 +551,11 @@ export function CommitMenu({
     };
 
     const createBranch = async () => {
-        if (!repo) return;
+        if (!repo) {
+            setMenuOpen(false);
+            setSetupOpen(true);
+            return;
+        }
         const name = window.prompt("New branch name");
         if (!name?.trim()) return;
         await runGit(`Switched to ${name.trim()}`, async () => {
@@ -529,7 +565,11 @@ export function CommitMenu({
     };
 
     const suggest = async () => {
-        if (!repo) return;
+        if (!repo) {
+            setMenuOpen(false);
+            setSetupOpen(true);
+            return;
+        }
         const token = getShapeAccessToken();
         if (!token) {
             notify.error("Git", "Sign in to Shape to write a commit message.");
@@ -560,14 +600,7 @@ export function CommitMenu({
                 }
                 void (async () => {
                     const repos = await discoverGitRepos(projectPath).catch(() => []);
-                    const found = pickDefaultRepo(projectPath, repos);
-                    if (!found) {
-                        setRepo(null);
-                        setMenuOpen(false);
-                        setSetupOpen(true);
-                        return;
-                    }
-                    setRepo(found);
+                    setRepo(pickDefaultRepo(projectPath, repos));
                     setMenuOpen(true);
                 })();
             }}
@@ -577,12 +610,16 @@ export function CommitMenu({
                     variant="ghost"
                     size="sm"
                     disabled={busy}
-                    className="px-1.5 text-sm font-normal text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                    className="group/changes px-1.5 text-sm font-normal text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <span>Commit</span>
+                    <span>Changes</span>
                     {totals.plus > 0 ? <span className="tabular-nums text-success">+{totals.plus}</span> : null}
                     {totals.minus > 0 ? <span className="tabular-nums text-error">−{totals.minus}</span> : null}
-                    <Icon icon={ChevronDown20Regular} className="opacity-60" />
+                    <span
+                        className="inline-flex w-0 shrink-0 items-center justify-end overflow-hidden opacity-0 transition-[width,opacity] duration-150 group-hover/changes:ml-1 group-hover/changes:w-4 group-hover/changes:opacity-100 group-data-[state=open]/changes:ml-1 group-data-[state=open]/changes:w-4 group-data-[state=open]/changes:opacity-100"
+                    >
+                        <Icon icon={ChevronDown20Regular} className="size-4" />
+                    </span>
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[320px]">

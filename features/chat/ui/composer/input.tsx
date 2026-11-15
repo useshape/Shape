@@ -11,10 +11,10 @@ import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
 import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
-import { FolderAdd24Filled, FolderAdd24Regular } from "@fluentui/react-icons/headless/svg/folder-add";
-import { Connected24Filled, Connected24Regular } from "@fluentui/react-icons/headless/svg/connected";
-import { DocumentEdit24Filled, DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
-import { MoviesAndTv24Filled, MoviesAndTv24Regular } from "@fluentui/react-icons/headless/svg/movies-and-tv";
+import { FolderAdd24Regular } from "@fluentui/react-icons/headless/svg/folder-add";
+import { DocumentEdit24Regular } from "@fluentui/react-icons/headless/svg/document-edit";
+import { MoviesAndTv24Regular } from "@fluentui/react-icons/headless/svg/movies-and-tv";
+import { Shield20Regular } from "@fluentui/react-icons/headless/svg/shield";
 import { Image20Regular } from "@fluentui/react-icons/headless/svg/image";
 
 
@@ -70,8 +70,6 @@ import {
 import { slashCommandRanges } from "@/lib/chat/workflows";
 import { revealComposerCaret, syncComposerOverlayScroll } from "@/lib/chat/composer-scroll";
 import { listSkills, subscribeSkills, type Skill } from "@/lib/chat/skills";
-import { fetchPlugins, peekPluginsCache, type PluginRow } from "@/lib/plugins/api";
-import { PluginLogo } from "@/components/ui/plugin-logo";
 import { getVisibleModels, isApiModel, resolveChatModels, sanitizeEnabledModels, type ModelInfo } from "@/lib/settings/models";
 import {
     getCatalogDefaultEnabledIds,
@@ -151,6 +149,25 @@ function contextWindowTokens(raw?: string): number | null {
     return m[2].toUpperCase() === "M" ? Math.round(n * 1_000_000) : Math.round(n * 1000);
 }
 
+/** Listed provider USD per 1M tokens, marked up the same way billing turns them into credits. */
+const CREDIT_USD = 0.02;
+const COST_MARKUP = 1.4;
+/** A middle-length agent turn. Real spend follows how long the prompt is. */
+const ESTIMATE_INPUT_TOKENS = 25_000;
+const ESTIMATE_OUTPUT_TOKENS = 1_500;
+
+function estimateCredits(model: ModelInfo): string | null {
+    if (model.inputCost <= 0 && model.outputCost <= 0) return null;
+    const usd =
+        (ESTIMATE_INPUT_TOKENS / 1_000_000) * model.inputCost +
+        (ESTIMATE_OUTPUT_TOKENS / 1_000_000) * model.outputCost;
+    const credits = (usd * COST_MARKUP) / CREDIT_USD;
+    if (!Number.isFinite(credits) || credits <= 0) return null;
+    if (credits < 0.1) return credits.toFixed(2);
+    if (credits < 10) return credits.toFixed(1);
+    return String(Math.round(credits));
+}
+
 const ModelTooltip = ({
     model,
     effort,
@@ -158,26 +175,43 @@ const ModelTooltip = ({
     model: ModelInfo;
     effort: ReasoningEffort;
 }) => {
-    const isAuto = false;
     const ctx = formatContextWindow(model.contextWindow);
-    const effortName = effortDisplayLabel(effort).toLowerCase();
+    const stops = effortsForModel(model.id);
+    const index = Math.max(0, stops.findIndex((stop) => stop.value === effort));
+    const cost = estimateCredits(model);
+    const level = effortDisplayLabel(effort);
 
     return (
-        <div className="flex flex-col gap-1 min-w-[220px] max-w-[280px] p-3 select-none">
-            <div className="text-sm font-normal leading-tight text-text-primary">
-                {isAuto ? "Auto" : model.name}
+        <div className="flex min-w-[220px] max-w-[280px] select-none flex-col gap-1.5 p-3">
+            <div className="flex items-center gap-1.5 text-sm font-normal leading-tight text-text-primary">
+                {providerIcon(model.id, 16)}
+                <span className="min-w-0">{model.name}</span>
             </div>
-            <p className="text-xs leading-snug text-text-secondary">
-                {isAuto
-                    ? "Picks a fast model for everyday work."
-                    : model.description}
-            </p>
-            {ctx ? (
-                <p className="mt-1 text-xs text-text-muted">{ctx} context window</p>
+            {model.description ? (
+                <p className="text-xs leading-snug text-text-secondary">{model.description}</p>
             ) : null}
-            <p className="mt-0.5 text-xs italic text-text-muted">
-                Version: {effortName} reasoning effort
-            </p>
+            <div className="mt-0.5 flex items-center gap-2" aria-label={`${level} reasoning`}>
+                <div className="flex min-w-0 flex-1 gap-0.5">
+                    {stops.map((stop, i) => (
+                        <span
+                            key={stop.value}
+                            className={cn("h-1.5 flex-1 rounded-[2px]", i <= index ? "bg-text-primary" : "bg-white/12")}
+                        />
+                    ))}
+                </div>
+                <span className="shrink-0 text-xs text-text-muted">{level}</span>
+            </div>
+            {ctx ? (
+                <p className="text-xs text-text-muted">{ctx} context</p>
+            ) : null}
+            {cost ? (
+                <div className="mt-0.5 border-t border-border-subtle pt-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-xs text-text-muted">Average</span>
+                        <span className="text-xs tabular-nums text-text-primary">{cost}% Usage</span>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 };
@@ -207,10 +241,10 @@ const ModelItem = ({
             align="start"
             sideOffset={6}
             delayDuration={200}
-            className="p-0!"
+            className={disabled ? "px-2.5 py-2" : "p-0!"}
             content={
                 disabled ? (
-                    <span className="text-xs text-text-muted px-1">{unavailableTooltip}</span>
+                    <span className="text-xs leading-snug text-text-secondary">{unavailableTooltip}</span>
                 ) : (
                     <ModelTooltip model={model} effort={effort} />
                 )
@@ -760,8 +794,6 @@ export function ChatInput({
     };
     const needsSignIn = !shapeAuth.isLoading && !shapeAuth.loggedIn;
 
-    const [plusPlugins, setPlusPlugins] = React.useState<PluginRow[]>(() => peekPluginsCache()?.plugins ?? []);
-    const [pluginQuery, setPluginQuery] = React.useState("");
     const [skills, setSkills] = React.useState<Skill[]>(() => listSkills());
     React.useEffect(() => subscribeSkills(() => setSkills(listSkills())), []);
 
@@ -932,18 +964,7 @@ export function ChatInput({
                             {...{ webkitdirectory: "", directory: "" }}
                             onChange={handleFilteredFileUpload}
                         />
-                        <DropdownMenu
-                            onOpenChange={(open) => {
-                                if (!open) return;
-                                const cached = peekPluginsCache()?.plugins;
-                                if (cached) setPlusPlugins(cached);
-                                void fetchPlugins()
-                                    .then((data) => setPlusPlugins(data.plugins))
-                                    .catch(() => {
-                                        if (!cached) setPlusPlugins([]);
-                                    });
-                            }}
-                        >
+                        <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <button
                                     className={cn(
@@ -960,6 +981,7 @@ export function ChatInput({
                             <DropdownMenuContent align="start" className="w-66">
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
+                                        <Icon icon={Shield20Regular} />
                                         Permission
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent className="w-52">
@@ -987,74 +1009,20 @@ export function ChatInput({
                                 <DropdownMenuItem
                                     onClick={() => document.getElementById("chat-media-upload")?.click()}
                                 >
-                                    <Icon icon={MoviesAndTv24Filled} />
+                                    <Icon icon={MoviesAndTv24Regular} />
                                     Upload photos & files
                                 </DropdownMenuItem>
                                 {talkSurface ? null : (
                                 <DropdownMenuItem
                                     onClick={() => document.getElementById("chat-folder-upload")?.click()}
                                 >
-                                    <Icon icon={FolderAdd24Filled} />
+                                    <Icon icon={FolderAdd24Regular} />
                                     Attach folder
                                 </DropdownMenuItem>
                                 )}
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
-                                        <Icon icon={Connected24Filled} />
-                                        Plugins
-                                    </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="w-56">
-                                        <SearchInput
-                                            borderless
-                                            placeholder="Search plugins"
-                                            autoFocus
-                                            value={pluginQuery}
-                                            onChange={(e) => setPluginQuery(e.target.value)}
-                                            onKeyDown={(e) => e.stopPropagation()}
-                                            onKeyUp={(e) => e.stopPropagation()}
-                                            onPointerDown={(e) => e.stopPropagation()}
-                                        />
-                                        <div className="max-h-40 overflow-y-auto">
-                                            {(() => {
-                                                const q = pluginQuery.trim().toLowerCase();
-                                                const matches = plusPlugins.filter(
-                                                    (plugin) =>
-                                                        !q
-                                                        || plugin.name.toLowerCase().includes(q)
-                                                        || plugin.toolkit.toLowerCase().includes(q),
-                                                );
-                                                if (matches.length === 0) {
-                                                    return (
-                                                        <DropdownMenuItem disabled>
-                                                            {plusPlugins.length === 0 ? "No plugins" : "No matches"}
-                                                        </DropdownMenuItem>
-                                                    );
-                                                }
-                                                return matches.map((plugin) => (
-                                                    <DropdownMenuItem
-                                                        key={plugin.toolkit}
-                                                        onClick={() =>
-                                                            appendToken(
-                                                                formatMentionToken({
-                                                                    kind: "plugin",
-                                                                    id: plugin.toolkit,
-                                                                    path: plugin.toolkit,
-                                                                    label: plugin.name,
-                                                                }),
-                                                            )
-                                                        }
-                                                    >
-                                                        <PluginLogo toolkit={plugin.toolkit} name={plugin.name} size={14} />
-                                                        <span className="min-w-0 flex-1 truncate">{plugin.name}</span>
-                                                    </DropdownMenuItem>
-                                                ));
-                                            })()}
-                                        </div>
-                                    </DropdownMenuSubContent>
-                                </DropdownMenuSub>
-                                <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger>
-                                        <Icon icon={DocumentEdit24Filled} />
+                                        <Icon icon={DocumentEdit24Regular} />
                                         Skills
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent className="w-56">

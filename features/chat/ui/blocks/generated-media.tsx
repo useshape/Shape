@@ -2,7 +2,7 @@
 
 import { ArrowDownload20Regular } from "@fluentui/react-icons/headless/svg/arrow-download";
 import { ArrowMaximize20Regular } from "@fluentui/react-icons/headless/svg/arrow-maximize";
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -61,7 +61,7 @@ export function GeneratedMediaCard({
     const [mime, setMime] = useState(mimeFor(kind));
     const [fileName, setFileName] = useState(defaultName(kind, prompt, name));
     const [loading, setLoading] = useState(Boolean(mediaId) && !(src || "").trim());
-    const [error, setError] = useState<string | null>(null);
+    const [missing, setMissing] = useState(false);
     const [open, setOpen] = useState(false);
 
     useEffect(() => {
@@ -85,9 +85,9 @@ export function GeneratedMediaCard({
                 if (!given) setResolvedSrc(bytesToUrl(next, nextMime));
                 setLoading(false);
             })
-            .catch((err) => {
+            .catch(() => {
                 if (cancelled) return;
-                setError(err instanceof Error ? err.message : String(err));
+                setMissing(true);
                 setLoading(false);
             });
         return () => {
@@ -95,18 +95,7 @@ export function GeneratedMediaCard({
         };
     }, [kind, mediaId, name, prompt, src]);
 
-    const label = useMemo(() => {
-        if (kind === "svg") return "SVG";
-        if (kind === "audio") return "Audio";
-        return "Image";
-    }, [kind]);
-
-    if (failed) {
-        return <p className="my-2 text-sm text-text-muted">{label} generation failed</p>;
-    }
-    if (error) {
-        return <p className="my-2 text-sm text-text-muted">{error}</p>;
-    }
+    if (failed || missing) return null;
     if (loading) {
         return <GeneratingMediaFrame />;
     }
@@ -149,6 +138,7 @@ export function GeneratedMediaCard({
                 className="w-full max-w-[360px]"
                 preload="metadata"
                 aria-label={prompt || "Generated audio"}
+                onError={() => setMissing(true)}
             />
         ) : (
             // eslint-disable-next-line @next/next/no-img-element
@@ -160,6 +150,7 @@ export function GeneratedMediaCard({
                     kind === "svg" ? "max-h-[420px] object-contain" : "max-h-[420px] object-cover",
                 )}
                 onClick={() => setOpen(true)}
+                onError={() => setMissing(true)}
             />
         );
 

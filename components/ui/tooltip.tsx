@@ -24,10 +24,10 @@ const TooltipContent = React.forwardRef<
                 right: 10,
             }}
             className={cn(
-                "shape-popover-content z-tooltip squircle-xl bg-sidebar border border-border p-1",
+                "shape-popover-content z-tooltip squircle-[15px] bg-sidebar p-2",
                 "max-w-[min(260px,calc(100vw-20px))] whitespace-normal wrap-break-word text-pretty leading-snug",
                 "text-xs font-normal text-text-primary",
-                "filter-[drop-shadow(1px_0_0_var(--border-border))_drop-shadow(-1px_0_0_var(--border-border))_drop-shadow(0_1px_0_var(--border-border))_drop-shadow(0_-1px_0_var(--border-border))]",
+                "filter-[drop-shadow(1px_0_0_var(--border))_drop-shadow(-1px_0_0_var(--border))_drop-shadow(0_1px_0_var(--border))_drop-shadow(0_-1px_0_var(--border))]",
                 className,
             )}
             onPointerLeave={(e) => {
@@ -45,7 +45,18 @@ const TooltipContent = React.forwardRef<
             {...props}
         >
             {children}
-            <TooltipPrimitive.Arrow className="fill-border" />
+            <TooltipPrimitive.Arrow width={12} height={6} asChild>
+                <svg
+                    width={12}
+                    height={6}
+                    viewBox="0 0 30 10"
+                    aria-hidden
+                    style={{ display: "block", marginTop: -1 }}
+                >
+                    <polygon points="0,0 30,0 15,10" className="fill-border" />
+                    <polygon points="1.6,0 28.4,0 15,8.3" className="fill-sidebar" />
+                </svg>
+            </TooltipPrimitive.Arrow>
         </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
 ));

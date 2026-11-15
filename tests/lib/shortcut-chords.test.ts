@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadKeybindings } from "@/lib/ui/shortcuts";
+import { loadKeybindings, bindingApplies } from "@/lib/ui/shortcuts";
 
 describe("keybinding chords", () => {
     beforeEach(() => {
@@ -15,5 +15,16 @@ describe("keybinding chords", () => {
         expect(bindings.some((b) => b.key.startsWith("Ctrl+K "))).toBe(true);
         expect(bindings.find((b) => b.key === "Ctrl+K S")?.label).toBe("Save All");
         expect(bindings.find((b) => b.key === "Ctrl+K Ctrl+O")?.label).toBe("Open Folder");
+    });
+
+    it("keeps editor shortcuts off the chat composer", () => {
+        const composer = document.createElement("textarea");
+        composer.setAttribute("data-chat-composer", "true");
+        document.body.append(composer);
+        expect(bindingApplies("editorFocus", composer)).toBe(false);
+        expect(bindingApplies("editorTextFocus && !editorReadonly", composer)).toBe(false);
+        expect(bindingApplies("global", composer)).toBe(true);
+        expect(bindingApplies("chatFocus || global", composer)).toBe(true);
+        composer.remove();
     });
 });

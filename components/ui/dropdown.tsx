@@ -27,6 +27,18 @@ const shortcutClasses =
 /** Inset so rows and the panel sit off the edges. */
 const menuInsetClasses = "p-1.5";
 const menuCollisionPadding = 8;
+/** Hover growth stops here so a very long label cannot stretch the menu. */
+const MENU_HOVER_MAX = 440;
+const MENU_ITEM_SELECTOR = '[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]';
+
+function truncatedLabels(item: HTMLElement): HTMLElement[] {
+    const labels: HTMLElement[] = [];
+    if (item.classList.contains("truncate")) labels.push(item);
+    item.querySelectorAll(".truncate").forEach((node) => {
+        if (node instanceof HTMLElement) labels.push(node);
+    });
+    return labels;
+}
 
 /** Overflow scrim — GitLab-style fade when the panel can scroll. */
 function DropdownScrollScrim({ side, visible }: { side: "up" | "down"; visible: boolean }) {
@@ -50,6 +62,8 @@ function DropdownScrollArea({
     children: React.ReactNode;
 }) {
     const ref = React.useRef<HTMLDivElement>(null);
+    const hoverItem = React.useRef<HTMLElement | null>(null);
+    const baseWidth = React.useRef<number | null>(null);
     const [canUp, setCanUp] = React.useState(false);
     const [canDown, setCanDown] = React.useState(false);
 
@@ -79,14 +93,68 @@ function DropdownScrollArea({
         };
     }, [update, children]);
 
+    const fitHoveredItem = React.useCallback((item: HTMLElement | null) => {
+        const panel = ref.current?.closest(".shape-popover-content");
+        if (!(panel instanceof HTMLElement)) return;
+        if (item && item === hoverItem.current) return;
+        hoverItem.current = item;
+        if (baseWidth.current == null) baseWidth.current = panel.getBoundingClientRect().width;
+        const base = baseWidth.current;
+        const current = panel.getBoundingClientRect().width;
+        let fit = base;
+        if (item) {
+            for (const label of truncatedLabels(item)) {
+                const delta = label.scrollWidth - label.clientWidth;
+                fit = Math.max(fit, current + delta + (delta > 2 ? 12 : 0));
+            }
+        }
+        const room = window.innerWidth - panel.getBoundingClientRect().left - 12;
+        const target = Math.min(Math.max(base, fit), MENU_HOVER_MAX, Math.max(base, room));
+        if (target <= base + 1) {
+            if (!panel.style.width) return;
+            panel.style.transition = "width 160ms var(--ease-out)";
+            panel.style.width = `${Math.ceil(base)}px`;
+            const clear = () => {
+                if (panel.getBoundingClientRect().width > base + 2) return;
+                panel.style.width = "";
+                panel.style.maxWidth = "";
+                panel.style.transition = "";
+            };
+            panel.addEventListener("transitionend", clear, { once: true });
+            return;
+        }
+        panel.style.transition = "width 160ms var(--ease-out)";
+        panel.style.maxWidth = `${Math.ceil(target)}px`;
+        panel.style.width = `${Math.ceil(target)}px`;
+    }, []);
+
+    const itemFromEvent = (target: EventTarget | null) => {
+        if (!(target instanceof Element)) return null;
+        const item = target.closest(MENU_ITEM_SELECTOR);
+        return item instanceof HTMLElement && ref.current?.contains(item) ? item : null;
+    };
+
     return (
         <div className="relative min-h-0">
             <DropdownScrollScrim side="up" visible={canUp && !hasStickySearch} />
             <div
                 ref={ref}
                 onScroll={update}
+                onPointerOver={(event) => fitHoveredItem(itemFromEvent(event.target))}
+                onPointerOut={(event) => {
+                    const next = event.relatedTarget;
+                    if (next instanceof Node && ref.current?.contains(next)) {
+                        fitHoveredItem(itemFromEvent(next));
+                        return;
+                    }
+                    fitHoveredItem(null);
+                }}
+                onFocus={(event) => fitHoveredItem(itemFromEvent(event.target))}
+                onBlur={(event) => {
+                    if (!itemFromEvent(event.relatedTarget)) fitHoveredItem(null);
+                }}
                 className={cn(
-                    "overflow-y-auto no-scrollbar",
+                    "overflow-y-auto no-scrollbar dropdown-menu-scroll",
                     className,
                     menuInsetClasses,
                 )}

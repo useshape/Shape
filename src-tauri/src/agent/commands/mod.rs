@@ -5,6 +5,7 @@ pub mod checkpoints;
 pub mod commit_message;
 pub mod conversation;
 pub mod git_ai;
+pub mod goldfish;
 pub mod history;
 pub mod indexing;
 pub mod journals;

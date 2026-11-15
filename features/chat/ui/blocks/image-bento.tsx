@@ -40,6 +40,7 @@ export function ImageBento({ images }: { images: GalleryImage[] }) {
     imagesRef.current = images;
     const [width, setWidth] = useState(0);
     const [measured, setMeasured] = useState<Measured[]>([]);
+    const [settled, setSettled] = useState(false);
     const [viewer, setViewer] = useState<number | null>(null);
     const key = images.map((image) => `${image.url}|${image.source || ""}`).join("\n");
 
@@ -56,8 +57,12 @@ export function ImageBento({ images }: { images: GalleryImage[] }) {
     useEffect(() => {
         let cancel = false;
         const list = imagesRef.current.filter((image) => image.url).slice(0, 12);
+        setSettled(false);
         void measure(list).then((rows) => {
-            if (!cancel) setMeasured(rows);
+            if (!cancel) {
+                setMeasured(rows);
+                setSettled(true);
+            }
         });
         return () => {
             cancel = true;
@@ -66,7 +71,7 @@ export function ImageBento({ images }: { images: GalleryImage[] }) {
 
     const targetHeight = Math.max(112, Math.min(176, width * 0.34));
     const rows = justifyImageRows(measured, width, { gap: 6, targetHeight });
-    if (!images.some((image) => image.url)) return null;
+    if (!images.some((image) => image.url) || (settled && measured.length === 0)) return null;
 
     return (
         <div ref={frame} className="flex w-full flex-col gap-1.5">

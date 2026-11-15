@@ -27,6 +27,24 @@ static WATCH_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::n
 static LIVE_PORT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
 static PAGE_WS: Mutex<Option<(u16, String)>> = Mutex::new(None);
 static LAST_FRAME: Mutex<Option<String>> = Mutex::new(None);
+static OWNER: Mutex<Option<String>> = Mutex::new(None);
+
+fn set_owner(id: Option<&str>) {
+    if let Ok(mut guard) = OWNER.lock() {
+        *guard = id.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    }
+}
+
+fn emit_browse(app: &tauri::AppHandle, mut payload: Value) {
+    if let Ok(guard) = OWNER.lock() {
+        if let Some(id) = guard.as_ref() {
+            if let Some(obj) = payload.as_object_mut() {
+                obj.entry("conversationId").or_insert_with(|| json!(id));
+            }
+        }
+    }
+    let _ = app.emit("agent-browse", payload);
+}
 static SHOTS_IN_FLIGHT: AtomicU32 = AtomicU32::new(0);
 
 struct Session {
@@ -40,8 +58,8 @@ static SESSION: Mutex<Option<Session>> = Mutex::new(None);
 #[tauri::command]
 pub fn agent_browse_stop(app: tauri::AppHandle) {
     stop_session();
-    let _ = app.emit(
-        "agent-browse",
+    emit_browse(
+        &app,
         json!({"id": "live", "status": "stopped"}),
     );
 }
@@ -62,15 +80,15 @@ pub async fn agent_browse_pointer(app: tauri::AppHandle, kind: String, x: f64, y
         port
     };
     let ws = fetch_page_ws(port).await?;
-    let _ = app.emit(
-        "agent-browse",
+    emit_browse(
+        &app,
         json!({"id": "live", "status": "controlling", "x": x, "y": y}),
     );
     if kind == "click" {
         click_at(&ws, x, y).await?;
         if let Ok(jpeg) = capture_jpeg(&ws).await {
-            let _ = app.emit(
-                "agent-browse",
+            emit_browse(
+                &app,
                 json!({
                     "id": "live",
                     "status": "controlling",
@@ -182,6 +200,9 @@ async fn run_browse_steps(ctx: &ToolCtx<'_>, steps: Vec<Value>) -> ToolOutcome {
 }
 
 async fn browse_once(args: &Value, ctx: &ToolCtx<'_>, publish: bool) -> ToolOutcome {
+    if let Some(id) = ctx.conversation_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        set_owner(Some(id));
+    }
     if stopped() && args.get("action").and_then(|v| v.as_str()) != Some("open") {
         return fail("The user stopped browser control. Call browse with action open if they ask you to continue.");
     }
@@ -198,8 +219,8 @@ async fn browse_once(args: &Value, ctx: &ToolCtx<'_>, publish: bool) -> ToolOutc
 
     if action == "stop" {
         stop_session();
-        let _ = ctx.app_handle.emit(
-            "agent-browse",
+        emit_browse(
+            ctx.app_handle,
             json!({"id": "live", "status": "stopped"}),
         );
         return ok(
@@ -244,8 +265,8 @@ async fn browse_once(args: &Value, ctx: &ToolCtx<'_>, publish: bool) -> ToolOutc
                 None => return fail("browse open requires url."),
             };
             STOP.store(false, Ordering::SeqCst);
-            let _ = ctx.app_handle.emit(
-                "agent-browse",
+            emit_browse(
+                ctx.app_handle,
                 json!({
                     "id": "live",
                     "status": "loading",
@@ -263,8 +284,8 @@ async fn browse_once(args: &Value, ctx: &ToolCtx<'_>, publish: bool) -> ToolOutc
             }
         }
         "click" => {
-            let _ = ctx.app_handle.emit(
-                "agent-browse",
+            emit_browse(
+                ctx.app_handle,
                 json!({
                     "id": "live",
                     "status": "controlling",
@@ -287,8 +308,8 @@ async fn browse_once(args: &Value, ctx: &ToolCtx<'_>, publish: bool) -> ToolOutc
             }
         }
         "scroll" => {
-            let _ = ctx.app_handle.emit(
-                "agent-browse",
+            emit_browse(
+                ctx.app_handle,
                 json!({ "id": "live", "status": "controlling", "x": cursor_x, "y": cursor_y }),
             );
             let dy = args.get("dy").and_then(|v| v.as_f64()).unwrap_or(400.0);
@@ -378,8 +399,8 @@ async fn browse_once(args: &Value, ctx: &ToolCtx<'_>, publish: bool) -> ToolOutc
 
     SHOW_FRAMES.store(true, Ordering::SeqCst);
     let ui = browse_tag("controlling", &href, &title);
-    let _ = ctx.app_handle.emit(
-        "agent-browse",
+    emit_browse(
+        ctx.app_handle,
         json!({
             "id": "live",
             "status": "controlling",
@@ -398,8 +419,8 @@ async fn browse_once(args: &Value, ctx: &ToolCtx<'_>, publish: bool) -> ToolOutc
             if let Ok(mut guard) = LAST_FRAME.lock() {
                 *guard = Some(image.clone());
             }
-            let _ = app.emit(
-                "agent-browse",
+            emit_browse(
+                &app,
                 json!({
                     "id": "live",
                     "status": "controlling",
@@ -517,8 +538,8 @@ async fn act_on_target(
     *cursor_x = (x / w * 100.0).clamp(0.0, 100.0);
     *cursor_y = (y / h * 100.0).clamp(0.0, 100.0);
     let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("");
-    let _ = app.emit(
-        "agent-browse",
+    emit_browse(
+        &app,
         json!({ "id": "live", "status": "controlling", "x": *cursor_x, "y": *cursor_y }),
     );
     if method == "type" {
@@ -670,7 +691,7 @@ async fn run_screencast(app: &tauri::AppHandle, gen: u64) -> Result<(), String> 
             "quality": 82,
             "maxWidth": VIEW_W as u32,
             "maxHeight": VIEW_H as u32,
-            "everyNthFrame": 2
+            "everyNthFrame": 4
         }
     });
     ws.send(Message::Text(start.to_string().into()))
@@ -697,7 +718,7 @@ async fn run_screencast(app: &tauri::AppHandle, gen: u64) -> Result<(), String> 
                 if !SHOW_FRAMES.load(Ordering::SeqCst) {
                     continue;
                 }
-                if last_emit.elapsed() < Duration::from_millis(120) {
+                if last_emit.elapsed() < Duration::from_millis(400) {
                     continue;
                 }
                 let Some(data) = v.pointer("/params/data").and_then(|d| d.as_str()) else {
@@ -707,8 +728,8 @@ async fn run_screencast(app: &tauri::AppHandle, gen: u64) -> Result<(), String> 
                     continue;
                 }
                 last_emit = Instant::now();
-                let _ = app.emit(
-                    "agent-browse",
+                emit_browse(
+                    &app,
                     json!({
                         "id": "live",
                         "status": "controlling",
@@ -940,8 +961,8 @@ async fn drive(ws_url: &str, method: &str, params: Value) -> Result<Value, Strin
 
 fn page_error(ctx: &ToolCtx<'_>, url: &str, message: &str) -> ToolOutcome {
     SHOW_FRAMES.store(false, Ordering::SeqCst);
-    let _ = ctx.app_handle.emit(
-        "agent-browse",
+    emit_browse(
+        ctx.app_handle,
         json!({
             "id": "live",
             "status": "error",

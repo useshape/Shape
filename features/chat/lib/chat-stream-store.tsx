@@ -29,6 +29,34 @@ function stampLastAssistant(
     return updated;
 }
 
+function withFinalAssistant(
+    messages: ChatMessage[],
+    content: string,
+    stats: ChatMessage["stats"],
+    model?: string,
+): ChatMessage[] {
+    const updated = [...messages];
+    for (let i = updated.length - 1; i >= 0; i--) {
+        const msg = updated[i];
+        if (!msg || msg.role !== "assistant") continue;
+        updated[i] = {
+            ...msg,
+            content,
+            stats: stats ?? msg.stats,
+            model: model ?? msg.model,
+        };
+        return updated;
+    }
+    updated.push({
+        role: "assistant",
+        content,
+        timestamp: Date.now(),
+        stats,
+        model,
+    });
+    return updated;
+}
+
 function isForeignConversation(id?: string | null) {
     return Boolean(id && id.startsWith("mw-worker-"));
 }
@@ -551,6 +579,16 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 if (conversationId) {
                     setChatGenerating(conversationId, false);
                     ignoredIdsRef.current.delete(conversationId);
+                    const live = liveTurnsRef.current.get(conversationId);
+                    const base = live?.messages ?? snapshotsRef.current.get(conversationId) ?? [];
+                    if (typeof content === "string" && content.length > 0) {
+                        snapshotsRef.current.set(
+                            conversationId,
+                            withFinalAssistant(base, content, stats, model),
+                        );
+                    } else if (base.length > 0) {
+                        snapshotsRef.current.set(conversationId, stampLastAssistant(base, stats, model));
+                    }
                     liveTurnsRef.current.delete(conversationId);
                 } else {
                     liveTurnsRef.current.delete(PENDING_KEY);

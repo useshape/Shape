@@ -27,33 +27,40 @@ export function PhotoStack({
 }) {
     const items = photos.filter((photo) => photo.src.trim());
     const [viewer, setViewer] = useState<number | null>(null);
-    if (items.length === 0) return null;
+    const [hidden, setHidden] = useState<number[]>([]);
+    const visible = items.flatMap((photo, index) => (hidden.includes(index) ? [] : [{ photo, index }]));
+    if (visible.length === 0) return null;
 
     const open = (index: number) => {
-        setViewer(index);
+        const at = visible.findIndex((item) => item.index === index);
+        setViewer(at >= 0 ? at : 0);
         const photo = items[index];
         if (photo) onOpen?.(photo, index);
+    };
+    const hide = (index: number) => {
+        setHidden((current) => (current.includes(index) ? current : [...current, index]));
     };
 
     return (
         <>
             <div className={cn("w-fit max-w-[280px]", align === "end" && "ml-auto")}>
-                {items.length === 1 ? (
-                    <PhotoCell photo={items[0]} cover={false} onClick={() => open(0)} />
+                {visible.length === 1 ? (
+                    <PhotoCell photo={visible[0].photo} cover={false} onClick={() => open(visible[0].index)} onFail={() => hide(visible[0].index)} />
                 ) : (
                     <div
                         className={cn(
                             "grid gap-px overflow-hidden rounded-[18px] bg-panel",
-                            gridClass(items.length),
+                            gridClass(visible.length),
                         )}
                     >
-                        {items.map((photo, index) => (
+                        {visible.map(({ photo, index }, slot) => (
                             <PhotoCell
                                 key={`${photo.mediaId || photo.src}-${index}`}
                                 photo={photo}
                                 cover
-                                className={cellClass(items.length, index)}
+                                className={cellClass(visible.length, slot)}
                                 onClick={() => open(index)}
+                                onFail={() => hide(index)}
                             />
                         ))}
                     </div>
@@ -62,7 +69,7 @@ export function PhotoStack({
             <MediaLightbox
                 open={viewer != null}
                 onClose={() => setViewer(null)}
-                images={items.map((photo) => ({ src: photo.src, title: photo.alt }))}
+                images={visible.map(({ photo }) => ({ src: photo.src, title: photo.alt }))}
                 initialIndex={viewer ?? 0}
             />
         </>
@@ -86,14 +93,15 @@ function PhotoCell({
     cover,
     className,
     onClick,
+    onFail,
 }: {
     photo: StackPhoto;
     cover: boolean;
     className?: string;
     onClick: () => void;
+    onFail: () => void;
 }) {
     const [ready, setReady] = useState(() => photo.src.startsWith("data:"));
-    const [failed, setFailed] = useState(false);
 
     return (
         <button
@@ -105,7 +113,7 @@ function PhotoCell({
                 className,
             )}
         >
-            {!ready && !failed ? (
+            {!ready ? (
                 <span
                     className={cn("preview-shimmer block", cover ? "absolute inset-0" : "h-40 w-[220px]")}
                     aria-hidden
@@ -113,27 +121,21 @@ function PhotoCell({
                     <span className="preview-shimmer-blob" />
                 </span>
             ) : null}
-            {failed ? (
-                <span className="flex h-28 w-[180px] items-center justify-center px-3 text-center text-xs text-text-muted">
-                    Couldn&apos;t load
-                </span>
-            ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                    src={photo.src}
-                    alt={photo.alt || ""}
-                    draggable={false}
-                    className={cn(
-                        "transition-opacity duration-300",
-                        cover
-                            ? "size-full object-cover"
-                            : "block max-h-[380px] max-w-[280px] object-contain",
-                        ready ? "opacity-100" : "absolute opacity-0",
-                    )}
-                    onLoad={() => setReady(true)}
-                    onError={() => setFailed(true)}
-                />
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src={photo.src}
+                alt={photo.alt || ""}
+                draggable={false}
+                className={cn(
+                    "transition-opacity duration-300",
+                    cover
+                        ? "size-full object-cover"
+                        : "block max-h-[380px] max-w-[280px] object-contain",
+                    ready ? "opacity-100" : "absolute opacity-0",
+                )}
+                onLoad={() => setReady(true)}
+                onError={onFail}
+            />
         </button>
     );
 }

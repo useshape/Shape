@@ -541,6 +541,8 @@ export const commands = {
         workerName?: string | null,
         workerJob?: string | null,
         selectedMediaId?: string | null,
+        goldfishEnabled?: boolean,
+        goldfishModel?: string | null,
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -575,6 +577,8 @@ export const commands = {
             workerName: workerName ?? null,
             workerJob: workerJob ?? null,
             selectedMediaId: selectedMediaId ?? null,
+            goldfishEnabled: goldfishEnabled ?? null,
+            goldfishModel: goldfishModel ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;
@@ -612,12 +616,27 @@ export const commands = {
         autoRunMode?: string;
         requireEditApproval?: boolean;
         protectDestructiveGit?: boolean;
+        computerUse?: boolean;
+        shellAutomation?: boolean;
+        browseEnabled?: boolean;
+        networkCommands?: string;
+        commandTimeoutSec?: number;
+        allowCapabilityUpgrade?: boolean;
+        maxContextLines?: number;
     }) =>
         invokeCommand<void>("update_turn_policy", {
             autoRunMode: policy.autoRunMode ?? null,
             requireEditApproval: policy.requireEditApproval ?? null,
             protectDestructiveGit: policy.protectDestructiveGit ?? null,
+            computerUse: policy.computerUse ?? null,
+            shellAutomation: policy.shellAutomation ?? null,
+            browseEnabled: policy.browseEnabled ?? null,
+            networkCommands: policy.networkCommands ?? null,
+            commandTimeoutSec: policy.commandTimeoutSec ?? null,
+            allowCapabilityUpgrade: policy.allowCapabilityUpgrade ?? null,
+            maxContextLines: policy.maxContextLines ?? null,
         }),
+    setOpenAtLogin: (enabled: boolean) => invokeCommand<boolean>("set_open_at_login", { enabled }),
     cleanupDesignSandbox: (sessionId?: string) =>
         invokeCommand<void>("cleanup_design_sandbox", {
             sessionId: sessionId ?? null,

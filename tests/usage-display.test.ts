@@ -95,7 +95,7 @@ describe("usage-display", () => {
             title: "18% used",
             headline: "18%",
             tooltip: "18% of free usage used",
-            showMeter: false,
+            showMeter: true,
         });
 
         expect(
@@ -112,10 +112,10 @@ describe("usage-display", () => {
             ),
         ).toMatchObject({
             mode: "usage",
-            percent: 0,
+            percent: 20,
             title: "1200% usage remaining",
             headline: "1200%",
-            showMeter: false,
+            showMeter: true,
         });
 
         expect(

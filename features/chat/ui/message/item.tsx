@@ -88,6 +88,7 @@ type ChatMessageItemProps = {
     surface?: "code" | "talk";
     talkMark?: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
     talkName?: string;
+    conversationId?: string | null;
 };
 
 function anonymizeReport(text: string): string {
@@ -335,6 +336,7 @@ function ChatMessageItemInner({
     surface = "code",
     talkMark = null,
     talkName = "Shape",
+    conversationId,
 }: ChatMessageItemProps) {
     const talk = surface === "talk";
     const [expanded, setExpanded] = React.useState(false);
@@ -593,6 +595,7 @@ function ChatMessageItemInner({
                                                 durationMs={stats?.timeMs}
                                                 surface="talk"
                                                 talkName={talkName}
+                                                conversationId={conversationId}
                                             />
                                         </div>
                                         );
@@ -637,6 +640,7 @@ function ChatMessageItemInner({
                                 activityLabel={activityLabel}
                                 isFileEditResolved={isFileEditResolved}
                                 durationMs={stats?.timeMs}
+                                conversationId={conversationId}
                             />
                         </div>
                     )}

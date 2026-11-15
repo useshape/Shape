@@ -153,7 +153,7 @@ export function ThreadReplies({
                     type="button"
                     onClick={() => onOpen(card.id)}
                     className={cn(
-                        "thread-link relative flex h-9 w-full items-center gap-2 squircle-2xl mt-1 pr-2 pl-8 text-left text-sm text-text-secondary",
+                        "relative flex h-9 w-full items-center gap-2 squircle-2xl mt-1 pr-2 text-left text-sm text-text-secondary",
                         color
                             ? "hover:bg-[color-mix(in_oklch,var(--chat-tint)_16%,transparent)] hover:text-text-primary"
                             : "hover:bg-panel-hover hover:text-text-primary",
