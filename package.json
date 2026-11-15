@@ -22,7 +22,7 @@
     "release-notes": "node scripts/release/notes.mjs",
     "release": "node scripts/release/run.mjs",
     "prepare-windows-assets": "node scripts/release/assets.mjs",
-    "icons:generate": "tauri icon public/logos/app_icon.svg --output src-tauri/icons && node -e \"require('fs').copyFileSync('public/logos/app_icon.svg','app/icon.svg');require('fs').copyFileSync('src-tauri/icons/icon.ico','app/favicon.ico')\""
+    "icons:generate": "tauri icon public/logos/icon.png --output src-tauri/icons && node -e \"require('fs').copyFileSync('public/logos/icon.png','app/icon.png');require('fs').copyFileSync('src-tauri/icons/icon.ico','app/favicon.ico')\""
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

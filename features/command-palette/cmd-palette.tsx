@@ -86,9 +86,6 @@ function paletteBlocks(rows: PaletteRow[]) {
     return out;
 }
 
-function PaletteThread({ children }: { children: React.ReactNode }) {
-    return <div className="thread-links relative">{children}</div>;
-}
 
 type PaletteFilter = "all" | "files";
 
@@ -726,9 +723,6 @@ export function CommandPalette() {
                                         tabIndex={0}
                                         className={cn(
                                             "relative mx-1 flex min-w-0 cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-left",
-                                            block.kind === "thread" && action.reply && "thread-link [--thread-x:-8px] [--thread-run:8px]",
-                                            block.kind === "thread" && action.reply && action.id === block.replies[0]?.id && "thread-link-first",
-                                            block.kind === "thread" && action.reply && action.id === block.replies[block.replies.length - 1]?.id && "thread-link-last",
                                             idx === selectedIndex
                                                 ? "bg-panel-hover text-text-primary"
                                                 : "text-text-secondary hover:bg-panel-hover",
@@ -813,10 +807,12 @@ export function CommandPalette() {
                             );
                             });
                             if (block.kind === "thread") {
+                                const [parent, ...replies] = rows;
                                 return [
-                                    <PaletteThread key={`thread-${block.parent.id}`}>
-                                        {rows}
-                                    </PaletteThread>,
+                                    <React.Fragment key={`thread-${block.parent.id}`}>
+                                        {parent}
+                                        <div className="thread-links">{replies}</div>
+                                    </React.Fragment>,
                                 ];
                             }
                             return rows;

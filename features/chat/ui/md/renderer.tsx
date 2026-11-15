@@ -1097,6 +1097,7 @@ export function MessageRenderer({
     skipSubagentSync = true,
     surface = "code",
     talkName = "Shape",
+    conversationId,
 }: {
     content: string;
     isGenerating?: boolean;
@@ -1106,6 +1107,7 @@ export function MessageRenderer({
     skipSubagentSync?: boolean;
     surface?: "code" | "talk";
     talkName?: string;
+    conversationId?: string | null;
 }) {
     const chunks = useMemo(() => {
         const parsed = parseMessageContent(content);
@@ -1223,6 +1225,7 @@ export function MessageRenderer({
                         isActive={!!isGenerating && isLastWf}
                         durationMs={isFirst ? durationMs : undefined}
                         activityLabel={isLastWf ? activityLabel : null}
+                        conversationId={conversationId}
                     />
                 </div>
             );
@@ -1339,6 +1342,7 @@ export function MessageRenderer({
                     y={y}
                     consoleLines={consoleLines}
                     followLive={index === lastBrowseIndex}
+                    conversationId={conversationId}
                 />
             );
         }
@@ -1399,7 +1403,7 @@ export function MessageRenderer({
                 if (next?.kind !== "chunk" || next.chunk.type !== "generated_image") break;
                 group.push(next.chunk);
             }
-            const ready = group.filter((item) => item.content?.trim() || item.mediaId || item.commandStatus === "failed");
+            const ready = group.filter((item) => (item.content?.trim() || item.mediaId) && item.commandStatus !== "failed");
             const pending = !!isGenerating && group.some((item) => !item.content?.trim() && !item.mediaId && item.commandStatus !== "failed");
             if (ready.length === 0 && !pending) return null;
             return (
@@ -1413,15 +1417,17 @@ export function MessageRenderer({
                             mediaId={item.mediaId}
                             name={item.file}
                             prompt={item.mediaPrompt || item.query}
-                            failed={item.commandStatus === "failed"}
+                            failed={false}
                         />
                     ))}
                 </div>
             );
         }
         if (chunk.type === 'generated_svg' || chunk.type === 'generated_audio') {
-            if (!chunk.content?.trim() && !chunk.mediaId && chunk.commandStatus !== "failed") {
-                return chunk.isGenerating ? <GeneratingMediaFrame key={`media-${index}`} /> : null;
+            if (chunk.commandStatus === "failed" || (!chunk.content?.trim() && !chunk.mediaId)) {
+                return chunk.isGenerating && chunk.commandStatus !== "failed"
+                    ? <GeneratingMediaFrame key={`media-${index}`} />
+                    : null;
             }
             const kind = chunk.type === "generated_svg" ? "svg" : "audio";
             return (
@@ -1432,7 +1438,7 @@ export function MessageRenderer({
                     mediaId={chunk.mediaId}
                     name={chunk.file}
                     prompt={chunk.mediaPrompt || chunk.query}
-                    failed={chunk.commandStatus === "failed"}
+                    failed={false}
                 />
             );
         }

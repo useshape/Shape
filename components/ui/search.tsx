@@ -78,14 +78,14 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                 data-dropdown-search={fade ? "" : undefined}
                 className={cn(
                     "relative flex min-w-0 items-center",
-                    fade && "border-b border-border -mx-1.5 mb-1",
+                    fade && "sticky top-0 z-10 border-b border-border bg-sidebar",
                     !borderless && "h-chrome",
                     className,
                 )}
             >
                 <Icon
                     icon={Search20Regular}
-                    className="pointer-events-none absolute left-2.5 z-10 pr-0.5 text-input-placeholder!"
+                    className="pointer-events-none absolute top-1/2 left-2.5 z-10 -translate-y-1/2 pr-0.5 text-input-placeholder!"
                 />
                 <input
                     {...props}
@@ -101,15 +101,15 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
                         onChange?.(e);
                     }}
                     className={cn(
-                        "h-full w-full min-w-0 text-sm font-normal text-text-primary outline-none",
+                        "w-full min-w-0 text-sm font-normal text-text-primary outline-none",
                         "placeholder:text-input-placeholder",
                         "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                         "disabled:cursor-not-allowed disabled:opacity-50",
-                        "[&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden",
+                        "[&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden [&::-webkit-search-results-button]:hidden",
                         borderless
-                            ? "rounded-none border-0 bg-transparent! py-2 pl-9 pr-8 shadow-none focus-visible:ring-0"
+                            ? "h-11 rounded-none border-0 bg-transparent! py-0 pl-9 pr-8 leading-9 shadow-none focus-visible:ring-0"
                             : cn(
-                                  "squircle-2xl border border-input-border bg-input-bg py-0 pl-9 pr-8",
+                                  "h-full squircle-2xl border border-input-border bg-input-bg py-0 pl-9 pr-8",
                                   "focus-visible:border-border-focus focus-visible:ring-1 focus-visible:ring-border-focus",
                               ),
                         className,

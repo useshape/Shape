@@ -65,7 +65,7 @@ export function UsageRing({
     );
 }
 
-export function ChatUsageButton({ compact = false }: { compact?: boolean }) {
+export function ChatUsageButton(_props: { compact?: boolean } = {}) {
     const shapeAuth = useShapeAuth();
     const settings = useSettings();
     const lastTurnUsage = useSyncExternalStore(subscribeLastTurnUsage, getLastTurnUsage, getLastTurnUsage);
@@ -83,8 +83,7 @@ export function ChatUsageButton({ compact = false }: { compact?: boolean }) {
                 }
                 aria-label={usage.tooltip || "Usage"}
             >
-                {usage.showMeter ? <UsageRing percent={usage.percent} size={16} warn={usage.warn} title={usage.tooltip} /> : null}
-                {usage.title ? <span className={cn("tabular-nums", compact && "text-xs")}>{usage.title}</span> : null}
+                <UsageRing percent={usage.percent} size={16} warn={usage.warn} title={usage.tooltip} />
             </button>
         </Tooltip>
     );

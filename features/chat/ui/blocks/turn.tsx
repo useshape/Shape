@@ -481,7 +481,7 @@ function PluginCallStep({ block }: { block: Chunk }) {
     );
 }
 
-function StepRow({ block }: { block: Chunk }) {
+function StepRow({ block, conversationId }: { block: Chunk; conversationId?: string | null }) {
     if (block.type === "browse_session") {
         let image = "";
         let x: number | undefined;
@@ -513,6 +513,7 @@ function StepRow({ block }: { block: Chunk }) {
                         y={y}
                         consoleLines={consoleLines}
                         followLive={Boolean(block.isGenerating) || !image.trim()}
+                        conversationId={conversationId}
                     />
                 </div>
             </div>
@@ -777,6 +778,7 @@ export function TurnWorkflowSummary({
     showHeader = true,
     activityLabel,
     model,
+    conversationId,
     children,
 }: {
     blocks: Chunk[];
@@ -784,6 +786,7 @@ export function TurnWorkflowSummary({
     durationMs?: number;
     activityLabel?: string | null;
     model?: string;
+    conversationId?: string | null;
     /** When false, only the step pile is shown (for interleaved mid-turn groups). */
     showHeader?: boolean;
     children?: React.ReactNode;
@@ -947,7 +950,7 @@ export function TurnWorkflowSummary({
                                             skippedLeadThought = true;
                                             return null;
                                         }
-                                        return <StepRow key={i} block={row.block} />;
+                                        return <StepRow key={i} block={row.block} conversationId={conversationId} />;
                                     }
                                     return null;
                                 });

@@ -189,7 +189,7 @@ describe("dispatchShortcutAction", () => {
         const terminal = listenCustomEvent<{ action: string }>("shape-terminal-shortcut");
         expect(dispatchShortcutAction("Terminal", "Ctrl+`")).toBe(true);
         expect(dispatchShortcutAction("New Terminal", "Ctrl+Shift+`")).toBe(true);
-        expect(terminal.events[0]?.detail).toEqual({ action: "open" });
+        expect(terminal.events[0]?.detail).toEqual({ action: "toggle" });
         expect(terminal.events[1]?.detail).toEqual({ action: "new" });
         terminal.off();
     });

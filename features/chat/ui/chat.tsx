@@ -50,6 +50,7 @@ const KeptThread = React.memo(function KeptThread({
     surface,
     talkMark,
     talkName,
+    conversationId,
 }: {
     messages: ChatMessage[];
     isLoading: boolean;
@@ -64,6 +65,7 @@ const KeptThread = React.memo(function KeptThread({
     surface: "code" | "talk";
     talkMark: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
     talkName: string;
+    conversationId?: string | null;
 }) {
     const groups = useMemo(() => groupChatMessages(messages), [messages]);
     return (
@@ -80,9 +82,10 @@ const KeptThread = React.memo(function KeptThread({
             surface={surface}
             talkMark={talkMark}
             talkName={talkName}
+            conversationId={conversationId}
         />
     );
-}, (prev, next) => prev.messages === next.messages && prev.isLoading === next.isLoading && prev.activityLabel === next.activityLabel);
+}, (prev, next) => prev.messages === next.messages && prev.isLoading === next.isLoading && prev.activityLabel === next.activityLabel && prev.conversationId === next.conversationId);
 
 export default function Chat({
     className,
@@ -448,6 +451,7 @@ export default function Chat({
                                         surface={talk ? "talk" : "code"}
                                         talkMark={talkMark}
                                         talkName={talkName}
+                                        conversationId={id}
                                     />
                                 )}
                             </div>

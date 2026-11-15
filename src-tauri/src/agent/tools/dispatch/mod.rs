@@ -146,8 +146,7 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
             || name == "generate_audio"
             || name == "edit_image"
             || name == "save_media"
-            || name == "re_extract"
-            || name == "browse")
+            || name == "re_extract")
     {
         return blocked_outcome(name, "This tool is not available in Ask or Plan mode.");
     }

@@ -19,6 +19,7 @@ export function ChatMessageList({
     surface = "code",
     talkMark = null,
     talkName = "Shape",
+    conversationId,
 }: {
     messageGroups: { msg: ChatMessage; msgIdx: number }[][];
     messages: ChatMessage[];
@@ -37,6 +38,7 @@ export function ChatMessageList({
     surface?: "code" | "talk";
     talkMark?: { shape: "circle" | "square" | "triangle" | "cloud"; color: string } | null;
     talkName?: string;
+    conversationId?: string | null;
 }) {
     const redoRef = useRef(onRedo);
     const restoreRef = useRef(onRestore);
@@ -117,6 +119,7 @@ export function ChatMessageList({
                                             surface={surface}
                                             talkMark={talkMark}
                                             talkName={talkName}
+                                            conversationId={conversationId}
                                         />
                                     </div>
                                 );

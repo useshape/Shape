@@ -134,6 +134,20 @@ function priorityTierForCredits(remaining: number, included: number): string | n
     return "priority";
 }
 
+/** Free usage first. The selected model only after that allowance is gone and paid credits remain. */
+function goldfishModelForSend(
+    selected: string,
+    freeUsedPercent: number | null | undefined,
+    creditsRemaining: number | null | undefined,
+): string {
+    const freeLeft = typeof freeUsedPercent === "number" && freeUsedPercent < 100;
+    const paidLeft = typeof creditsRemaining === "number" && creditsRemaining > 0;
+    if (freeLeft || !paidLeft || !selected || selected === "auto" || selected === "openrouter/auto") {
+        return "auto";
+    }
+    return selected;
+}
+
 function writeComposerPrefs(prefs: ComposerPrefs) {
     try {
         localStorage.setItem(COMPOSER_PREFS_KEY, JSON.stringify(prefs));
@@ -871,7 +885,7 @@ export function useChatSession() {
             const index = Math.max(0, ids.indexOf(current || ""));
             const next = ids[(index + (dir < 0 ? -1 : 1) + ids.length) % ids.length];
             if (!next || next === current) return;
-            window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: next }));
+            window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id: next } }));
         };
         window.addEventListener("shape-chat-cycle", onCycleChat as EventListener);
         return () => window.removeEventListener("shape-chat-cycle", onCycleChat as EventListener);
@@ -1164,6 +1178,12 @@ export function useChatSession() {
                 talkName,
                 loop?.job || mark?.taught || mark?.job || undefined,
                 getSelectedTalkMediaId(),
+                settings.ai.goldfishEnabled,
+                goldfishModelForSend(
+                    modelToSend,
+                    shapeAuth.freeAutoPercent,
+                    shapeAuth.creditsRemaining,
+                ),
             );
             await refreshMetadata();
             return true;
@@ -1774,6 +1794,23 @@ export function useChatSession() {
                 const liveTitle = liveConv?.title?.trim() || "Chat";
                 setChatTitle(liveTitle);
                 syncOpenTabs(id, liveTitle);
+                return;
+            }
+            const cached = peekSnapshot(id);
+            if (!options?.force && cached && cached.length > 0) {
+                conversationIdRef.current = id;
+                setConversationId(id);
+                setCurrentConversationId(id);
+                setViewingConversation(id);
+                const knownTitle = recentConvs.find((c) => c.id === id)?.title?.trim() || "Chat";
+                setChatTitle(knownTitle);
+                syncOpenTabs(id, knownTitle);
+                scrollInstantRef.current = true;
+                isNearBottomRef.current = true;
+                setMessages(cached);
+                setHistoryLoading(false);
+                const projectForFocus = recentConvs.find((c) => c.id === id)?.project_path ?? project_path;
+                void commands.focusConversation(id, projectForFocus).catch(() => {});
                 return;
             }
             if (!options?.force && isSameConversation && hasVisibleMessages) {

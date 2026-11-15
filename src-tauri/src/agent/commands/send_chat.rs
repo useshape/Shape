@@ -61,6 +61,8 @@ pub async fn send_chat_message(
     access_token: Option<String>,
     _design_options: Option<crate::commands::preview_render::DesignAgentOptions>,
     review_adversarial_enabled: Option<bool>,
+    goldfish_enabled: Option<bool>,
+    goldfish_model: Option<String>,
     auto_run_mode: Option<String>,
     require_edit_approval: Option<bool>,
     protect_destructive_git: Option<bool>,
@@ -95,6 +97,7 @@ pub async fn send_chat_message(
 ) -> Result<String, AppError> {
     tokio::task::yield_now().await;
     let review_adversarial_on = review_adversarial_enabled.unwrap_or(false);
+    let goldfish_on = goldfish_enabled.unwrap_or(true);
     state.set_review_adversarial_enabled(review_adversarial_on);
     let workspace = workspace_mode
         .clone()
@@ -679,7 +682,7 @@ pub async fn send_chat_message(
         );
     } else if matches!(mode_to_use.to_ascii_lowercase().as_str(), "ask" | "plan") {
         turn_context.push_str(
-            "\nThis turn is read-only. Do not call edit, shell, git commit, browse, or mcp_call. They are blocked.",
+            "\nThis turn is read-only. Do not edit files, run the shell, commit, or call mcp_call. browse, screenshot_page, web_search, and visit_url stay available. When the user wants a live site, call browse. If browse is not listed, call load_tools for the browse pack. visit_url only fetches text and is not a substitute. Do not tell the user the browser is blocked.",
         );
     }
     if !talk && !skill_notes.is_empty() {
@@ -691,6 +694,31 @@ pub async fn send_chat_message(
     if !steer.hint.is_empty() {
         turn_context.push_str("\n");
         turn_context.push_str(&steer.hint);
+    }
+    let goldfish_for_code = mode_to_use.eq_ignore_ascii_case("code")
+        && !talk
+        && goldfish_on
+        && !crate::agent::subagents::is_thread_id(&owned_conversation_id);
+    if goldfish_for_code {
+        let model = goldfish_model
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("auto");
+        if let Some(note) = super::goldfish::review_request(
+            &client,
+            &auth_token,
+            &message,
+            model,
+            &proxy_base,
+            &app_handle,
+            &owned_conversation_id,
+            &cancel,
+        )
+        .await
+        {
+            turn_context.push_str(&super::goldfish::context_note(&note));
+        }
     }
     turn_context.push_str("\n");
     turn_context.push_str(&crate::agent::subagents::policy_line(&state));
@@ -847,9 +875,14 @@ pub async fn send_chat_message(
         &crate::agent::tools::browse::finish_browse_markup(turn_outcome.response_text).await,
     );
     if final_full_response.contains("<browse_session") {
+        crate::agent::tools::browse::stop_session();
         let _ = app_handle.emit(
             "agent-browse",
-            json!({ "id": "live", "status": "stopped" }),
+            json!({
+                "id": "live",
+                "status": "stopped",
+                "conversationId": &owned_conversation_id,
+            }),
         );
     }
     let loop_count = turn_outcome.loop_count;

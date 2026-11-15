@@ -39,7 +39,7 @@ import type { BrowserHistoryEntry, BrowserPickedElement, BrowserTab } from "@/li
 import { hostnameOf } from "@/lib/ui/favicon";
 import { cn } from "@/lib/utils";
 import { AgentControlBar, BrowseStage } from "@/features/chat/ui/blocks/browse-frame";
-import { useBrowseFrame } from "@/features/agent/browser/session";
+import { useControllingBrowseFrame } from "@/features/agent/browser/session";
 import { resolveBrowserInput } from "@/features/agent/browser/store";
 import { MAJOR_SITES } from "@/features/agent/browser/sites";
 import { getLastDevUrl } from "@/features/preview/store";
@@ -728,7 +728,7 @@ export function BrowserView({
     const controlled = Array.isArray(tabIds);
     const [tabs, setTabs] = useState<PageTab[]>([]);
     const [activeId, setActiveId] = useState<string | null>(null);
-    const agentFrame = useBrowseFrame();
+    const agentFrame = useControllingBrowseFrame();
     const agentLive = !!agentFrame && agentFrame.status !== "stopped" && agentFrame.status !== "error";
     const agentPage = !!agentFrame && Boolean(agentFrame.image);
     const [localActive, setLocalActive] = useState<string | null>(null);
