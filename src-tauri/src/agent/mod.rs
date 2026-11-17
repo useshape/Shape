@@ -1,5 +1,7 @@
 pub mod checkout;
 pub mod commands;
+#[path = "../../../validation/harness.rs"]
+pub mod harness;
 pub mod context;
 pub mod decide;
 pub mod steer;
@@ -11,6 +13,7 @@ pub mod models;
 pub mod overview;
 pub mod parent_resume;
 pub mod prompts;
+pub mod scratch;
 pub mod search;
 pub mod security;
 pub mod subagents;

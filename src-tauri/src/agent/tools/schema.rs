@@ -82,7 +82,6 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         browse(),
         screenshot_page(),
         inspect_runtime(),
-        design_review(),
         generate_svg(),
         generate_image(),
         generate_audio(),
@@ -97,8 +96,6 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         re_functions(),
         re_callgraph(),
         re_extract(),
-        ask_user(),
-        save_plan(),
         finish(),
     ]);
     tools
@@ -126,6 +123,12 @@ fn ask_tools() -> Vec<Value> {
         inspect_archive(),
         inspect_font(),
         show_images(),
+        generate_svg(),
+        generate_image(),
+        generate_audio(),
+        browse(),
+        screenshot_page(),
+        inspect_runtime(),
         plugin_list(),
         plugin_search(),
         plugin_tools(),
@@ -137,13 +140,12 @@ fn ask_tools() -> Vec<Value> {
         decide(),
         check_done(),
         spawn_subagent(),
-        ask_user(),
         finish(),
     ]
 }
 
 /// Return tools appropriate for the active chat mode (reduces token overhead).
-/// Unknown modes fail closed to Ask (read-only).
+/// Unknown mode strings get the Code tool list. Read-only is composer Ask only.
 #[allow(dead_code)]
 pub fn tools_for_mode(mode: &str, extra: Vec<Value>) -> Vec<Value> {
     tools_for_mode_and_family(mode, ModelFamily::Other, extra)
@@ -178,13 +180,16 @@ pub fn tools_for_mode_family_and_memory(
             tools.extend(extra);
             tools
         }
-        "code" | "review" | "agent" => {
+        "code" | "review" | "agent" | "auto" => {
             let mut tools = all_tools_for_family(family);
             tools.extend(extra);
             tools
         }
-        // Fail closed: unknown mode strings get read-only Ask tools.
-        _ => ask_tools(),
+        _ => {
+            let mut tools = all_tools_for_family(family);
+            tools.extend(extra);
+            tools
+        }
     };
     if chat_memory_enabled {
         insert_before_finish(&mut tools, list_chats());
@@ -278,11 +283,10 @@ fn steer_pack_for(name: &str) -> Option<&'static str> {
         "create_directory" | "create_file" | "apply_patch" | "edit_file" | "delete_file"
         | "rename_file" | "read_lints" | "codebase_overview" | "map_module"
         | "search_codebase" | "spawn_subagent" | "schedule_followup"
-        | "design_review" | "adversarial_review" | "render_design_previews" | "mcp_search"
-        | "mcp_call" => Some("workspace"),
-        "plugin_search" | "plugin_run" | "plugin_connect" => Some("plugins"),
-        "plugin_list" | "plugin_tools" => Some("browse"),
-        "web_search" | "visit_url" | "show_map" => Some("web"),
+        | "adversarial_review" | "send_file" => Some("workspace"),
+        "plugin_list" | "plugin_tools" | "plugin_search" | "plugin_run" | "plugin_connect"
+        | "mcp_search" | "mcp_call" => Some("plugins"),
+        "web_search" | "visit_url" | "show_map" | "http_request" | "analyze_trace" => Some("web"),
         "browse" | "screenshot_page" | "inspect_runtime" => Some("browse"),
         "git_status" | "git_fetch" | "git_log" | "git_stage" | "git_commit" | "git_diff"
         | "git_branches" | "git_create_branch" | "git_switch" | "git_sync" | "git_worktree" => {
@@ -292,8 +296,9 @@ fn steer_pack_for(name: &str) -> Option<&'static str> {
             Some("terminal")
         }
         "generate_svg" | "generate_image" | "generate_audio" | "edit_image" | "save_media"
-        | "inspect_computer" | "show_images" => Some("media"),
-        "send_file" => Some("workspace"),
+        | "inspect_computer" | "show_images" | "screenshot_desktop" | "system_diagnostics"
+        | "profile_processes" | "inspect_ports" | "inspect_sqlite" | "inspect_archive"
+        | "inspect_font" | "render_design_previews" => Some("media"),
         "re_catalog" | "re_identify" | "re_inspect" | "re_strings" | "re_disassemble"
         | "re_functions" | "re_callgraph" | "re_extract" => Some("reverse"),
         _ => None,
@@ -301,7 +306,7 @@ fn steer_pack_for(name: &str) -> Option<&'static str> {
 }
 
 /// Drop unused tool packs so the main model does not pay for their schemas.
-/// Core tools (finish, ask_user, decide, …) always stay.
+/// Core tools (finish, decide, …) always stay.
 pub fn apply_steer_packs(tools: Vec<Value>, packs: &SteerPacks) -> Vec<Value> {
     if packs.workspace
         && packs.plugins
@@ -384,7 +389,6 @@ pub fn apply_talk_tools(tools: Vec<Value>) -> Vec<Value> {
         "screenshot_page",
         "schedule_followup",
         "adversarial_review",
-        "ask_user",
         "finish",
         "decide",
     ];
@@ -411,12 +415,8 @@ const MUTATING_TOOLS: &[&str] = &[
     "git_sync",
     "git_worktree",
     "update_todos",
-    "design_review",
     "render_design_previews",
     "plugin_run",
-    "generate_svg",
-    "generate_image",
-    "generate_audio",
     "edit_image",
     "save_media",
     "re_extract",
@@ -446,14 +446,19 @@ pub fn assemble_tools(
             name != "list_chats" && name != "read_chat"
         });
     }
-    if !tools.iter().any(|tool| tool_fn_name(tool) == "save_plan") {
-        insert_before_finish(&mut tools, save_plan());
-    }
+    tools.retain(|tool| tool_fn_name(tool) != "save_plan");
     if !tools.iter().any(|tool| tool_fn_name(tool) == "load_tools") {
         insert_before_finish(&mut tools, load_tools());
         insert_before_finish(&mut tools, load_skill());
     }
     tools
+}
+
+pub fn include_save_plan(tools: &mut Vec<Value>) {
+    if tools.iter().any(|tool| tool_fn_name(tool) == "save_plan") {
+        return;
+    }
+    insert_before_finish(tools, save_plan());
 }
 
 pub fn include_adversarial_review(tools: &mut Vec<Value>) {
@@ -669,7 +674,7 @@ fn web_search() -> Value {
 fn create_directory() -> Value {
     tool(
         "create_directory",
-        "Create a directory (and any missing parents). No-op if it already exists. Blocked in Ask mode.",
+        "Create a directory (and any missing parents). No-op if it already exists.",
         json!({
             "type": "object",
             "properties": {
@@ -684,7 +689,7 @@ fn create_directory() -> Value {
 fn create_file() -> Value {
     tool(
         "create_file",
-        "Create a brand-new file with the given content. Fails if the file already exists — use edit_file to modify existing files. On success the result may include SYNTAX ERRORS from a parse of the content — fix those before finish. Blocked in Ask mode.",
+        "Create a brand-new file with the given content. Fails if the file already exists — use edit_file to modify existing files. On success the result may include SYNTAX ERRORS from a parse of the content — fix those before finish.",
         json!({
             "type": "object",
             "properties": {
@@ -700,7 +705,7 @@ fn create_file() -> Value {
 fn edit_file() -> Value {
     tool(
         "edit_file",
-        "Apply a targeted edit to an existing file. The `code_edit` argument MUST use the SEARCH/REPLACE block format. On success the result may include SYNTAX ERRORS and linter diagnostics — fix those before finish. Blocked in Ask mode.",
+        "Apply a targeted edit to an existing file. The `code_edit` argument MUST use the SEARCH/REPLACE block format. On success the result may include SYNTAX ERRORS and linter diagnostics — fix those before finish.",
         json!({
             "type": "object",
             "properties": {
@@ -717,7 +722,7 @@ fn edit_file() -> Value {
 fn apply_patch() -> Value {
     tool(
         "apply_patch",
-        "Apply a Codex-style multi-file patch. Pass the entire patch as `input` (not JSON-wrapped hunks). Format:\n*** Begin Patch\n*** Update File: path\n@@\n context\n-old\n+new\n*** Add File: path\n+line\n*** Delete File: path\n*** End Patch\nAlways include Begin and End markers. Prefer this over shell edits. On success the result may include SYNTAX ERRORS and linter diagnostics — fix those before finish. Blocked in Ask mode.",
+        "Apply a Codex-style multi-file patch. Pass the entire patch as `input` (not JSON-wrapped hunks). Format:\n*** Begin Patch\n*** Update File: path\n@@\n context\n-old\n+new\n*** Add File: path\n+line\n*** Delete File: path\n*** End Patch\nAlways include Begin and End markers. Prefer this over shell edits. On success the result may include SYNTAX ERRORS and linter diagnostics — fix those before finish.",
         json!({
             "type": "object",
             "properties": {
@@ -750,7 +755,7 @@ fn read_lints() -> Value {
 fn delete_file() -> Value {
     tool(
         "delete_file",
-        "Delete a single file. Directories cannot be deleted by the agent. Blocked in Ask mode.",
+        "Delete a single file. Directories cannot be deleted by the agent.",
         json!({
             "type": "object",
             "properties": {
@@ -765,7 +770,7 @@ fn delete_file() -> Value {
 fn rename_file() -> Value {
     tool(
         "rename_file",
-        "Rename or move a file. Blocked in Ask mode.",
+        "Rename or move a file.",
         json!({
             "type": "object",
             "properties": {
@@ -781,7 +786,7 @@ fn rename_file() -> Value {
 fn run_terminal() -> Value {
     tool(
         "run_terminal",
-        "Run a shell command with the project as the working directory. On Windows uses PowerShell; on macOS/Linux uses bash/sh. Use it for builds, tests, installs, scripts, and any installed program (`python script.py`, `ffmpeg`, `program --help`). Prefer file tools for reading and editing project source. Interpreters and programs need approval unless auto-run allows them. Commands that finish quickly return output and an exit code. Commands still running after ~25s return a background session_id — then call `wait`. A rejected command must NOT be retried. Do not use cat/type/ls/dir for file inspection. Blocked in Ask and Plan modes.",
+        "Run a shell command with the project as the working directory. On Windows uses PowerShell; on macOS uses bash/sh. Use it for builds, tests, installs, scripts, and any installed program (`python script.py`, `ffmpeg`, `program --help`). Prefer file tools for reading and editing project source. Interpreters and programs need approval unless auto-run allows them. Commands that finish quickly return output and an exit code. Commands still running after ~25s return a background session_id — then call `wait`. A rejected command must NOT be retried. Do not use cat/type/ls/dir for file inspection.",
         json!({
             "type": "object",
             "properties": {
@@ -1036,7 +1041,7 @@ fn wait() -> Value {
 fn write_to_terminal() -> Value {
     tool(
         "write_to_terminal",
-        "Write text or keystrokes to an active terminal session. Use when a command is waiting for interactive input. Append \\r for Enter. Use list_terminals first to get the session_id. Blocked in Ask and Plan modes.",
+        "Write text or keystrokes to an active terminal session. Use when a command is waiting for interactive input. Append \\r for Enter. Use list_terminals first to get the session_id.",
         json!({
             "type": "object",
             "properties": {
@@ -1052,7 +1057,7 @@ fn write_to_terminal() -> Value {
 fn save_plan() -> Value {
     tool(
         "save_plan",
-        "Save the implementation plan. Research first, then call this with the full plan — do not outline in chat beforehand. Markdown body has Goal / Findings / Steps / Risks. Pass todos as a separate string array (not inside the markdown).",
+        "Only when the user asked for a plan and not the implementation. If they asked to build, create, or implement, do not call this — write the files. Research first, then call this with the full plan — do not outline in chat beforehand. Markdown body has Goal / Findings / Steps / Risks. Pass todos as a separate string array (not inside the markdown).",
         json!({
             "type": "object",
             "properties": {
@@ -1101,7 +1106,7 @@ fn update_todos() -> Value {
         "Optional live checklist for LONG multi-step implementation only (e.g. building from a saved plan with 5+ phases). \
 Skip for ordinary Code/Visual work — including slightly long prompts, single features, UI polish, installs, and small refactors. Just do the work. \
 When used: 3–5 high-level items (never 8+ granular file-by-file steps). Labels like \"Rebuild homepage\" not \"Add Inter font import to index.css\". \
-Exactly one in_progress (auto-healed if missing), pass the full merged list every call. Not available in Ask/Plan.",
+Exactly one in_progress (auto-healed if missing), pass the full merged list every call.",
         json!({
             "type": "object",
             "properties": {
@@ -1141,47 +1146,6 @@ fn finish() -> Value {
             "properties": {
                 "summary": {"type": "string", "description": "User-facing reply. Direct and specific. Never third-person logs or permission asks."}
             },
-            "additionalProperties": false
-        }),
-    )
-}
-
-fn ask_user() -> Value {
-    tool(
-        "ask_user",
-        "Pause and show click-through multiple-choice questions in chat. Only when a real user decision would change the work and you cannot infer a default. Never use this to pick a plugin slug or Slack/Discord action — plugin_run the recommended slug instead. Prefer defaults. Do not quiz. Batch related questions in one call. Wait for the tool result.",
-        json!({
-            "type": "object",
-            "properties": {
-                "questions": {
-                    "type": "array",
-                    "description": "1–6 questions. Each needs a prompt and 2–8 options. Mark one option recommended when you have a lean.",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "string", "description": "Stable id (q1, palette). Optional; assigned if omitted."},
-                            "prompt": {"type": "string", "description": "The question shown to the user."},
-                            "allow_multiple": {"type": "boolean", "description": "If true, more than one option can be selected."},
-                            "options": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {"type": "string"},
-                                        "label": {"type": "string"},
-                                        "recommended": {"type": "boolean"}
-                                    },
-                                    "required": ["label"],
-                                    "additionalProperties": false
-                                }
-                            }
-                        },
-                        "required": ["prompt", "options"],
-                        "additionalProperties": false
-                    }
-                }
-            },
-            "required": ["questions"],
             "additionalProperties": false
         }),
     )
@@ -1297,7 +1261,7 @@ fn plugin_tools() -> Value {
 fn plugin_run() -> Value {
     tool(
         "plugin_run",
-        "Run a connected plugin action. Use the recommended slug from plugin_search. Blocked in Ask/Plan.",
+        "Run a connected plugin action. Use the recommended slug from plugin_search.",
         json!({
             "type": "object",
             "properties": {
@@ -1330,7 +1294,7 @@ fn plugin_connect() -> Value {
 fn generate_svg() -> Value {
     tool(
         "generate_svg",
-        "Generate a vector SVG via the svg tool (not a chat model). Use for icons, logos, and illustrations. Preview appears in chat at the tool call. Asking to generate an SVG is not a request to write a project file. If this tool errors as not configured or unavailable, tell the user generation is unavailable; do not retry generate_image; do not write an SVG with create_file or edit.",
+        "Generate a vector SVG via the svg tool (not a chat model). Use for icons, logos, illustrations, charts, and graphs. Preview appears in chat at the tool call. Asking to generate an SVG is not a request to write a project file. If this tool errors as not configured or unavailable, tell the user generation is unavailable; do not retry generate_image; do not write an SVG with create_file or edit.",
         json!({
             "type": "object",
             "properties": {
@@ -1685,37 +1649,6 @@ fn adversarial_review() -> Value {
     )
 }
 
-fn design_review() -> Value {
-    tool(
-        "design_review",
-        "Send several persona agents through a live site at the same time, each in its own isolated browser session, and get back how the experience landed for them — the browser version of the adversarial review. Use it when the user asks for UX, UI, conversion, or marketing feedback on a running site, or in design mode after a redesign. Personas must be accurate, specific people with a real reason to be there (e.g. a parent buying a specific stroller on a budget, a CTO evaluating the pricing page), not generic 'users'. Results show as cards with a screenshot and a browser view; do not paste the transcripts back into the chat — summarize the shared findings and fix the top issues.",
-        json!({
-            "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "Site to test, usually the local dev server."},
-                "personas": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 4,
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string", "description": "Short handle, e.g. Maya, budget parent."},
-                            "profile": {"type": "string", "description": "Who they are: role, context, device habits, patience, what they compare against."},
-                            "goal": {"type": "string", "description": "The one concrete thing they came to do on this site."}
-                        },
-                        "required": ["name", "profile", "goal"],
-                        "additionalProperties": false
-                    }
-                },
-                "steps": {"type": "number", "description": "Moves each persona may make, 3–10. Default 6."}
-            },
-            "required": ["url", "personas"],
-            "additionalProperties": false
-        }),
-    )
-}
-
 fn screenshot_desktop() -> Value {
     tool(
         "screenshot_desktop",
@@ -1940,10 +1873,10 @@ mod tests {
         assert!(names.contains(&"map_module".to_string()));
         assert!(names.contains(&"plugin_list".to_string()));
         assert!(!names.contains(&"plugin_run".to_string()));
-        assert!(!names.contains(&"generate_svg".to_string()));
-        assert!(!names.contains(&"generate_image".to_string()));
+        assert!(names.contains(&"generate_svg".to_string()));
+        assert!(names.contains(&"generate_image".to_string()));
         assert!(!names.contains(&"save_media".to_string()));
-        assert!(names.contains(&"ask_user".to_string()));
+        assert!(!names.contains(&"ask_user".to_string()));
     }
 
     #[test]
@@ -1957,15 +1890,25 @@ mod tests {
         assert!(names.contains(&"generate_svg".to_string()));
         assert!(names.contains(&"generate_image".to_string()));
         assert!(names.contains(&"save_media".to_string()));
-        assert!(names.contains(&"ask_user".to_string()));
+        assert!(!names.contains(&"ask_user".to_string()));
     }
 
     #[test]
-    fn ask_mode_has_no_screenshot_page() {
+    fn ask_mode_keeps_browser_research() {
         let tools = tools_for_mode_and_family("ask", ModelFamily::OpenAi, vec![]);
         let names = tool_names(&tools);
-        assert!(!names.contains(&"screenshot_page".to_string()));
-        assert!(!names.contains(&"inspect_runtime".to_string()));
+        assert!(names.contains(&"screenshot_page".to_string()));
+        assert!(names.contains(&"inspect_runtime".to_string()));
+        assert!(names.contains(&"browse".to_string()));
+    }
+
+    #[test]
+    fn unknown_mode_is_not_read_only() {
+        let tools = tools_for_mode_and_family("auto", ModelFamily::OpenAi, vec![]);
+        let names = tool_names(&tools);
+        assert!(names.contains(&"apply_patch".to_string()) || names.contains(&"edit_file".to_string()));
+        assert!(names.contains(&"run_terminal".to_string()));
+        assert!(names.contains(&"generate_svg".to_string()));
     }
 
     #[test]
@@ -2019,7 +1962,7 @@ mod tests {
         assert!(!names.contains(&"plugin_list".to_string()));
         assert!(!names.contains(&"plugin_tools".to_string()));
         assert!(names.contains(&"finish".to_string()));
-        assert!(names.contains(&"ask_user".to_string()));
+        assert!(!names.contains(&"ask_user".to_string()));
         assert!(names.contains(&"decide".to_string()));
         assert!(names.contains(&"read_file".to_string()));
         assert!(names.contains(&"grep".to_string()));
@@ -2069,7 +2012,7 @@ mod tests {
     #[test]
     fn assemble_ask_is_smaller_than_the_full_catalog() {
         use crate::agent::decide::{decide, Locks};
-        let decision = decide("Why is the button disabled?", None, Locks::default(), None);
+        let decision = decide("Why is the button disabled?", None, Locks::default(), Some(crate::agent::decide::Capability::Ask));
         let steer = SteerPacks {
             workspace: decision.packs.workspace,
             plugins: decision.packs.plugins,
@@ -2114,7 +2057,7 @@ mod tests {
     #[test]
     fn identity_ask_omits_web_and_heavy_workspace_tools() {
         use crate::agent::decide::{decide, Locks};
-        let decision = decide("what model are you", None, Locks::default(), None);
+        let decision = decide("what model are you", None, Locks::default(), Some(crate::agent::decide::Capability::Ask));
         assert!(!decision.packs.web);
         let names = tool_names(&assemble_tools(
             ModelFamily::OpenAi,
@@ -2181,8 +2124,8 @@ mod tests {
 
         let chars_to_toks = |s: &str| (s.chars().count() + 3) / 4;
         let full = chars_to_toks(&serde_json::to_string(&stable_tools(ModelFamily::OpenAi)).unwrap());
-        let (id_names, identity, id_conf, id_cap) = tool_schema_tokens("what model are you");
-        let (_, ask, ask_conf, ask_cap) = tool_schema_tokens("Why is the button disabled?");
+        let (id_names, identity, _id_conf, id_cap) = tool_schema_tokens("what model are you");
+        let (_, ask, _ask_conf, ask_cap) = tool_schema_tokens("Why is the button disabled?");
         let (_, code, code_conf, code_cap) = tool_schema_tokens(
             "Fix the off-by-one in the pager and run the tests",
         );
@@ -2215,11 +2158,11 @@ mod tests {
             "tool schema tokens (chars/4): identity={identity} ask={ask} code={code} unconfident={unconf} jev_workspace={jev} full={full}"
         );
 
-        assert!(id_conf && ask_conf && code_conf);
+        assert!(code_conf);
         assert!(!unconf_conf);
-        assert_eq!(id_cap, Capability::Ask);
-        assert_eq!(ask_cap, Capability::Ask);
         assert_eq!(code_cap, Capability::Code);
+        assert_ne!(id_cap, Capability::Plan);
+        assert_ne!(ask_cap, Capability::Plan);
         assert!(
             identity * 3 < full,
             "identity {identity} toks vs full {full}"
@@ -2249,6 +2192,49 @@ mod tests {
     }
 
     #[test]
+    fn build_prompts_do_not_offer_save_plan() {
+        use crate::agent::decide::{decide, wants_plan_document, Capability, Locks};
+        const ITCH: &str = "Build a basic but fully functional developer marketplace inspired by itch.io.\n\nBefore coding, research itch.io properly. Explore the actual website.\n\nI want user accounts, project pages, browse/search, ratings, and a dashboard. Keep the scope small. Make sure all buttons actually work.";
+        const GRAPH: &str = "can you quickly just use a python library to generate a graph and send it here.";
+        for prompt in [ITCH, GRAPH] {
+            assert!(!wants_plan_document(prompt), "{prompt}");
+            let decision = decide(prompt, None, Locks::default(), None);
+            assert_eq!(decision.capability, Capability::Code, "{prompt}");
+            assert!(!decision.skills.contains(&"plan"), "{prompt}");
+            let mut packs = decision.packs;
+            packs.workspace = true;
+            packs.terminal = true;
+            packs.media = true;
+            let tools = assemble_tools(
+                ModelFamily::OpenAi,
+                &steer_from_packs(packs),
+                "Code",
+                false,
+            );
+            let names = tool_names(&tools);
+            assert!(!names.contains(&"save_plan".to_string()), "{prompt}");
+            assert!(
+                names.contains(&"create_file".to_string())
+                    || names.contains(&"apply_patch".to_string()),
+                "{prompt}"
+            );
+            assert!(names.contains(&"run_terminal".to_string()), "{prompt}");
+        }
+        assert!(wants_plan_document(
+            "Write a plan for the marketplace. Do not implement yet."
+        ));
+        let mut tools = assemble_tools(
+            ModelFamily::OpenAi,
+            &SteerPacks::all_on(),
+            "Code",
+            false,
+        );
+        assert!(!tool_names(&tools).contains(&"save_plan".to_string()));
+        include_save_plan(&mut tools);
+        assert!(tool_names(&tools).contains(&"save_plan".to_string()));
+    }
+
+    #[test]
     fn adversarial_review_is_opt_in() {
         let mut tools = assemble_tools(
             ModelFamily::OpenAi,
@@ -2271,7 +2257,7 @@ mod tests {
         )));
         assert!(names.contains(&"web_search".to_string()));
         assert!(names.contains(&"visit_url".to_string()));
-        assert!(names.contains(&"ask_user".to_string()));
+        assert!(!names.contains(&"ask_user".to_string()));
         assert!(names.contains(&"read_file".to_string()));
         assert!(names.contains(&"list_dir".to_string()));
         assert!(names.contains(&"run_terminal".to_string()));
@@ -2282,6 +2268,74 @@ mod tests {
         assert!(!names.contains(&"re_disassemble".to_string()));
         assert!(!names.contains(&"git_status".to_string()));
         assert!(!names.contains(&"git_commit".to_string()));
+    }
+
+    #[test]
+    fn hello_py_skips_media_mcp_and_host_inspect() {
+        use crate::agent::decide::{decide, Locks};
+        let decision = decide(
+            "Create hello.py that prints hello world when run.",
+            None,
+            Locks::default(),
+            None,
+        );
+        let mut packs = decision.packs;
+        packs.workspace = true;
+        packs.terminal = true;
+        let names = tool_names(&assemble_tools(
+            ModelFamily::OpenAi,
+            &steer_from_packs(packs),
+            "Code",
+            false,
+        ));
+        assert!(names.contains(&"create_file".to_string()) || names.contains(&"apply_patch".to_string()));
+        assert!(names.contains(&"run_terminal".to_string()));
+        assert!(names.contains(&"load_tools".to_string()));
+        assert!(!names.contains(&"generate_audio".to_string()));
+        assert!(!names.contains(&"generate_image".to_string()));
+        assert!(!names.contains(&"mcp_call".to_string()));
+        assert!(!names.contains(&"inspect_ports".to_string()));
+        assert!(!names.contains(&"re_disassemble".to_string()));
+        assert!(!names.contains(&"http_request".to_string()));
+        assert!(!names.contains(&"plugin_list".to_string()));
+        assert!(!names.contains(&"inspect_computer".to_string()));
+        assert!(!names.contains(&"browse".to_string()));
+        let lean = serde_json::to_string(&assemble_tools(
+            ModelFamily::OpenAi,
+            &steer_from_packs(packs),
+            "Code",
+            false,
+        ))
+        .unwrap();
+        let full = serde_json::to_string(&stable_tools(ModelFamily::OpenAi)).unwrap();
+        assert!(
+            lean.len() * 2 < full.len(),
+            "hello.py schema {} should be far under full {}",
+            lean.len(),
+            full.len()
+        );
+    }
+
+    #[test]
+    fn web_research_does_not_ship_plugin_schemas() {
+        use crate::agent::decide::{decide, Locks};
+        let decision = decide(
+            "What is the latest DeepSeek release? Search the web.",
+            None,
+            Locks::default(),
+            None,
+        );
+        assert!(decision.packs.web);
+        let names = tool_names(&assemble_tools(
+            ModelFamily::OpenAi,
+            &steer_from_packs(decision.packs),
+            decision.capability.as_str(),
+            false,
+        ));
+        assert!(names.contains(&"web_search".to_string()));
+        assert!(!names.contains(&"plugin_list".to_string()));
+        assert!(!names.contains(&"plugin_run".to_string()));
+        assert!(!names.contains(&"generate_image".to_string()));
     }
 }
 

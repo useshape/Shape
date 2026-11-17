@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { commands, type ChatMessage } from "@/lib/backend";
 import { groupChatMessages } from "@/features/chat/lib/chat-session-utils";
 import { ChatMessageList } from "@/features/chat/ui/message/list";
-import { UserMessageCard } from "@/features/chat/ui/message/bubble";
 import { MessageRenderer } from "@/features/chat/ui/md/renderer";
+import { GeneratingIndicator } from "@/features/chat/ui/blocks/generating";
 import {
     getActiveSubagent,
     subagentDisplayTitle,
@@ -34,10 +34,12 @@ export function SubagentChatView() {
         };
     }, [card?.id, card?.status, card?.updatedAt]);
 
-    const messages = useMemo(
-        () => (history ?? []).filter((message) => !message.hidden),
-        [history],
-    );
+    const messages = useMemo(() => {
+        const visible = (history ?? []).filter((message) => !message.hidden);
+        const firstUser = visible.findIndex((message) => message.role === "user");
+        if (firstUser < 0) return visible;
+        return visible.filter((_, index) => index !== firstUser);
+    }, [history]);
     const groups = useMemo(() => groupChatMessages(messages), [messages]);
 
     if (!card) return null;
@@ -58,22 +60,22 @@ export function SubagentChatView() {
     }
 
     const live = card.status === "running" || card.status === "pending";
-    const task = card.task?.trim() || subagentDisplayTitle(card);
     const workflow = subagentWorkflowContent(card);
 
     return (
-        <div className="mx-auto flex min-h-full w-full min-w-0 max-w-4xl flex-col gap-4 pb-16 pt-8">
-            <UserMessageCard className="w-full max-w-none">
-                {task}
-            </UserMessageCard>
-            <div className="min-w-0 chat-text text-text-primary">
-                <MessageRenderer
-                    content={workflow}
-                    isGenerating={live}
-                    skipSubagentSync
-                    activityLabel={live ? card.activity : undefined}
-                />
-            </div>
+        <div className="mx-auto flex min-h-full w-full min-w-0 max-w-4xl flex-col gap-3 pb-16 pt-8">
+            <p className="text-sm text-text-muted">{subagentDisplayTitle(card)}</p>
+            {live && !workflow ? <GeneratingIndicator label={card.activity || "Working"} /> : null}
+            {workflow ? (
+                <div className="min-w-0 chat-text text-text-primary">
+                    <MessageRenderer
+                        content={workflow}
+                        isGenerating={live}
+                        skipSubagentSync
+                        activityLabel={live ? card.activity : undefined}
+                    />
+                </div>
+            ) : null}
         </div>
     );
 }

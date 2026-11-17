@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Emitter, Manager, State};
 use notify::{Watcher, RecursiveMode, Event};
@@ -211,9 +212,12 @@ fn is_ignored_path(path: &Path) -> bool {
                 || s == "dist"
                 || s == "build"
                 || s == "out"
-                || s == ".shape"
+                ||             s == ".shape"
                 || s == ".idea"
                 || s == ".vscode"
+                || s == ".turbo"
+                || s == ".cache"
+                || s == "coverage"
                 || s == "venv"
                 || s == ".venv"
                 || s == "__pycache__"
@@ -291,6 +295,8 @@ fn start_watcher(app: AppHandle, path: &str) {
         std::sync::Arc::new(std::sync::Mutex::new(HashSet::new()));
     let pending_for_emit = pending_paths.clone();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let wake_queued = std::sync::Arc::new(AtomicBool::new(false));
+    let wake_for_flush = wake_queued.clone();
 
     tokio::spawn(async move {
         let mut delay: Option<std::pin::Pin<Box<tokio::time::Sleep>>> = None;
@@ -310,6 +316,7 @@ fn start_watcher(app: AppHandle, path: &str) {
                     }
                 } => {
                     delay = None;
+                    wake_for_flush.store(false, Ordering::Relaxed);
                     let count = pending_for_emit
                         .lock()
                         .map(|mut set| {
@@ -331,6 +338,7 @@ fn start_watcher(app: AppHandle, path: &str) {
     let cmd_for_events = cmd_tx.clone();
     let pending_for_watch = pending_paths.clone();
     let root = PathBuf::from(path);
+    let wake_for_watch = wake_queued.clone();
 
     std::thread::Builder::new()
         .name("shape-fs-watch".into())
@@ -354,7 +362,11 @@ fn start_watcher(app: AppHandle, path: &str) {
                         }
                         crate::core::ram_debug::note_watch_event(set.len());
                     }
-                    if any_interesting {
+                    if any_interesting
+                        && wake_for_watch
+                            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+                            .is_ok()
+                    {
                         let _ = tx_clone.send(());
                     }
                 },

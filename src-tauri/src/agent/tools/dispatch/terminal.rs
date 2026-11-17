@@ -19,7 +19,7 @@ use super::{SideEffect, ToolCtx, ToolOutcome};
 
 pub(super) async fn tool_run_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("run_terminal", "Running terminal commands is not allowed in Ask or Plan mode.");
+        return blocked_outcome("run_terminal", "Running terminal commands is not on this turn.");
     }
     let command = match get_str(args, "command") {
         Ok(s) => s,
@@ -863,7 +863,7 @@ pub(super) async fn tool_wait(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
 pub(super) fn tool_write_to_terminal(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("write_to_terminal", "Writing to terminal is not allowed in Ask or Plan mode.");
+        return blocked_outcome("write_to_terminal", "Writing to terminal is not on this turn.");
     }
     let session_id = match args.get("session_id").and_then(|v| v.as_u64()) {
         Some(id) => id as u32,

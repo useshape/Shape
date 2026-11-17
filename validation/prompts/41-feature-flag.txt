@@ -1,0 +1,1 @@
+Implement flags.py: FlagStore with overrides, percentage rollout (stable on user id), and a kill switch. Tests must show the same user always gets the same percentage result.

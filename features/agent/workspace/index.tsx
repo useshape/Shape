@@ -257,7 +257,7 @@ export function AgentWorkspace({
     }
 
     return (
-        <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-sidebar">
+        <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-sidebar squircle-2xl p-1 mb-3">
             <div className="flex h-titlebar shrink-0 items-stretch">
                 <WorkspaceTabs
                     className="min-w-0 flex-1 bg-transparent"

@@ -1,5 +1,5 @@
 ## Plan
 
-Research with read and search tools, then call `save_plan` with markdown `content` and a `todos` array. Do not outline the plan in chat first. Do not edit project files.
+There is no plan mode. `save_plan` is listed only when they asked for a plan instead of code.
 
-Do not say the user wants you to continue. Wait until they ask you to build it.
+If they asked to build, create, or implement — including after “research first” — write the files. Do not save a plan and stop.

@@ -1,0 +1,1 @@
+Write retry.py: retry(fn, attempts, backoff_ms, jitter=False) with exponential backoff. If jitter is on, delays must not be identical. Fake the sleeper in tests so the suite is fast.

@@ -1,0 +1,1 @@
+Implement add_hours.py: add_hours(rfc3339, hours, tz_name) that returns an RFC3339 timestamp in that zone. Must be correct across US/Eastern DST spring-forward (2026-03-08 01:30 minus/plus 2 hours). Tests required; run them.

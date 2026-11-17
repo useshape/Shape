@@ -1,0 +1,1 @@
+Research how a simple countdown timer UI is usually laid out, then actually build timer.html with start, pause, and reset. Do not stop at a plan.

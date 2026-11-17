@@ -21,12 +21,10 @@ import { GeneratedMediaCard } from '../blocks/generated-media';
 import { PhotoStack } from '../blocks/photo-stack';
 import { SentFileCard } from '../blocks/sent-file';
 import { ReviewDebatePanel } from '../blocks/debate';
-import { PersonaReviewPanel } from '../blocks/persona-review';
 import { BrowseChatCard } from '../blocks/browse-frame';
 import { GeneratingMediaFrame } from '../blocks/border-glow';
-import { ChartBlock } from '../blocks/chart';
 import { ShownImages } from '../blocks/place-map';
-import { QuestionsCard, parseQuestionsPayload, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
+import { parseQuestionsPayload, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
 import { hostnameOf } from '@/lib/ui/favicon';
 
 function hostnameFromUrl(url: string): string {
@@ -1271,20 +1269,15 @@ export function MessageRenderer({
         }
         if (chunk.type === 'plan') {
             const blockContent = chunk.content || '';
-            const title = chunk.file || 'Plan';
             const stepMatches = [...blockContent.matchAll(/<step\s+status="([^"]*)">([\s\S]*?)<\/step>/g)];
             const steps = stepMatches.map((m) => ({
                 status: m[1] as "done" | "active" | "pending" | "cancelled",
                 label: m[2].trim(),
             }));
-            const completedCount = steps.filter((s) => s.status === 'done').length;
             return (
                 <PlanningBlock
                     key={`plan-${index}`}
-                    title={title}
                     steps={steps}
-                    completedCount={completedCount}
-                    totalCount={steps.length}
                     isGenerating={isGenerating}
                 />
             );
@@ -1294,14 +1287,10 @@ export function MessageRenderer({
                 status: t.status,
                 label: t.label,
             }));
-            const completedCount = steps.filter((s) => s.status === 'done').length;
             return (
                 <PlanningBlock
                     key={`todos-${index}`}
-                    title={chunk.content || 'Todos'}
                     steps={steps}
-                    completedCount={completedCount}
-                    totalCount={steps.length}
                     isGenerating={isGenerating}
                 />
             );
@@ -1313,7 +1302,7 @@ export function MessageRenderer({
             return <ShownImages key={`photos-${index}`} content={chunk.content} />;
         }
         if (chunk.type === 'chart') {
-            return <ChartBlock key={`chart-${index}`} content={chunk.content} />;
+            return null;
         }
         if (chunk.type === 'insight_card') {
             return null;
@@ -1453,32 +1442,16 @@ export function MessageRenderer({
             );
         }
         if (chunk.type === 'persona_review') {
-            return (
-                <PersonaReviewPanel
-                    key={`persona-review-${chunk.commandId || index}`}
-                    reviewId={chunk.commandId}
-                    url={chunk.visitUrl}
-                    status={chunk.commandStatus}
-                    content={chunk.content || ''}
-                />
-            );
+            return null;
         }
         if (chunk.type === 'question') {
-            return (
-                <QuestionsCard
-                    key={`question-${chunk.commandId || index}`}
-                    askId={chunk.commandId}
-                    status={chunk.commandStatus}
-                    questions={chunk.questions || []}
-                    answers={chunk.answers}
-                />
-            );
+            return null;
         }
         return null;
     });
 
     return (
-        <div className="flex w-fit max-w-full min-w-0 flex-col items-start gap-0 overflow-visible">
+        <div className="flex w-fit max-w-full min-w-0 flex-col items-start gap-2 overflow-visible">
             {renderedSegments}
             {showStatusLine ? (
                 <div className="mt-1">

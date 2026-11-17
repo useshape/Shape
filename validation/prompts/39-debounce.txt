@@ -1,0 +1,1 @@
+Implement debounce.js and a tiny demo.html: a search box that only runs a fake search after 250ms idle. Prove the function with a node test that uses fake timers or timestamps, not a real 250ms wait loop.

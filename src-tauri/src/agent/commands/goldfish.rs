@@ -117,7 +117,8 @@ fn is_basic_edit(text: &str) -> bool {
 
 pub fn clip_note(text: &str) -> String {
     let trimmed = text.trim();
-    if trimmed.eq_ignore_ascii_case("skip") || trimmed.to_ascii_lowercase().starts_with("skip") {
+    let bare = trimmed.trim_matches(|c: char| c == '.' || c == '!' || c == ' ');
+    if bare.eq_ignore_ascii_case("skip") {
         return String::new();
     }
     let mut out: String = trimmed.chars().take(NOTE_CAP).collect();
@@ -156,13 +157,16 @@ Request:\n{message}"
     );
     let ctx = proxy.clone().with_feature("goldfish").fresh_request();
     let model = if model.trim().is_empty() { "auto" } else { model };
-    let result = streaming::complete_chat_with_max_tokens(
-        client,
-        api_key,
-        &prompt,
-        model,
-        500,
-        &ctx,
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(12),
+        streaming::complete_chat_with_max_tokens(
+            client,
+            api_key,
+            &prompt,
+            model,
+            500,
+            &ctx,
+        ),
     )
     .await;
     streaming::emit_chat_status(
@@ -176,15 +180,15 @@ Request:\n{message}"
         return None;
     }
     match result {
-        Ok((text, _, _)) => {
+        Ok(Ok((text, _, _))) => {
             let note = clip_note(&text);
             if note.is_empty() { None } else { Some(note) }
         }
-        Err(AppError::Message(err)) => {
+        Ok(Err(AppError::Message(err))) => {
             crate::agent::commands::logging::debug("goldfish", &err);
             None
         }
-        Err(_) => None,
+        _ => None,
     }
 }
 
@@ -227,6 +231,12 @@ mod tests {
     #[test]
     fn a_question_does_not() {
         assert!(!needs_goldfish("Why does the save button stay disabled on the settings page?"));
+    }
+
+    #[test]
+    fn a_gap_that_mentions_skipping_is_kept() {
+        let note = clip_note("Skip retries and a late webhook can charge twice.");
+        assert!(note.contains("webhook"));
     }
 
     #[test]

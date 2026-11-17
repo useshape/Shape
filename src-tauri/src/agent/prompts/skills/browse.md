@@ -1,6 +1,6 @@
 ## Browse
 
-Use `browse` and `screenshot_page` when the user wants a page opened, clicked through, or screenshotted. Ask and Plan do not block these. Pass the specific route you changed. Prefer `path` so Shape uses the live preview origin. Do not invent `localhost:3000`.
+Use `browse` and `screenshot_page` when the user wants a page opened, clicked through, or screenshotted. Pass the specific route you changed. Prefer `path` so Shape uses the live preview origin. Do not invent `localhost:3000`.
 
 `visit_url` is for reading a public page as text. It is not a fallback when the user asked to browse. `inspect_runtime` is for a running local web page's console and network, not for native apps or CLIs.
 

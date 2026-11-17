@@ -14,7 +14,7 @@ import { commands, useProjectState } from "@/lib/backend";
 import { useChatStream } from "@/features/chat/lib/chat-stream-store";
 import { displayPlanName, parsePlanMarkdown, splitPlanDocument, type PlanPreview } from "@/lib/plan/preview";
 import { ChatMarkdown } from "@/features/chat/ui/md/view";
-import { freezeActiveSteps, todoCountLabel } from "@/lib/chat/planning-block";
+import { freezeActiveSteps } from "@/lib/chat/planning-block";
 import { Button } from "@/components/ui/button";
 import { Collapse } from "./collapse";
 import { ProgressTracker } from "./progress-tracker";
@@ -25,50 +25,43 @@ type PlanStep = {
     status: "done" | "active" | "pending" | "cancelled";
 };
 
-export function PlanningBlock({ steps, completedCount, totalCount, isGenerating }: {
-    title?: string;
+export function PlanningBlock({ steps, isGenerating }: {
     steps: PlanStep[];
-    completedCount: number;
-    totalCount: number;
     /** When false, freeze "active" steps so they don't spin after the turn ends. */
     isGenerating?: boolean;
 }) {
-    const [isOpen, setIsOpen] = React.useState(totalCount <= 5);
+    const [open, setOpen] = React.useState(true);
     const displaySteps = React.useMemo(
         () => freezeActiveSteps(steps, isGenerating),
         [steps, isGenerating],
     );
-    const active = displaySteps.find((s) => s.status === "active");
-    const visibleSteps = isOpen
-        ? displaySteps
-        : active
-          ? [active]
-          : displaySteps.filter((s) => s.status === "done").slice(-2);
 
     return (
-        <div className="my-1 w-full overflow-hidden squircle-2xl border border-border">
+        <div className="w-full overflow-hidden squircle-2xl border border-border p-2">
             <button
                 type="button"
-                onClick={() => totalCount > 1 && setIsOpen((open) => !open)}
-                className={cn(
-                    "flex w-full items-center gap-2 px-2 py-2 text-left",
-                    totalCount > 1 && "hover:bg-panel-hover/40 transition-colors cursor-pointer",
-                )}
+                onClick={() => setOpen((value) => !value)}
+                className="flex w-full items-center gap-2 text-left transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]"
             >
                 <span className="flex size-4 shrink-0 items-center justify-center text-text-muted">
                     <Icon icon={TaskListSquareLtr20Regular} className="icon-sm" />
                 </span>
-                <span className="truncate text-sm font-medium text-text-primary">To-dos</span>
-                <span className="ms-auto shrink-0 text-sm tabular-nums text-text-muted">
-                    {todoCountLabel(completedCount, totalCount)}
+                <span className="min-w-0 flex-1 truncate text-md tracking-relaxed font-regular text-text-secondary">
+                    To-dos
                 </span>
+                <Icon
+                    icon={ChevronDown20Regular}
+                    className={cn(
+                        "icon-sm shrink-0 text-text-muted transition-transform duration-[var(--transition-fast)] ease-[var(--ease-out)]",
+                        open && "rotate-180",
+                    )}
+                />
             </button>
 
-            <Collapse open={visibleSteps.length > 0}>
-                <div className="flex flex-col px-2 pb-2">
+            <Collapse open={open && displaySteps.length > 0}>
+                <div className="flex flex-col pt-2">
                     <ProgressTracker
-                        title="Tasks"
-                        steps={visibleSteps.map((step, i) => ({
+                        steps={displaySteps.map((step, i) => ({
                             id: `${step.label}-${i}`,
                             label: step.label,
                             done: step.status === "done",
@@ -180,7 +173,7 @@ export function PlanSavedBlock({
     const todoCount = todos.length;
 
     return (
-        <div className="my-1 w-full overflow-hidden squircle-2xl border border-border-subtle bg-surface-2 p-2">
+        <div className="w-full overflow-hidden squircle-2xl border border-border p-2">
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
@@ -189,7 +182,7 @@ export function PlanSavedBlock({
                 <span className="flex size-4 shrink-0 items-center justify-center text-text-muted">
                     <Icon icon={CalendarCheckmark24Filled} className="icon-sm" />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-md tracking-relaxed font-medium text-text-secondary">
+                <span className="min-w-0 flex-1 truncate text-md tracking-relaxed font-regular text-text-secondary">
                     {displayTitle}
                 </span>
                 <Icon
@@ -211,7 +204,6 @@ export function PlanSavedBlock({
 
                     {todoCount > 0 ? (
                         <ProgressTracker
-                            title="Tasks"
                             steps={todos.map((todo, i) => ({
                                 id: `${todo}-${i}`,
                                 label: todo,
@@ -224,14 +216,14 @@ export function PlanSavedBlock({
                             disabled={isLoading || checking || missing}
                             onClick={() => { void handleBuild(); }}
                             variant={missing ? "outline" : "default"}
-                            size="sm"
+                            size="md"
                             className={cn("gap-1", missing && "text-error border-error/40")}
                         >
                             {buildLabel}
                             {!missing ? (
-                                <span className="ml-1 inline-flex items-center gap-0.5 opacity-80">
-                                    <kbd className="text-[10px]">{mod}</kbd>
-                                    <kbd className="text-[10px]">↵</kbd>
+                                <span className="ml-1 inline-flex items-center gap-0.5 font-regular opacity-80">
+                                    <kbd className="text-xs font-sans">{mod}</kbd>
+                                    <kbd className="text-xl">↵</kbd>
                                 </span>
                             ) : null}
                         </Button>

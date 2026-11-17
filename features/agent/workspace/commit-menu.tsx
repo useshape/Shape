@@ -28,7 +28,7 @@ import { Checkmark } from "@/components/ui/checkmark";
 import { countChangedLines } from "@/lib/ui/diff-count";
 import { Input } from "@/components/ui/input";
 import { notify } from "@/features/notifications";
-import { GenerateStarButton } from "@/features/git/ui/shared/generate-star";
+import { GenerateStarButton, splitGeneratedCommit } from "@/features/git/ui/shared/generate-star";
 import { QuickPick, type QuickPickItem } from "@/components/ui/quick-pick";
 import {
     AzureDevOpsMark,
@@ -300,11 +300,13 @@ export function CommitMenu({
             }
             const list = await commands.gitStatus(path);
             setFiles(list);
-            try {
-                const raw = await commands.gitDiff(path);
-                setStats(parseDiffFileStats(raw || ""));
-            } catch {
-                setStats({});
+            if (menuOpen) {
+                try {
+                    const raw = await commands.gitDiff(path);
+                    setStats(parseDiffFileStats(raw || ""));
+                } catch {
+                    setStats({});
+                }
             }
             const [log, sync, remote, current] = await Promise.all([
                 commands.gitLog(path, 1).catch(() => []),
@@ -327,7 +329,7 @@ export function CommitMenu({
             setBehind(0);
             setBranch("");
         }
-    }, [projectPath]);
+    }, [projectPath, menuOpen]);
 
     useEffect(() => {
         void refresh();
@@ -336,28 +338,50 @@ export function CommitMenu({
         return () => window.removeEventListener("shape-git-refresh", on);
     }, [refresh]);
 
-    const fileKey = files.map((file) => file.path).join("\n");
+    const rows = useMemo(() => {
+        const norm = (path: string) => path.replace(/\\/g, "/");
+        const map = new Map<string, { path: string; plus: number; minus: number; git?: GitFileParams; editId?: string }>();
+        for (const file of files) {
+            const key = norm(file.path);
+            const row = stats[key];
+            map.set(key, {
+                path: file.path,
+                plus: row?.plus ?? 0,
+                minus: row?.minus ?? 0,
+                git: file,
+            });
+        }
+        for (const edit of edits) {
+            const key = norm(edit.file);
+            const diff = countChangedLines(edit.original, edit.replacement);
+            const existing = map.get(key);
+            if (existing) {
+                existing.editId = edit.id;
+                if (existing.plus === 0 && existing.minus === 0) {
+                    existing.plus = diff.add;
+                    existing.minus = diff.del;
+                }
+            } else {
+                map.set(key, { path: edit.file, plus: diff.add, minus: diff.del, editId: edit.id });
+            }
+        }
+        return [...map.values()];
+    }, [files, stats, edits]);
+
+    const rowKey = rows.map((row) => row.path).join("\n");
     useEffect(() => {
-        setPicked(files.map((file) => file.path));
-    }, [fileKey]);
+        setPicked(rows.map((row) => row.path));
+    }, [rowKey]);
 
     const totals = useMemo(() => {
         let plus = 0;
         let minus = 0;
-        for (const file of files) {
-            const key = file.path.replace(/\\/g, "/");
-            const row = stats[key];
-            if (!row) continue;
+        for (const row of rows) {
             plus += row.plus;
             minus += row.minus;
         }
-        for (const edit of edits) {
-            const diff = countChangedLines(edit.original, edit.replacement);
-            plus += diff.add;
-            minus += diff.del;
-        }
         return { plus, minus };
-    }, [files, stats, edits]);
+    }, [rows]);
 
     const messageBody = () => {
         const head = title.trim();
@@ -445,7 +469,7 @@ export function CommitMenu({
         }
     };
 
-    const selectedPaths = files.map((file) => file.path).filter((path) => picked.includes(path));
+    const selectedPaths = rows.map((row) => row.path).filter((path) => picked.includes(path));
 
     const commitAll = () => {
         if (!repo) {
@@ -578,10 +602,13 @@ export function CommitMenu({
         setBusy(true);
         try {
             await commands.gitStageAll(repo);
-            const message = await commands.generateCommitMessage(token, repo);
-            const lines = message.trim().split("\n");
-            setTitle(lines[0] ?? "");
-            setDescription(lines.slice(1).join("\n").trim());
+            const parsed = splitGeneratedCommit(await commands.generateCommitMessage(token, repo));
+            if (!parsed) {
+                notify.error("Git", "Commit generation did not return a message. Try again.");
+                return;
+            }
+            setTitle(parsed.title);
+            setDescription(parsed.description);
         } catch (err) {
             notify.gitError(err);
         } finally {
@@ -618,11 +645,11 @@ export function CommitMenu({
                     <span
                         className="inline-flex w-0 shrink-0 items-center justify-end overflow-hidden opacity-0 transition-[width,opacity] duration-150 group-hover/changes:ml-1 group-hover/changes:w-4 group-hover/changes:opacity-100 group-data-[state=open]/changes:ml-1 group-data-[state=open]/changes:w-4 group-data-[state=open]/changes:opacity-100"
                     >
-                        <Icon icon={ChevronDown20Regular} className="size-4" />
+                        <Icon icon={ChevronDown20Regular} className="icon-md" />
                     </span>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[320px]">
+            <DropdownMenuContent align="end" className="w-[370px]">
                 <div
                     className="flex flex-col gap-1.5"
                     onPointerDown={(event) => event.stopPropagation()}
@@ -665,8 +692,15 @@ export function CommitMenu({
                             variant="default"
                             size="md"
                             className="flex-1"
-                            disabled={selectedPaths.length === 0 || busy || !title.trim()}
-                            onClick={commitAll}
+                            disabled={busy || Boolean(repo && (selectedPaths.length === 0 || !title.trim()))}
+                            onClick={() => {
+                                if (!repo) {
+                                    setMenuOpen(false);
+                                    setSetupOpen(true);
+                                    return;
+                                }
+                                commitAll();
+                            }}
                         >
                             Commit
                         </Button>
@@ -694,7 +728,7 @@ export function CommitMenu({
                                 <DropdownMenuItem disabled={files.length === 0 || busy} onSelect={() => void stageAll()}>
                                     Stage all
                                 </DropdownMenuItem>
-                                <DropdownMenuItem disabled={!repo || busy} onSelect={() => void runGit("Unstaged", () => commands.gitUnstageAll(repo!))}>
+                                <DropdownMenuItem disabled={busy} onSelect={() => void runGit("Unstaged", () => commands.gitUnstageAll(repo!))}>
                                     Unstage all
                                 </DropdownMenuItem>
                                 <DropdownMenuItem disabled={files.length === 0 || busy} onSelect={() => void discardAll()}>
@@ -717,10 +751,10 @@ export function CommitMenu({
                                 <DropdownMenuItem disabled={files.length === 0 || busy} onSelect={() => void runGit("Stashed", () => commands.gitStashSave(repo!, title.trim() || "WIP", true))}>
                                     Stash changes
                                 </DropdownMenuItem>
-                                <DropdownMenuItem disabled={!repo || busy} onSelect={() => void runGit("Stash applied", () => commands.gitStashPop(repo!, 0))}>
+                                <DropdownMenuItem disabled={busy} onSelect={() => void runGit("Stash applied", () => commands.gitStashPop(repo!, 0))}>
                                     Pop stash
                                 </DropdownMenuItem>
-                                <DropdownMenuItem disabled={!repo || busy} onSelect={() => void createBranch()}>
+                                <DropdownMenuItem disabled={busy} onSelect={() => void createBranch()}>
                                     New branch{branch ? ` from ${branch}` : ""}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem disabled={!repo || busy || hasRemote} onSelect={() => setPublishOpen(true)}>
@@ -734,66 +768,51 @@ export function CommitMenu({
                     <span className="flex-1">Changes</span>
                     {edits.length > 0 && onRejectAll && onAcceptAll ? (
                         <span className="flex items-center gap-1">
-                            <Button variant="ghost" size="xs" onClick={onRejectAll}>Undo</Button>
-                            <Button variant="ghost" size="xs" onClick={onAcceptAll}>Keep</Button>
+                            <Button variant="ghost" size="sm" onClick={onRejectAll}>Undo</Button>
+                            <Button variant="ghost" size="sm" onClick={onAcceptAll}>Keep</Button>
                         </span>
                     ) : null}
-                    {files.length > 0 ? (
-                        <span className="rounded-full bg-primary px-1.5 text-xs text-text-primary">{selectedPaths.length}/{files.length}</span>
+                    {rows.length > 0 ? (
+                        <span className="rounded-full bg-primary px-1.5 text-sm text-text-primary">{selectedPaths.length}/{rows.length}</span>
                     ) : null}
                 </div>
-                <div className="max-h-64 overflow-y-auto">
-                    {edits.map((edit) => {
-                        const name = edit.file.split(/[\\/]/).pop() || edit.file;
-                        const diff = countChangedLines(edit.original, edit.replacement);
-                        return (
-                            <div key={edit.id} className="flex items-center gap-2 px-2 py-1 text-sm">
-                                <span className="min-w-0 flex-1 truncate text-text-primary">{name}</span>
-                                <span className="shrink-0 tabular-nums text-xs">
-                                    {diff.add > 0 ? <span className="text-success">+{diff.add}</span> : null}
-                                    {diff.del > 0 ? <span className="text-error"> -{diff.del}</span> : null}
-                                </span>
-                                {onAccept ? (
-                                    <button type="button" aria-label="Keep" className="text-text-muted hover:text-success" onClick={() => onAccept(edit.id)}>
-                                        <Icon icon={Checkmark20Regular} />
-                                    </button>
-                                ) : null}
-                                {onReject ? (
-                                    <button type="button" aria-label="Undo" className="text-text-muted hover:text-error" onClick={() => onReject(edit.id)}>
-                                        <Icon icon={Dismiss20Regular} />
-                                    </button>
-                                ) : null}
-                            </div>
-                        );
-                    })}
-                    {files.length === 0 && edits.length === 0 ? (
+                <div className="max-h-64 overflow-y-auto p-1.5">
+                    {rows.length === 0 ? (
                         <div className="px-2 py-2 text-sm text-text-muted">No changes</div>
                     ) : (
-                        files.map((file) => {
-                            const letter = statusLetter(file.status);
-                            const folder = parentFolder(file.path);
-                            const selected = picked.includes(file.path);
+                        rows.map((row) => {
+                            const name = fileName(row.path);
+                            const folder = parentFolder(row.path);
+                            const selected = picked.includes(row.path);
+                            const letter = row.git ? statusLetter(row.git.status) : "M";
                             return (
-                                <button
-                                    key={`${file.path}-${file.staged}`}
-                                    type="button"
-                                    onClick={() => setPicked((current) => (
-                                        current.includes(file.path)
-                                            ? current.filter((path) => path !== file.path)
-                                            : [...current, file.path]
-                                    ))}
-                                    className="flex w-full items-center gap-2 px-2 py-1 text-left text-sm hover:bg-panel-hover"
+                                <div
+                                    key={row.path}
+                                    className="mb-1 flex items-center gap-3 bg-sidebar py-1 text-sm last:mb-0"
                                 >
-                                    <Checkmark checked={selected} onCheckedChange={() => {
-                                        setPicked((current) => (
-                                            current.includes(file.path)
-                                                ? current.filter((path) => path !== file.path)
-                                                : [...current, file.path]
-                                        ));
-                                    }} />
-                                    <FileIcon name={fileName(file.path)} className="size-4 shrink-0" />
-                                    <span className="min-w-0 flex-1 truncate text-text-primary">{fileName(file.path)}</span>
-                                    {folder ? <span className="shrink-0 text-sm text-text-muted">{folder}</span> : null}
+                                    <button
+                                        type="button"
+                                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                        onClick={() => setPicked((current) => (
+                                            current.includes(row.path)
+                                                ? current.filter((path) => path !== row.path)
+                                                : [...current, row.path]
+                                        ))}
+                                    >
+                                        <Checkmark checked={selected} onCheckedChange={() => {
+                                            setPicked((current) => (
+                                                current.includes(row.path)
+                                                    ? current.filter((path) => path !== row.path)
+                                                    : [...current, row.path]
+                                            ));
+                                        }} />
+                                        <FileIcon name={name} className="size-4 shrink-0" />
+                                        <span className="min-w-0 flex-1 truncate text-text-primary">{name}</span>
+                                    </button>
+                                    <span className="shrink-0 tabular-nums text-sm">
+                                        {row.plus > 0 ? <span className="text-success">+{row.plus}</span> : null}
+                                        {row.minus > 0 ? <span className="text-error"> −{row.minus}</span> : null}
+                                    </span>
                                     <span
                                         className={cn(
                                             "w-4 shrink-0 text-center text-sm",
@@ -804,7 +823,17 @@ export function CommitMenu({
                                     >
                                         {letter}
                                     </span>
-                                </button>
+                                    {row.editId && onAccept ? (
+                                        <button type="button" aria-label="Keep" className="text-text-muted hover:text-success" onClick={() => onAccept(row.editId!)}>
+                                            <Icon icon={Checkmark20Regular} className="icon-sm" />
+                                        </button>
+                                    ) : null}
+                                    {row.editId && onReject ? (
+                                        <button type="button" aria-label="Undo" className="text-text-muted hover:text-error" onClick={() => onReject(row.editId!)}>
+                                            <Icon icon={Dismiss20Regular} className="icon-sm" />
+                                        </button>
+                                    ) : null}
+                                </div>
                             );
                         })
                     )}

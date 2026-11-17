@@ -1,0 +1,1 @@
+Write messy.csv with inconsistent headers, extra spaces, and a blank row. Then clean.py that writes clean.csv with trimmed headers, dropped empty rows, and amounts parsed as floats. Print a one-line summary of rows in/out.

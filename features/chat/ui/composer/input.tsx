@@ -856,8 +856,15 @@ export function ChatInput({
 
     const runMode = settings.ai.autoRunMode;
     const setRunMode = (next: AutoRunModeSetting) => {
-        updateSettingSection("ai", { autoRunMode: next });
-        void commands.updateTurnPolicy({ autoRunMode: next });
+        updateSettingSection("ai", {
+            autoRunMode: next,
+            requireEditApproval: next !== "always",
+            autonomy: "custom",
+        });
+        void commands.updateTurnPolicy({
+            autoRunMode: next,
+            requireEditApproval: next !== "always",
+        });
     };
 
     const sendActive =

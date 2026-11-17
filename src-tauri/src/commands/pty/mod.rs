@@ -1217,6 +1217,11 @@ async fn spawn_pty_with_command(
 
     cmd.env("TERM", "xterm-256color");
     cmd.env("CLAW_TERMINAL", "1");
+    if let Ok(scratch) = std::env::var("SHAPE_SCRATCH") {
+        if !scratch.trim().is_empty() {
+            cmd.env("SHAPE_SCRATCH", scratch);
+        }
+    }
 
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 

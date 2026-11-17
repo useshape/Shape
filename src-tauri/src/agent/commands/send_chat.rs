@@ -147,15 +147,10 @@ pub async fn send_chat_message(
         })
         .unwrap_or(false);
     let has_images = model_router::content_has_images(&message) || history_has_images;
-    let mode_to_use = if talk {
+    let mut mode_to_use = if talk {
         "Agent".to_string()
     } else {
-        let picked = mode.as_deref().unwrap_or("Ask").to_string();
-        if picked.eq_ignore_ascii_case("visual") || picked.eq_ignore_ascii_case("design") {
-            "Code".to_string()
-        } else {
-            picked
-        }
+        "Code".to_string()
     };
     // Auto stays on DeepSeek locally. The website maps `auto` for billing.
     // Vision-capable picks keep pixels; text-only models get a caption pass.
@@ -449,38 +444,42 @@ pub async fn send_chat_message(
         .with_reasoning_effort(Some(effort_norm.clone()))
         .with_service_tier(tier_norm.clone());
 
-    let legacy_hint = match mode.as_deref().map(|m| m.to_ascii_lowercase()).as_deref() {
-        Some("ask") => Some(Capability::Ask),
-        Some("plan") => Some(Capability::Plan),
-        _ => None,
-    };
     let review_hint = mode.as_deref().is_some_and(|m| m.eq_ignore_ascii_case("review"));
     let policy_now = state.turn_policy_for(Some(&owned_conversation_id));
-    let (mode_to_use, steer, skill_notes) = if talk {
-        (
-            "Agent".to_string(),
-            schema::SteerPacks::talk(),
-            String::new(),
-        )
+    let composer_read_only = !talk && policy_now.auto_run_mode == AutoRunMode::Ask;
+    let (steer, skill_notes) = if talk {
+        (schema::SteerPacks::talk(), String::new())
     } else {
-        let sticky = state.sticky_capability(&owned_conversation_id);
+        let sticky = state
+            .sticky_capability(&owned_conversation_id)
+            .filter(|cap| matches!(cap, Capability::Code));
         let locks = decide::Locks {
             browse_enabled: policy_now.browse_enabled,
             shell_enabled: true,
             allow_upgrade: policy_now.allow_capability_upgrade,
         };
-        let mut decision = decide::decide(&message, sticky, locks, legacy_hint);
+        let mut decision = decide::decide(&message, sticky, locks, None);
         if review_hint && !decision.skills.contains(&"review") {
             decision.skills.insert(0, "review");
             decision.skills.truncate(2);
         }
+        // Composer Read only is the only lock. Packs pick extra tools.
+        // Do not give the model an Ask/Plan/Code identity.
+        decision.capability = if composer_read_only {
+            Capability::Ask
+        } else {
+            Capability::Code
+        };
         let mut packs = state
             .session_packs(&owned_conversation_id)
             .union(decision.packs)
             .clamp(policy_now.browse_enabled, true);
-        if decision.capability.is_read_only() {
+        if composer_read_only {
             packs.workspace = false;
             packs.terminal = false;
+        } else {
+            packs.workspace = true;
+            packs.terminal = true;
         }
         let mut steer_hint = String::new();
         if !decision.confident {
@@ -506,6 +505,15 @@ pub async fn send_chat_message(
                 reply.as_ref(),
             );
         }
+        if composer_read_only {
+            packs.workspace = false;
+            packs.terminal = false;
+            mode_to_use = "Ask".to_string();
+        } else {
+            packs.workspace = true;
+            packs.terminal = true;
+            mode_to_use = "Code".to_string();
+        }
         state.set_capability(&owned_conversation_id, decision.capability);
         state.set_session_packs(&owned_conversation_id, packs);
         let steer = schema::SteerPacks {
@@ -521,23 +529,21 @@ pub async fn send_chat_message(
         };
         let mut notes = String::new();
         for name in &decision.skills {
+            if *name == "plan" {
+                continue;
+            }
             if let Some(body) = prompts::skill_body(name) {
                 notes.push('\n');
                 notes.push_str(body);
             }
         }
-        if !decision.confident {
-            notes.push_str(
-                "\nThis turn started with a small tool list. Call load_tools before using a pack that is not listed.",
-            );
-        }
-        (decision.capability.as_str().to_string(), steer, notes)
+        (steer, notes)
     };
     let mut context_opts = context_options_for_query(message.clone(), (*index_state).clone());
     let read_only_turn = mode_to_use.eq_ignore_ascii_case("ask") || mode_to_use.eq_ignore_ascii_case("plan");
     context_opts.include_repo_map = !talk && !read_only_turn && (steer.workspace || steer.git);
     context_opts.include_diagnostics = !talk && mode_to_use.eq_ignore_ascii_case("code") && steer.workspace;
-    context_opts.include_git_status = !talk && (steer.git || (steer.workspace && !read_only_turn));
+    context_opts.include_git_status = !talk && steer.git;
     // Chat can see the open project. It still cannot see another mode's transcript.
     context_opts.include_workspace = true;
     let ctx_res = build_context_with_options(&app_state, context_opts).await;
@@ -653,7 +659,7 @@ pub async fn send_chat_message(
     }
     let mut api_messages =
         messages::build_messages_json(&final_system_prompt, &api_history, &model_to_use);
-    let mut turn_context = format!("Mode: {mode_to_use}");
+    let mut turn_context = String::new();
     if talk {
         turn_context.push_str(&format!("\nWorkspace: {workspace}"));
         if let Some(name) = worker_name.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
@@ -680,10 +686,6 @@ pub async fn send_chat_message(
         turn_context.push_str(
             "\nA new request is new work. Continue an earlier asset only when this message refers to it, and then edit_image that media_id. A story, fable, poem, or question is text. Call generate_image only when they asked for a picture, and use the count they named (one if they did not).",
         );
-    } else if matches!(mode_to_use.to_ascii_lowercase().as_str(), "ask" | "plan") {
-        turn_context.push_str(
-            "\nThis turn is read-only. Do not edit files, run the shell, commit, or call mcp_call. browse, screenshot_page, web_search, and visit_url stay available. When the user wants a live site, call browse. If browse is not listed, call load_tools for the browse pack. visit_url only fetches text and is not a substitute. Do not tell the user the browser is blocked.",
-        );
     }
     if !talk && !skill_notes.is_empty() {
         turn_context.push_str("\n");
@@ -691,6 +693,13 @@ pub async fn send_chat_message(
     }
     turn_context.push_str("\n\nCURRENT CONTEXT:\n");
     turn_context.push_str(&context_string);
+    if let Some(scratch) = crate::agent::scratch::ensure_for(&owned_conversation_id) {
+        std::env::set_var("SHAPE_SCRATCH", &scratch);
+        turn_context.push_str(&format!(
+            "Scratch (ephemeral scripts and plots, not the project): {}\n",
+            scratch.display()
+        ));
+    }
     if !steer.hint.is_empty() {
         turn_context.push_str("\n");
         turn_context.push_str(&steer.hint);
@@ -734,6 +743,9 @@ pub async fn send_chat_message(
             state.chat_memory_enabled(),
         )
     };
+    if !talk && decide::wants_plan_document(&message) {
+        schema::include_save_plan(&mut tools);
+    }
     if review_adversarial_on {
         schema::include_adversarial_review(&mut tools);
     }

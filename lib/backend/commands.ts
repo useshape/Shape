@@ -741,6 +741,7 @@ export const commands = {
     getConversation: (id: string, projectPath?: string | null) =>
         invokeCommand<Conversation>("get_conversation", { id, projectPath: projectPath ?? null }),
     clearChatHistory: () => invokeCommand<void>("clear_chat_history"),
+    clearShapeLocalData: () => invokeCommand<string[]>("clear_shape_local_data"),
     newChat: (storePath?: string | null) =>
         invokeCommand<void>("new_chat", { storePath: storePath ?? null }),
     focusConversation: (id: string, projectPath?: string | null) =>

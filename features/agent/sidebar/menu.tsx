@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowEnter20Regular } from "@fluentui/react-icons/headless/svg/arrow-enter";
+import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { ArrowExit20Regular } from "@fluentui/react-icons/headless/svg/arrow-exit";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
 import { FolderOpen20Regular } from "@fluentui/react-icons/headless/svg/folder-open";
@@ -10,6 +11,7 @@ import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
 
 import { useCallback, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/utils";
 import { logoutShape, useShapeAuth } from "@/lib/cloud/store";
 import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
 import { useGitHubAuth } from "@/lib/github/store";
@@ -61,9 +63,11 @@ export function ProfileAvatar({
 export function AccountMenu({
     children,
     side = "bottom",
+    align = "start",
 }: {
     children: ReactNode;
     side?: "top" | "bottom";
+    align?: "start" | "end";
 }) {
     const shapeAuth = useShapeAuth();
     const githubAuth = useGitHubAuth();
@@ -82,7 +86,7 @@ export function AccountMenu({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side={side} className="w-80">
+            <DropdownMenuContent align={align} side={side} className="w-80">
                 <div className="flex items-center gap-2.5 px-2 py-1">
                     <ProfileAvatar
                         size={20}
@@ -159,5 +163,48 @@ export function AccountMenu({
                 )}
             </DropdownMenuContent>
         </DropdownMenu>
+    );
+}
+
+export function AccountMenuButton({
+    className,
+    side = "bottom",
+    align = "start",
+}: {
+    className?: string;
+    side?: "top" | "bottom";
+    align?: "start" | "end";
+}) {
+    const shapeAuth = useShapeAuth();
+    const githubAuth = useGitHubAuth();
+    const displayName =
+        (shapeAuth.name && !/^n\/?a$/i.test(shapeAuth.name.trim()) ? shapeAuth.name.trim() : null)
+        ?? (githubAuth.loggedIn && githubAuth.username ? githubAuth.username : null)
+        ?? "Sign in";
+
+    return (
+        <AccountMenu side={side} align={align}>
+            <button
+                type="button"
+                aria-label="Account"
+                className={cn(
+                    "flex items-center gap-2 squircle-2xl px-1 py-0.5 text-left hover:bg-panel-hover",
+                    className,
+                )}
+            >
+                <ProfileAvatar
+                    gitAvatarUrl={githubAuth.loggedIn ? githubAuth.avatarUrl : null}
+                    shapeUserId={shapeAuth.userId}
+                    offline={Boolean(shapeAuth.offline)}
+                    name={displayName}
+                    size={20}
+                />
+                <Icon
+                    icon={ChevronDown20Regular}
+                    className="shrink-0 text-text-muted!"
+                    style={{ ["--icon-size" as string]: "14px" }}
+                />
+            </button>
+        </AccountMenu>
     );
 }

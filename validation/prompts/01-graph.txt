@@ -1,0 +1,1 @@
+Generate a python graph of y = x^2 from -10 to 10 and save the image in this project.

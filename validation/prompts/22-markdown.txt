@@ -1,0 +1,1 @@
+Create STATUS.md with a markdown table of 3 features and their status (done, wip, todo).

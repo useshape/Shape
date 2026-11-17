@@ -1,0 +1,1 @@
+Write schema.sql with users(id, email unique, created_at) and posts(id, user_id fk, title, body).

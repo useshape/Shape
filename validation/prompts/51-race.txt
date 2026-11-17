@@ -1,0 +1,1 @@
+bank.py has a classic check-then-act race on withdraw. Make withdrawals thread-safe, add a test that starts 50 threads each taking $1 from a $100 account and asserts the final balance is 0 (or that overdraft never happens). Run the test.

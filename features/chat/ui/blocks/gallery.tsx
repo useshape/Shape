@@ -10,7 +10,7 @@ import { TextFontSize20Regular } from "@fluentui/react-icons/headless/svg/text-f
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { mediaSrc } from "@/lib/ui/media-src";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -69,12 +69,8 @@ function previewSrcDoc(item: DesignPreviewItem): string | null {
 
 function resolveSrc(path: string): string | undefined {
     if (!path) return undefined;
-    if (path.startsWith("data:") || path.startsWith("http") || path.startsWith("asset:")) {
-        return path;
-    }
-    // Temp sandbox HTML is not durable; do not hit the asset protocol for missing files.
     if (path.includes("shape-design-sandbox")) return undefined;
-    return convertFileSrc(path);
+    return mediaSrc(path);
 }
 
 function applyLiveTweaks(

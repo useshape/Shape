@@ -1,0 +1,1 @@
+Research how Hacker News lays out the front page (ranks, points, domain, age). Then actually build a static local clone: 20 fake stories, vote buttons that increment in memory, and a submit form that prepends a story. HTML/CSS/JS only. Do not stop at a plan. Do not use generate_image.

@@ -424,8 +424,14 @@ fn escapes_workspace(command: &str, workspace: &str) -> Option<String> {
             return Some("Recursive deletes outside a single workspace file are blocked.".to_string());
         }
     }
-    let workspace_norm = workspace.replace('\\', "/").to_lowercase();
-    if mutating && !workspace_norm.is_empty() {
+    let mut allowed: Vec<String> = Vec::new();
+    if !workspace.trim().is_empty() {
+        allowed.push(workspace.replace('\\', "/").to_lowercase());
+    }
+    if let Some(scratch) = crate::agent::scratch::scratch_root() {
+        allowed.push(scratch.to_string_lossy().replace('\\', "/").to_lowercase());
+    }
+    if mutating && !allowed.is_empty() {
         for token in command.split_whitespace() {
             let token = token.trim_matches(|c| c == '"' || c == '\'' || c == ',');
             let norm = token.replace('\\', "/");
@@ -437,7 +443,8 @@ fn escapes_workspace(command: &str, workspace: &str) -> Option<String> {
                 continue;
             }
             let token_lower = norm.to_lowercase();
-            if !token_lower.contains(&workspace_norm) && token_lower.len() > 2 {
+            let inside = allowed.iter().any(|root| token_lower.contains(root));
+            if !inside && token_lower.len() > 2 {
                 return Some(format!(
                     "Command targets {token}, which is outside the workspace. That cannot be approved."
                 ));

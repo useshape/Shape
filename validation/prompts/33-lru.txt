@@ -1,0 +1,1 @@
+Write lru.py: LruCache(capacity) with get/set, O(1) expected, evicts least recently used. Tests for update-on-get, overwrite, and capacity 1.

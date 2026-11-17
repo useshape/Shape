@@ -6,6 +6,6 @@ Commands that finish quickly return output and an exit code. A command still run
 
 Dev servers stay in the background. Do not start one unless the user asked. Never `Stop-Process -Name node`, `taskkill` node, or `killall node`. Stop only a PID this turn started.
 
-On Windows the shell is PowerShell (chain with `;`). On macOS and Linux it is bash/sh.
+On Windows the shell is PowerShell (chain with `;`). On macOS it is bash/sh.
 
 A rejected command is not retried. Encoded PowerShell, `Invoke-Expression`, and credential files stay blocked. Network commands ask first unless settings turn them off.

@@ -7,6 +7,19 @@ import { Icon } from "@/components/ui/icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+export function splitGeneratedCommit(raw: string): { title: string; description: string } | null {
+    const text = raw.trim();
+    if (
+        !text
+        || text.startsWith("<")
+        || /<subagent|spawn_subagent|you are a senior/i.test(text)
+    ) {
+        return null;
+    }
+    const lines = text.split("\n");
+    return { title: lines[0] ?? "", description: lines.slice(1).join("\n").trim() };
+}
+
 /** Reveal text into a field with a short stream-in feel (backend is one-shot). */
 export async function streamTextInto(
     text: string,

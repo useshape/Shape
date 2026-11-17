@@ -1,0 +1,1 @@
+This folder has search.py. binary_search infinite-loops on a miss and is wrong on some hits. Fix it, add tests that cover empty list, missing value, first and last element, then run the tests.

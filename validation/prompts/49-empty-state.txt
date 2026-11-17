@@ -1,0 +1,1 @@
+Create inbox.html: a mail list that shows a proper empty state when there are no messages, and a list with sender/subject/time when localStorage has messages. Include a button to seed 3 fake messages and one to clear.

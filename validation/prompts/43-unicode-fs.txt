@@ -1,0 +1,1 @@
+Create a file named `café notes.md` (with the accent) containing a heading and a list, then a script list_notes.py that prints files in the folder whose names are not ascii-only. Run it.

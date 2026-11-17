@@ -1,0 +1,1 @@
+index.html reflects the input as HTML. Stop the XSS, keep the greeting visible, and do not introduce a framework.
