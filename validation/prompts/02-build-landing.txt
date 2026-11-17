@@ -1,0 +1,1 @@
+Look at how a simple file-hosting landing page is structured, then actually build a working one in this folder with HTML, CSS, and JS: a grid of downloadable items, an item page, and an upload form. Fully functional locally. Do not stop at a plan.

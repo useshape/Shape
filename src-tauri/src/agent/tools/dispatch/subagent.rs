@@ -29,10 +29,10 @@ pub(super) async fn tool_spawn_subagent(args: &Value, ctx: &ToolCtx<'_>) -> Tool
         .get("title")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
-        .unwrap_or(task.as_str())
+        .unwrap_or("Thread")
         .to_string();
-    if title.chars().count() > 72 {
-        title = format!("{}…", title.chars().take(71).collect::<String>());
+    if title.chars().count() > 40 {
+        title = format!("{}…", title.chars().take(39).collect::<String>());
     }
     let isolation = Isolation::parse(args.get("isolation").and_then(|v| v.as_str()));
     let ask_like = ctx.mode.eq_ignore_ascii_case("ask") || ctx.mode.eq_ignore_ascii_case("plan");
@@ -113,10 +113,9 @@ pub(super) async fn tool_spawn_subagent(args: &Value, ctx: &ToolCtx<'_>) -> Tool
     let isolation = spawned.isolation;
 
     let running_ui = format!(
-        "\n<subagent_ref id=\"{}\" agent=\"{}\" task=\"{}\" status=\"running\" />\n",
+        "\n<subagent_ref id=\"{}\" agent=\"{}\" status=\"running\" />\n",
         escape_xml_attr(&id),
         escape_xml_attr(&title),
-        escape_xml_attr(&task),
     );
 
     ToolOutcome {

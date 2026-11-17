@@ -45,7 +45,7 @@ pub(super) fn tool_git_status(ctx: &ToolCtx<'_>) -> ToolOutcome {
 
 pub(super) fn tool_git_fetch(ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("git_fetch", "Fetching remotes is not allowed in Ask or Plan mode.");
+        return blocked_outcome("git_fetch", "Fetching remotes is not on this turn.");
     }
     let _ = ctx.emit_ui_token(git_ui_chunk("fetch", "running", "Fetching from remotes…"));
     match git::git_fetch(ctx.project_path.to_string()) {
@@ -101,7 +101,7 @@ pub(super) fn tool_git_log(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
 pub(super) fn tool_git_stage(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("git_stage", "Staging files is not allowed in Ask or Plan mode.");
+        return blocked_outcome("git_stage", "Staging files is not on this turn.");
     }
     let path = match get_str(args, "path") {
         Ok(s) => s,
@@ -122,7 +122,7 @@ pub(super) fn tool_git_stage(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
 pub(super) async fn tool_git_commit(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("git_commit", "Committing is not allowed in Ask or Plan mode.");
+        return blocked_outcome("git_commit", "Committing is not on this turn.");
     }
     let message = match get_str(args, "message") {
         Ok(s) => s.to_string(),
@@ -211,7 +211,7 @@ pub(super) fn tool_git_branches(ctx: &ToolCtx<'_>) -> ToolOutcome {
 
 pub(super) fn tool_git_create_branch(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("git_create_branch", "Creating a branch is not allowed in Ask or Plan mode.");
+        return blocked_outcome("git_create_branch", "Creating a branch is not on this turn.");
     }
     let name = match get_str(args, "name").and_then(|s| safe_branch(&s)) {
         Ok(s) => s,
@@ -232,7 +232,7 @@ pub(super) fn tool_git_create_branch(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
 
 pub(super) fn tool_git_switch(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("git_switch", "Switching branches is not allowed in Ask or Plan mode.");
+        return blocked_outcome("git_switch", "Switching branches is not on this turn.");
     }
     let name = match get_str(args, "name").and_then(|s| safe_branch(&s)) {
         Ok(s) => s,
@@ -253,7 +253,7 @@ pub(super) fn tool_git_switch(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
 pub(super) fn tool_git_sync(ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("git_sync", "Sync is not allowed in Ask or Plan mode.");
+        return blocked_outcome("git_sync", "Sync is not on this turn.");
     }
     match git::git_sync(ctx.project_path.to_string()) {
         Ok(()) => {
@@ -271,7 +271,7 @@ pub(super) fn tool_git_sync(ctx: &ToolCtx<'_>) -> ToolOutcome {
 pub(super) fn tool_git_worktree(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     let action = args.get("action").and_then(|v| v.as_str()).unwrap_or("list");
     if action != "list" && is_read_only_mode(ctx.mode) {
-        return blocked_outcome("git_worktree", "Changing worktrees is not allowed in Ask or Plan mode.");
+        return blocked_outcome("git_worktree", "Changing worktrees is not on this turn.");
     }
     let mut git_bin = match crate::core::git_bin::git_command() {
         Ok(cmd) => cmd,

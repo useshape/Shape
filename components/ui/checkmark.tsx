@@ -43,7 +43,7 @@ export const Checkmark = React.forwardRef<HTMLDivElement, CheckmarkProps>(
                     }
                 }}
                 className={cn(
-                    "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-panel-hover cursor-pointer overflow-hidden",
+                    "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-panel-hover cursor-pointer overflow-hidden",
                     "transition-colors duration-[var(--transition-fast)] ease-[var(--ease-out)]",
                     "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-focus",
                     checked === true && "bg-accent border-accent text-accent-fg",
@@ -56,12 +56,12 @@ export const Checkmark = React.forwardRef<HTMLDivElement, CheckmarkProps>(
             >
                 {checked === true && (
                     <div className="flex items-center justify-center">
-                        <Icon icon={Checkmark20Regular}   />
+                        <Icon icon={Checkmark20Regular} className="icon-sm p-0.5" />
                     </div>
                 )}
                 {checked === "indeterminate" && (
                     <div className="flex items-center justify-center">
-                        <Icon icon={Subtract20Regular}  />
+                        <Icon icon={Subtract20Regular} className="icon-xs p-0.5" />
                     </div>
                 )}
             </div>

@@ -1,0 +1,1 @@
+Research how itch.io presents games, then actually build a local developer marketplace in this folder: listing grid, item page, upload form. HTML/CSS/JS. Do not stop at a plan or patch plan.

@@ -610,7 +610,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                             {rightExpanded ? (
                                 <div
                                     style={{ width: workspaceWidth }}
-                                    className="relative flex h-full flex-col overflow-hidden bg-white"
+                                    className="relative flex h-full flex-col overflow-hidden"
                                 >
                                     <AgentWorkspace
                                         projectPath={project_path}

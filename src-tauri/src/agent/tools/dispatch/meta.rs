@@ -137,7 +137,7 @@ pub(super) async fn tool_mcp_call(name: &str, args_json: &str, ctx: &ToolCtx<'_>
 }
 pub(super) fn tool_save_plan(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if ctx.mode.eq_ignore_ascii_case("ask") {
-        return blocked_outcome("save_plan", "Saving a plan is not available in Ask mode.");
+        return blocked_outcome("save_plan", "Saving a plan is not on this turn.");
     }
     if ctx.project_path.is_empty() {
         return error_outcome("save_plan", "No project is open.");
@@ -218,7 +218,7 @@ pub(super) fn tool_update_todos(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome 
     if ctx.mode.eq_ignore_ascii_case("ask") || ctx.mode.eq_ignore_ascii_case("plan") {
         return blocked_outcome(
             "update_todos",
-            "update_todos is only available when implementing (Code/Design/Review), not in Ask or Plan mode.",
+            "update_todos is not on this turn.",
         );
     }
     let todos = match args.get("todos").and_then(|v| v.as_array()) {

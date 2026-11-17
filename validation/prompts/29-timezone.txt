@@ -1,0 +1,1 @@
+when.py compares date strings with slicing. It is wrong across timezones and midnight UTC. Fix it using timezone-aware datetimes. Cover a case where two RFC3339 timestamps are the same local calendar day in US/Eastern but different UTC dates.

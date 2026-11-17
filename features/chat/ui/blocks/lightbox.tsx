@@ -5,17 +5,14 @@ import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { mediaSrc } from "@/lib/ui/media-src";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
 import type { DesignPreviewItem } from "./gallery";
 
 function resolveSrc(path: string): string {
-    if (path.startsWith("data:") || path.startsWith("http") || path.startsWith("asset:")) {
-        return path;
-    }
-    return convertFileSrc(path);
+    return mediaSrc(path);
 }
 
 function isHtml(item: { path: string; kind?: string }): boolean {
@@ -78,9 +75,7 @@ export function MediaLightbox({
     const resolved = design
         ? resolveSrc(design.path)
         : rawSrc
-          ? rawSrc.startsWith("data:") || rawSrc.startsWith("http") || rawSrc.startsWith("asset:")
-              ? rawSrc
-              : convertFileSrc(rawSrc)
+          ? mediaSrc(rawSrc)
           : "";
     if (!resolved) return null;
 

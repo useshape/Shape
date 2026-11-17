@@ -1,0 +1,1 @@
+Create src/main.rs that prints hello from rust. No need for a full Cargo project unless you want one.

@@ -30,6 +30,7 @@ import { FileIcon } from "@/components/ui/file-icon";
 import { ManagerDiffEditor } from "@/features/git/ui/shared/manager-diff";
 import {
     GenerateStarButton,
+    splitGeneratedCommit,
     streamTextInto,
 } from "@/features/git/ui/shared/generate-star";
 import { GitAiAction } from "@/features/git/ui/shared/ai-insight";
@@ -677,15 +678,16 @@ export default function Source({
                 setCommitSuggestionStatus("idle");
                 return;
             }
-            const message = await commands.generateCommitMessage(token, gitRepo);
-            const lines = message.trim().split("\n");
-            const title = lines[0] ?? "";
-            const description = lines.slice(1).join("\n").trim();
+            const parsed = splitGeneratedCommit(await commands.generateCommitMessage(token, gitRepo));
+            if (!parsed) {
+                notify.error("AI Error", "Commit generation did not return a message. Try again.");
+                return;
+            }
             setCommitTitle("");
             setCommitDescription("");
-            await streamTextInto(title, setCommitTitle);
-            if (description) {
-                await streamTextInto(description, setCommitDescription, { msPerChar: 4 });
+            await streamTextInto(parsed.title, setCommitTitle);
+            if (parsed.description) {
+                await streamTextInto(parsed.description, setCommitDescription, { msPerChar: 4 });
             }
             void import("@/lib/cloud/store")
                 .then(({ refreshShapeAuth }) => {

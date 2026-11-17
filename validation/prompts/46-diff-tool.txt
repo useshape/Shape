@@ -1,0 +1,1 @@
+Build a two-pane diff viewer in index.html: paste left/right text, show added/removed lines like a unified diff. No npm. Handle Windows and Unix newlines.

@@ -1,0 +1,1 @@
+Write server.mjs that answers OPTIONS /data with CORS for http://localhost:4173 and rejects other origins. GET /data returns {"ok":true}. Include a node script that asserts allow and deny. No Express unless you really need it.

@@ -1,0 +1,1 @@
+Write sample.csv with 5 rows of name,amount and sum.py that prints the total amount.

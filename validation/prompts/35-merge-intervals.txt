@@ -1,0 +1,1 @@
+Implement merge_intervals.py that merges overlapping [start, end] pairs and a test file. Include nested, touching, unsorted, and empty inputs.

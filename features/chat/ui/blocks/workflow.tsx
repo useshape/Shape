@@ -27,7 +27,6 @@ import { openProjectFile } from "@/lib/window/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path/utils";
 import { TerminalCommandStep } from "./terminal-live";
 import { parseWebSearchHits, WebSearchBlock } from "./search";
-import { providerIcon } from "@/lib/ui/provider-icon";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
@@ -146,6 +145,10 @@ export function parseGitDiffMeta(content?: string): { file?: string; scope?: str
     const scopeMatch = first.match(/^\[scope\]\s+(\w+)$/);
     if (scopeMatch) {
         return { scope: scopeMatch[1], body: lines.slice(1).join("\n") };
+    }
+    const looksPatched = /^(diff |index |--- |\+\+\+ |@@ )/m.test(content);
+    if (!looksPatched && lines.length === 1 && /[\\/.\w-]/.test(first)) {
+        return { file: first, body: "" };
     }
     return { body: content };
 }
@@ -741,16 +744,16 @@ function GitDiffGroup({
     const { add, del } = countDiffLines(body);
     const fileName = file?.split(/[\\/]/).pop();
     const label = file
-        ? "Diff"
+        ? "Looked at changes"
         : scope === "staged"
-          ? "Staged diff"
-          : "Diff";
+          ? "Looked at staged changes"
+          : "Looked at changes";
 
     return (
         <GitResult label={label} detail={fileName} add={add} del={del}>
             <div className="flex flex-col">
                 {file ? <FilePill path={file} /> : null}
-                <ChatPatchDiff body={body} />
+                {body.trim() ? <ChatPatchDiff body={body} /> : null}
             </div>
         </GitResult>
     );
@@ -1056,7 +1059,7 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                                     : op === "log"
                                         ? "Git log"
                                         : op === "diff"
-                                            ? "Git diff"
+                                            ? "Looked at changes"
                                             : op === "branches"
                                                 ? "Branches"
                                                 : op === "stage"
@@ -1087,7 +1090,7 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 gitStatusLines: statusLines.length > 0 ? statusLines : undefined,
                 gitLogLines: logLines.length > 0 ? logLines : undefined,
                 gitBranchLines: branchLines.length > 0 ? branchLines : undefined,
-                gitDiffMeta: diffMeta?.body ? diffMeta : undefined,
+                gitDiffMeta: diffMeta?.body || diffMeta?.file ? diffMeta : undefined,
             };
         }
         default:
@@ -1389,18 +1392,14 @@ export function ActionItem({
         return (
             <ActionLine
                 action="Thread"
-                detail={name}
-                icon={providerIcon(block.command || "auto", 14)}
+                detail={name.length > 40 ? `${name.slice(0, 40).trimEnd()}…` : name}
                 onClick={() => {
                     void import("@/features/agent/subagents/store").then(({ upsertSubagent }) => {
                         upsertSubagent({
                             id,
-                            title: name,
+                            title: name.length > 40 ? `${name.slice(0, 40).trimEnd()}…` : name,
                             agent: name,
-                            model: block.command,
                             activity: "Working…",
-                            task: block.type === "subagent_ref" ? block.content : undefined,
-                            transcript: block.type === "subagent" ? block.content : undefined,
                             status: (block.commandStatus as "running" | "done" | "error" | "pending") || "running",
                         });
                         window.dispatchEvent(new CustomEvent("shape-open-subagent", { detail: { id } }));

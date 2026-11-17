@@ -1,7 +1,7 @@
 "use client";
 
 import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { freeUsageMeter, paidUsageMeter } from "@/lib/chat/usage-display";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,60 @@ import {
     useShapeAuth,
 } from "@/lib/cloud/store";
 import { requestShapeLogin } from "@/features/agent/workbench/ui/login-prompt-dialog";
+import { loginGitHub, logoutGitHub, useGitHubAuth } from "@/lib/github/store";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
 import { commands } from "@/lib/backend";
 
 function tierLabel(tier: string) {
     return tier.charAt(0).toUpperCase() + tier.slice(1);
+}
+
+export function GitHubAccountSection() {
+    const github = useGitHubAuth();
+    const [signingOut, setSigningOut] = useState(false);
+    const name = github.username?.trim() || "GitHub";
+
+    return (
+        <SettingSection id="settings-github" title="GitHub">
+            <SettingCard>
+                <SettingRow
+                    title={github.loggedIn ? name : "GitHub"}
+                    description={
+                        github.error
+                            ? github.error
+                            : github.loggedIn
+                                ? "Signed in. Used for pull requests, pushes, and the GitHub menu."
+                                : "Sign in to open pull requests and push from Shape."
+                    }
+                >
+                    {github.loggedIn ? (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={SETTING_CONTROL_BTN}
+                            disabled={signingOut}
+                            onClick={() => {
+                                setSigningOut(true);
+                                void logoutGitHub(github.username ?? undefined).finally(() => setSigningOut(false));
+                            }}
+                        >
+                            {signingOut ? "Signing out…" : "Sign out"}
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={SETTING_CONTROL_BTN}
+                            disabled={github.isLoggingIn || github.isLoading}
+                            onClick={() => void loginGitHub()}
+                        >
+                            {github.isLoggingIn ? "Waiting…" : "Sign in"}
+                        </Button>
+                    )}
+                </SettingRow>
+            </SettingCard>
+        </SettingSection>
+    );
 }
 
 export function AccountSettingsPanel() {
@@ -87,6 +136,7 @@ export function AccountSettingsPanel() {
 
     if (!auth.loggedIn) {
         return (
+            <>
             <SettingSection id="settings-account" title="Profile">
                 <SettingCard>
                 <div className="px-3.5 py-3">
@@ -107,6 +157,8 @@ export function AccountSettingsPanel() {
                 </div>
                 </SettingCard>
             </SettingSection>
+            <GitHubAccountSection />
+            </>
         );
     }
 
@@ -200,6 +252,7 @@ export function AccountSettingsPanel() {
                     </Button>
                 </SettingRow>
             </SettingSection>
+            <GitHubAccountSection />
         </>
     );
 }

@@ -1667,9 +1667,7 @@ html[data-chrome="macos"] [data-chrome-leading="true"] {
 /* Fade only after overflow is measured. Short labels stay solid. */
 .truncate.is-overflowing,
 .t-swap--block .t-swap__layer.is-overflowing,
-.t-composer-hint__text.is-overflowing,
-.ui-progressc__title.is-overflowing,
-.ui-progressc__label.is-overflowing {
+.t-composer-hint__text.is-overflowing {
   text-overflow: clip;
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.25rem), transparent);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.25rem), transparent);

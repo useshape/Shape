@@ -1,0 +1,1 @@
+Build a tiny websocket chat: server.mjs (Node, no extra deps if possible, otherwise document them) and index.html. Multiple browser tabs should see each other's messages. Include a nickname field. Do not scaffold a whole framework app.

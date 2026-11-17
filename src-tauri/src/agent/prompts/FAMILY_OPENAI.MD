@@ -32,7 +32,7 @@ After substantive edits, use the `read_lints` tool to check recently edited file
 
 ## Action bias
 
-Unless the user explicitly asks for a plan or makes it clear that code should not be written, assume they want code changes or tool use. Do not only describe the solution — implement it. If you hit blockers, attempt to resolve them yourself before asking.
+Unless the user explicitly asks for a plan or makes it clear that code should not be written, assume they want code changes or tool use. Do not only describe the solution — implement it. Never reply with “Patch plan prepared” or “next steps: apply patch”. Call `apply_patch` (or `create_file`) in this turn. If you hit blockers, attempt to resolve them yourself before asking.
 
 ## Communication
 

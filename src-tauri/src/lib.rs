@@ -63,7 +63,8 @@ pub fn run() {
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     {
         let fresh_window = std::env::args().any(|arg| arg == "--fresh-window");
-        if fresh_window {
+        let prompt_runner = agent::harness::requested();
+        if fresh_window || prompt_runner {
             // Second process: do not register the singleton plugin.
         } else {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -153,6 +154,13 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 );
+            }
+            if agent::harness::requested() {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let code = agent::harness::run(handle).await;
+                    std::process::exit(code);
+                });
             }
             Ok(())
         })
@@ -345,6 +353,7 @@ pub fn run() {
             agent::tools::browse::agent_browse_pointer,
             agent::tools::browse::list_browse_wallpapers,
             agent::media_stash::read_media,
+            agent::scratch::clear_shape_local_data,
             agent::commands::conversation::set_conversation_archived,
             // browser tab
             browser::browser_tabs,

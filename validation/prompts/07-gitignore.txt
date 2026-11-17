@@ -1,0 +1,1 @@
+Create a .gitignore for a Node and Python repo covering node_modules, venv, dist, and .env.

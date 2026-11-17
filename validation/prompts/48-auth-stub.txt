@@ -1,0 +1,1 @@
+Implement auth.py: hash_password + verify with a salt, timing-safe compare. Never store plaintext. Tests for wrong password, mutated hash, and two hashes of the same password being different.

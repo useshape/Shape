@@ -11,7 +11,6 @@ import { listen } from "@tauri-apps/api/event";
 import { Icon } from "@/components/ui/icon";
 
 import { cn } from "@/lib/utils";
-import { providerIcon } from "@/lib/ui/provider-icon";
 import { GeneratingIndicator } from "@/features/chat/ui/blocks/generating";
 import { ReadGroup } from "@/features/chat/ui/blocks/workflow";
 import {
@@ -55,11 +54,8 @@ function Card({ card }: { card: SubagentCard }) {
             className="flex cursor-pointer flex-col gap-1 squircle-2xl bg-surface-3 p-2.5 text-left"
         >
             <div className="flex items-center gap-2">
-                <span className="flex size-4 shrink-0 items-center justify-center">
-                    {providerIcon(card.model || "auto", 14)}
-                </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
-                    {card.title}
+                    {card.title.length > 40 ? "Thread" : card.title}
                 </span>
                 {card.status === "done" ? (
                     <Icon icon={CheckmarkCircle20Filled} className={cn("shrink-0", statusTone(card.status))} />

@@ -29,4 +29,4 @@ After substantive edits, call `read_lints` on changed files (or fix diagnostics 
 
 ## Action
 
-Implement with tools. Do not end after proposing code in chat unless the user asked for explanation only. Do not stop early because a task “seems large” — keep going until the request is solved or you are blocked on information only the user has. A failed command is not a reason to finish; read the error and retry.
+Implement with tools. Do not end after proposing code in chat unless the user asked for explanation only. Do not stop early because a task “seems large” — keep going until the request is solved or you are blocked on information only the user has. Never reply with “Patch plan prepared” or a summary of files you would write — create or edit them. A failed command is not a reason to finish; read the error and retry.

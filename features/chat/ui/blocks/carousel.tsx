@@ -5,7 +5,7 @@ import { ChevronUp20Regular } from "@fluentui/react-icons/headless/svg/chevron-u
 
 
 import React, { useCallback, useEffect, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { mediaSrc } from "@/lib/ui/media-src";
 import { Icon } from "@/components/ui/icon";
 
 import { Button } from "@/components/ui/button";
@@ -69,7 +69,7 @@ export function DesignPreviewCarousel({
 
     if (!item) return null;
 
-    const src = convertFileSrc(item.path);
+    const src = mediaSrc(item.path);
     const html = isHtmlPreview(item);
     const isSelected = selectedId === item.id;
     const canSelect = !!onSelect && !locked;

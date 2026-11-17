@@ -1,0 +1,1 @@
+locks.py can deadlock if left() and right() run together. Fix it (one lock order, or a single lock), then write a test that hammers both functions from many threads and finishes in under 2 seconds. Run it.

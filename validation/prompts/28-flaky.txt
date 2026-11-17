@@ -1,0 +1,1 @@
+test_order.py is order-dependent and fails if tests shuffle. Make the tests isolated and re-run them. Keep pytest style.

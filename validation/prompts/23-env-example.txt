@@ -1,0 +1,1 @@
+Create .env.example with APP_NAME, PORT, and DATABASE_URL placeholders. No real secrets.

@@ -1,0 +1,1 @@
+Create api.mjs: in-memory list of 95 items, GET /items?page&pageSize with Link-style metadata {items, page, pageSize, total, hasNext}. Reject page < 1. Include a small test script that hits it with Node http and then exits.

@@ -2,7 +2,7 @@
 
 import { useLayoutEffect } from "react";
 
-const SELECTOR = ".truncate, .t-composer-hint__text, .ui-progressc__title, .ui-progressc__label, .t-swap__layer";
+const SELECTOR = ".truncate, .t-composer-hint__text, .t-swap__layer";
 
 let measurer: CanvasRenderingContext2D | null | undefined;
 

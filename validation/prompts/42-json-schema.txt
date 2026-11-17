@@ -1,0 +1,1 @@
+Write validate.py that checks a user object against a schema: email required, age integer 0-130, roles array of strings. Return a list of path+message errors, not a boolean. Tests for missing email, bad age, extra fields allowed.

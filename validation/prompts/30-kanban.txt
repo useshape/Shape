@@ -1,0 +1,1 @@
+Build a local kanban board in index.html: three columns (Todo, Doing, Done), add card, drag cards between columns, persist to localStorage. No build step. Keyboard: Enter adds, Escape cancels edit.

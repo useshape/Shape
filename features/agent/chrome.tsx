@@ -13,6 +13,8 @@ import { useShapeAuth } from "@/lib/cloud/store";
 import { dashboardUrl } from "@/lib/cloud/api";
 import { commands } from "@/lib/backend/commands";
 import { WindowControlsSpacer } from "@/features/agent/workbench/titlebar/ui/window-controls";
+import { useChromeKind } from "@/lib/ui/chrome-platform";
+import { AccountMenuButton } from "@/features/agent/sidebar/menu";
 
 export const AGENT_TABS_SLOT = "shape-agent-tabs";
 export const AGENT_CHROME_ACTIONS_SLOT = "shape-agent-chrome-actions";
@@ -94,6 +96,7 @@ export function AgentChrome({
     onSidebarHoverStart?: () => void;
     onSidebarHoverEnd?: () => void;
 }) {
+    const macos = useChromeKind() === "macos";
     return (
         <div
             className="relative z-30 flex h-titlebar shrink-0 items-stretch overflow-hidden bg-transparent"
@@ -116,7 +119,7 @@ export function AgentChrome({
                 className="relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden pl-2"
             />
 
-            <div className="relative z-10 flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
+            <div className="relative z-10 ml-auto flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
                 <div id={AGENT_CHROME_ACTIONS_SLOT} className="flex items-center gap-0.5" />
                 {showRightToggle ? (
                     <Btn
@@ -129,6 +132,7 @@ export function AgentChrome({
                     </Btn>
                 ) : null}
                 {padWindowControls ? <WindowControlsSpacer /> : null}
+                {macos ? <AccountMenuButton align="end" /> : null}
             </div>
         </div>
     );

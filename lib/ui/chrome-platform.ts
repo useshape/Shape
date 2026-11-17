@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-export type ChromeKind = "windows" | "macos" | "linux";
+export type ChromeKind = "windows" | "macos";
 
 const STORAGE_KEY = "shape:chrome-preview";
 const QUERY_KEY = "shape-chrome";
@@ -14,7 +14,6 @@ function parseChrome(value: string | null | undefined): ChromeKind | null {
     const normalized = value?.trim().toLowerCase();
     if (normalized === "macos" || normalized === "mac" || normalized === "darwin") return "macos";
     if (normalized === "windows" || normalized === "win") return "windows";
-    if (normalized === "linux") return "linux";
     return null;
 }
 
@@ -23,7 +22,6 @@ export function nativeChromeKind(): ChromeKind {
     const platform = (navigator.platform || "").toLowerCase();
     const userAgent = (navigator.userAgent || "").toLowerCase();
     if (platform.includes("mac") || userAgent.includes("mac os")) return "macos";
-    if (platform.includes("linux") || userAgent.includes("linux")) return "linux";
     return "windows";
 }
 

@@ -41,12 +41,9 @@ export function getActiveSubagent(): SubagentCard | null {
 }
 
 export function subagentDisplayTitle(card: { title?: string; task?: string }): string {
-    const title = card.title?.trim() || "";
-    if (title && !/^subagent$/i.test(title)) return title;
-    const task = (card.task || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    if (!task) return "Thread";
-    const line = task.split(/[.!?]/)[0]?.trim() || task;
-    return line.length > 48 ? `${line.slice(0, 48).trimEnd()}…` : line;
+    const title = (card.title || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (!title || /^subagent$/i.test(title) || title.length > 40) return "Thread";
+    return title;
 }
 
 export function openSubagent(id: string) {
@@ -366,11 +363,8 @@ export function syncSubagentsFromChunks(
             title: chunk.query || chunk.file || existing?.title || "Subagent",
             agent: chunk.query,
             model: chunk.command,
-            activity:
-                (chunk.type === "subagent" ? existing?.activity : chunk.content)
-                || existing?.activity
-                || "Working…",
-            task: chunk.type === "subagent_ref" ? chunk.content : existing?.task,
+            activity: existing?.activity || "Working…",
+            task: existing?.task,
             transcript: chunk.type === "subagent" ? chunk.content : existing?.transcript,
             parentId: parentConversationId ?? existing?.parentId,
             status,

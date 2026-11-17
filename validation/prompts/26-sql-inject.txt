@@ -1,0 +1,1 @@
+query.py builds SQL with string formatting. Fix the injection without breaking callers. Add a short comment at the call site showing the safe pattern. Do not add a web framework.
