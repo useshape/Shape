@@ -70,14 +70,11 @@ pub fn apply_unconfident(
 ) -> Packs {
     if let Some(reply) = reply.filter(|r| is_trusted_source(&r.source)) {
         packs = packs.union(reply.packs);
-        if capability.is_read_only() {
-            packs.workspace = false;
-            packs.terminal = false;
-        }
-        return packs.clamp(locks.browse_enabled, locks.shell_enabled);
     }
-    packs.workspace = false;
-    packs.terminal = false;
+    if capability.is_read_only() {
+        packs.workspace = false;
+        packs.terminal = false;
+    }
     packs.clamp(locks.browse_enabled, locks.shell_enabled)
 }
 
@@ -183,11 +180,12 @@ mod tests {
     }
 
     #[test]
-    fn missing_jev_keeps_unconfident_code_small() {
+    fn missing_jev_keeps_kernel_packs() {
         let mut kernel = Packs::default();
         kernel.web = true;
+        kernel.workspace = true;
         let out = apply_unconfident(kernel, Capability::Code, Locks::default(), None);
-        assert!(!out.workspace);
+        assert!(out.workspace);
         assert!(!out.terminal);
         assert!(out.web);
     }

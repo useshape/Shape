@@ -9,7 +9,6 @@ mod files;
 mod git;
 mod host;
 mod meta;
-mod persona;
 mod subagent;
 mod terminal;
 
@@ -141,18 +140,15 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
     if is_read_only_mode(ctx.mode)
         && ((name.starts_with("mcp_") && name != "mcp_search")
             || name == "plugin_run"
-            || name == "generate_svg"
-            || name == "generate_image"
-            || name == "generate_audio"
             || name == "edit_image"
             || name == "save_media"
             || name == "re_extract")
     {
-        return blocked_outcome(name, "This tool is not available in Ask or Plan mode.");
+        return blocked_outcome(name, "That tool is not on this turn.");
     }
 
     let policy = ctx.agent_state.turn_policy_for(ctx.conversation_id.as_deref());
-    if !policy.browse_enabled && matches!(name, "browse" | "screenshot_page" | "inspect_runtime" | "design_review") {
+    if !policy.browse_enabled && matches!(name, "browse" | "screenshot_page" | "inspect_runtime") {
         return blocked_outcome(name, "Browsing is turned off in settings.");
     }
 
@@ -239,12 +235,12 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "update_todos" => meta::tool_update_todos(&args, ctx),
         "screenshot_page" => meta::tool_screenshot_page(&args, ctx).await,
         "browse" => crate::agent::tools::browse::tool_browse(&args, ctx).await,
-        "design_review" => persona::tool_design_review(&args, ctx).await,
+        "design_review" => error_outcome("design_review", "That tool is not available."),
         "adversarial_review" => meta::tool_adversarial_review(&args, ctx).await,
         "mcp_search" => meta::tool_mcp_search(&args, ctx).await,
         "mcp_call" => meta::tool_mcp_call_named(&args, ctx).await,
         "inspect_runtime" => meta::tool_inspect_runtime(&args, ctx).await,
-        "ask_user" => meta::tool_ask_user(&args, ctx).await,
+        "ask_user" => error_outcome("ask_user", "Ask in the chat instead of using a questions card."),
         "schedule_followup" => meta::tool_schedule_followup(&args, ctx),
         "generate_svg" => crate::agent::tools::generate::tool_generate_svg(&args, ctx).await,
         "generate_image" => crate::agent::tools::generate::tool_generate_image(&args, ctx).await,

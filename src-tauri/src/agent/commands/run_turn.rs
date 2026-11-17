@@ -66,11 +66,13 @@ Plain prose; bullets only if listing distinct items. No section headers, no soft
 const NUDGE_CONTINUE_OR_FINISH: &str = "Continue the task. If you still need to read or edit files, \
 call the appropriate tools now. If the work is done, reply to the user in plain prose (finish is optional).";
 
+const NUDGE_IMPLEMENT_THE_PATCH: &str = "You described a patch or plan. That is not the work. \
+Call create_file, apply_patch, or edit_file now and implement what the user asked for. \
+Do not call save_plan. Do not reply with 'Patch plan prepared'.";
+
 const NUDGE_REASONING_ONLY: &str = "You thought but did not call any tools or reply to the user. \
 Call the tools you need now (read/search/etc), or give a short answer. Do not only think again.";
 
-const NUDGE_PLAN_REASONING_ONLY: &str = "You thought but did not research or save a plan. \
-Use read/search tools now, then call save_plan with content plus a todos array. Do not outline in chat first.";
 
 const NUDGE_ASK_REASONING_ONLY: &str = "You thought but did not call tools or answer. \
 Read or search what you need, then answer the user. Do not only think again.";
@@ -284,6 +286,14 @@ fn looks_like_incomplete_work(content: &str) -> bool {
         return false;
     }
     true
+}
+
+fn looks_like_patch_plan_stall(content: &str) -> bool {
+    let t = content.to_ascii_lowercase();
+    t.contains("patch plan prepared")
+        || t.contains("next steps: apply patch")
+        || t.contains("apply patch with code files")
+        || (t.contains("patch plan") && t.contains("next steps"))
 }
 
 /// True when `incoming` is the same user-facing prose we already showed.
@@ -554,6 +564,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
     // Line ranges already returned for each file this turn.
     let mut read_coverage: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
     let mut wait_calls = 0usize;
+    let mut web_lookups = 0usize;
     let mut final_full_response = String::new();
     let mut finished_signal: Option<String> = None;
     let mut ended_with_text_completion = false;
@@ -815,9 +826,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 && loop_count < config.max_loops
             {
                 reasoning_only_nudged = true;
-                let nudge = if config.mode.eq_ignore_ascii_case("plan") {
-                    NUDGE_PLAN_REASONING_ONLY
-                } else if config.mode.eq_ignore_ascii_case("ask") {
+                let nudge = if config.mode.eq_ignore_ascii_case("ask") {
                     NUDGE_ASK_REASONING_ONLY
                 } else {
                     NUDGE_REASONING_ONLY
@@ -883,11 +892,11 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             // Models often narrate the next tool step as prose ("Let me try the edit
             // again") and stop. Nudge once so the turn does not die mid-task.
             if !incomplete_text_nudged
-                && loop_count > 1
                 && !config.cancel.is_cancelled()
                 && (
-                    looks_like_incomplete_work(content)
+                    (loop_count > 1 && looks_like_incomplete_work(content))
                     || (last_round_failed && content.chars().count() < 280)
+                    || (!wrote_files && looks_like_patch_plan_stall(content))
                 )
             {
                 incomplete_text_nudged = true;
@@ -899,6 +908,8 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     "role": "user",
                     "content": if last_round_failed {
                         "The last command failed. Do not stop. Read the error, adjust, and continue the task (or explain the blocker if you are genuinely stuck)."
+                    } else if looks_like_patch_plan_stall(content) {
+                        NUDGE_IMPLEMENT_THE_PATCH
                     } else {
                         NUDGE_CONTINUE_OR_FINISH
                     },
@@ -925,18 +936,20 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 break 'outer;
             }
 
-            if tool_calls[0].name != "decide" {
-                streaming::emit_chat_status(
-                    &config.app_handle,
-                    json!({ "phase": "tool", "tool": tool_calls[0].name, "conversationId": conversation_id }),
-                );
-            }
+            // Streaming already announced the first tool while the call was parsed.
 
             // The duplicate-call / denied-path guards still apply per call.
             let mut plugin_search_in_batch = false;
+            let mut web_budget = MAX_WEB_LOOKUPS_PER_TURN.saturating_sub(web_lookups);
             let blocked: Vec<Option<String>> = tool_calls
                 .iter()
                 .map(|call| {
+                    if is_web_lookup(&call.name) {
+                        if web_budget == 0 {
+                            return Some(ENOUGH_RESEARCH.to_string());
+                        }
+                        web_budget -= 1;
+                    }
                     if call.name == "plugin_list" || call.name == "plugin_tools" {
                         return Some(
                             "Skip catalog dumps. plugin_search once, then plugin_run the recommended slug with the args it listed."
@@ -968,6 +981,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     }
                 })
                 .collect();
+            web_lookups = MAX_WEB_LOOKUPS_PER_TURN.saturating_sub(web_budget);
             if plugin_search_in_batch {
                 plugin_search_used = true;
             }
@@ -1060,9 +1074,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
 
             // Prune only as overflow protection. Rewriting earlier tool results
             // busts the cached prompt prefix (Claude Code uses cache_edits instead).
-            if super::messages::clear_old_tool_results(config.api_messages) {
-                read_coverage.clear();
-            }
+            prune_turn_api_history(config.api_messages, &mut read_coverage);
 
             // Skip explore counting when every call was a duplicate or denied retry.
             if !round_had_real_explore {
@@ -1110,21 +1122,17 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 break 'outer;
             }
 
-            if call.name != "decide" {
-                let mut tool_status = if call.name == "render_design_previews" {
-                    json!({
-                        "phase": "tool",
-                        "tool": call.name,
-                        "label": "Creating designs",
-                    })
-                } else {
-                    json!({ "phase": "tool", "tool": call.name })
-                };
-                if let Some(obj) = tool_status.as_object_mut() {
-                    obj.entry("conversationId")
-                        .or_insert(json!(conversation_id));
+            if is_web_lookup(&call.name) {
+                if web_lookups >= MAX_WEB_LOOKUPS_PER_TURN {
+                    push_tool_result(
+                        config.api_messages,
+                        &call.id,
+                        &call.name,
+                        ENOUGH_RESEARCH,
+                    );
+                    continue;
                 }
-                streaming::emit_chat_status(&config.app_handle, tool_status);
+                web_lookups += 1;
             }
 
             if call.name == "read_file" {
@@ -1467,6 +1475,9 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         last_round_failed = round_failed;
 
         if finished_signal.is_some() {
+            let stall = finished_signal
+                .as_deref()
+                .is_some_and(looks_like_patch_plan_stall);
             if last_round_failed && !incomplete_text_nudged && !config.cancel.is_cancelled() {
                 incomplete_text_nudged = true;
                 finished_signal = None;
@@ -1474,6 +1485,16 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 config.api_messages.push(json!({
                     "role": "user",
                     "content": "The last command failed. Do not finish yet. Recover from the error or explain the blocker, then continue the task.",
+                }));
+                continue;
+            }
+            if stall && !wrote_files && !incomplete_text_nudged && !config.cancel.is_cancelled() {
+                incomplete_text_nudged = true;
+                finished_signal = None;
+                logging::info("chat", "finish with a patch plan and no files — nudging to implement");
+                config.api_messages.push(json!({
+                    "role": "user",
+                    "content": NUDGE_IMPLEMENT_THE_PATCH,
                 }));
                 continue;
             }
@@ -1517,9 +1538,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
             }
         }
 
-        if super::messages::clear_old_tool_results(config.api_messages) {
-            read_coverage.clear();
-        }
+        prune_turn_api_history(config.api_messages, &mut read_coverage);
     }
 
     if let Some(ref summary) = finished_signal {
@@ -1571,6 +1590,23 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
         interrupt_error,
         wrote_files,
     })
+}
+
+const MAX_WEB_LOOKUPS_PER_TURN: usize = 6;
+const ENOUGH_RESEARCH: &str = "Enough research this turn. Implement the files the user asked for now. Do not search or visit more pages.";
+
+fn is_web_lookup(name: &str) -> bool {
+    name == "web_search" || name == "visit_url"
+}
+
+fn prune_turn_api_history(
+    api_messages: &mut Vec<Value>,
+    read_coverage: &mut HashMap<String, Vec<(usize, usize)>>,
+) {
+    if super::messages::clear_old_tool_results(api_messages) {
+        read_coverage.clear();
+    }
+    super::messages::compact_old_tool_call_args(api_messages);
 }
 
 fn push_tool_result(api_messages: &mut Vec<Value>, id: &str, name: &str, content: &str) {
@@ -1855,6 +1891,13 @@ This IDE has a few modes, and design work lives in Visual mode.\n\
     #[test]
     fn trailing_let_me_is_incomplete() {
         assert!(looks_like_incomplete_work("Found the bug. Let me try the edit again"));
+    }
+
+    #[test]
+    fn patch_plan_prose_is_a_stall() {
+        let body = "Patch plan prepared: add a small Node.js server with JSON-file backed data store and a minimal frontend. Next steps: apply patch with code files.";
+        assert!(looks_like_patch_plan_stall(body));
+        assert!(!looks_like_patch_plan_stall("map: show aircraft heading"));
     }
 
     #[test]

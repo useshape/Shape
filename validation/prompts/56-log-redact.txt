@@ -1,0 +1,1 @@
+Write redact.py: redact_log(line) masks emails, AWS access keys matching AKIA[0-9A-Z]{16}, and Bearer tokens, leaving the rest of the line. Include tests with mixed lines. Do not over-redact ordinary words.

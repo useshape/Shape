@@ -1191,11 +1191,18 @@ pub async fn complete_chat_messages(
     }
 
     let model = rewrite_model_for_provider(model, &proxy_ctx.provider)?;
-    let body = json!({
+    let mut body = json!({
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
     });
+    if matches!(
+        proxy_ctx.feature.as_str(),
+        "commit" | "title" | "file-edit" | "caption" | "review" | "goldfish"
+    ) {
+        body["reasoning"] = json!({ "enabled": false, "exclude": true });
+        body["tool_choice"] = json!("none");
+    }
 
     let send_fut = shape_proxy_request(client, api_key, proxy_ctx)
         .json(&body)
@@ -1275,9 +1282,10 @@ pub async fn complete_chat_with_max_tokens(
     });
     if matches!(
         proxy_ctx.feature.as_str(),
-        "commit" | "title" | "file-edit" | "caption" | "review"
+        "commit" | "title" | "file-edit" | "caption" | "review" | "goldfish"
     ) {
         body["reasoning"] = json!({ "enabled": false, "exclude": true });
+        body["tool_choice"] = json!("none");
     }
 
     let resp = shape_proxy_request(client, api_key, proxy_ctx)

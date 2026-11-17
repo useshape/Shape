@@ -22,7 +22,7 @@ export function PluginConnectCard({
     return (
         <div
             data-plugin-connect=""
-            className="my-1.5 flex w-full max-w-[25rem] items-center gap-3 squircle-2xl border border-border/10 bg-surface-3 px-3 py-2.5"
+            className="flex w-full max-w-[25rem] items-center gap-3 squircle-2xl border border-border bg-transparent px-3 py-2.5"
         >
             <PluginLogo toolkit={toolkit} name={label} logo={logo} size={32} />
             <div className="min-w-0 flex-1">

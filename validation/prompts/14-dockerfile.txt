@@ -1,0 +1,1 @@
+Add a Dockerfile that runs a Python 3.12 app from app.py on port 8000.

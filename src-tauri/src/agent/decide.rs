@@ -140,7 +140,7 @@ pub fn decide(
 ) -> TurnDecision {
     let text = message.trim().to_ascii_lowercase();
     // Plan is a tool, not a mode. A stored Plan capability must not lock the turn.
-    let sticky = sticky.filter(|cap| !matches!(cap, Capability::Plan));
+    let sticky = sticky.filter(|cap| matches!(cap, Capability::Code));
     let hint = hint.filter(|cap| !matches!(cap, Capability::Plan));
     if is_internal_continuation(&text) {
         if let Some(stuck) = sticky {
@@ -159,7 +159,6 @@ pub fn decide(
     }
     let change = !is_internal_continuation(&text) && has_change_verb(&text);
     let go_ahead = is_go_ahead(&text);
-    let question = is_question(&text);
     let browse = has_browse_signal(&text);
     let git = has_git_signal(&text);
     let media = has_media_signal(&text);
@@ -168,20 +167,13 @@ pub fn decide(
     let plugins = has_plugin_signal(&text);
     let web = has_web_signal(&text);
 
+    // Read-only is the composer permission, not a guess from wording.
     let (capability, confident) = if hint == Some(Capability::Ask) && !go_ahead {
         (Capability::Ask, true)
-    } else if change {
+    } else if change || go_ahead {
         (Capability::Code, true)
-    } else if question {
-        (Capability::Ask, true)
     } else if let Some(stuck) = sticky {
-        if is_short_continuation(&text) || !text.is_empty() {
-            (stuck, true)
-        } else {
-            (stuck, true)
-        }
-    } else if text.chars().count() <= 24 {
-        (Capability::Ask, true)
+        (stuck, true)
     } else {
         (Capability::Code, false)
     };
@@ -195,21 +187,17 @@ pub fn decide(
     packs.plugins = plugins;
     packs.web = web || browse;
     match capability {
-        Capability::Ask => {
-            packs.workspace = false;
-            packs.terminal = false;
-        }
-        Capability::Plan => {
+        Capability::Ask | Capability::Plan => {
             packs.workspace = false;
             packs.terminal = false;
         }
         Capability::Code if confident => {
             packs.workspace = true;
-            packs.terminal = terminal || change;
+            packs.terminal = terminal || change || media;
         }
         Capability::Code => {
             packs.workspace = false;
-            packs.terminal = false;
+            packs.terminal = terminal || media;
         }
     }
     packs = packs.clamp(locks.browse_enabled, locks.shell_enabled);
@@ -218,12 +206,12 @@ pub fn decide(
         Capability::Code if confident => ContextNeed {
             repo_map: true,
             diagnostics: true,
-            git_status: true,
+            git_status: git,
         },
         Capability::Plan => ContextNeed {
             repo_map: true,
             diagnostics: false,
-            git_status: true,
+            git_status: git,
         },
         Capability::Ask => ContextNeed {
             repo_map: text.contains("file") || text.contains("function") || text.contains("code") || text.contains("repo"),
@@ -245,7 +233,6 @@ pub fn decide(
         push_skill(&mut skills, "review");
     }
     match capability {
-        Capability::Plan => push_skill(&mut skills, "plan"),
         Capability::Code if confident => {
             if packs.terminal {
                 push_skill(&mut skills, "terminal");
@@ -308,16 +295,6 @@ fn is_go_ahead(text: &str) -> bool {
     WORDS.iter().any(|w| text.contains(w))
 }
 
-fn is_question(text: &str) -> bool {
-    if text.contains('?') {
-        return true;
-    }
-    const STARTS: &[&str] = &[
-        "what ", "why ", "explain", "how does", "how do", "who ", "when ", "where ", "which ",
-    ];
-    STARTS.iter().any(|s| text.starts_with(s))
-}
-
 fn has_web_signal(text: &str) -> bool {
     if text.contains("http://") || text.contains("https://") {
         return true;
@@ -358,21 +335,38 @@ fn has_browse_signal(text: &str) -> bool {
         || text.contains(".app")
 }
 
+fn has_word(text: &str, words: &[&str]) -> bool {
+    text.split(|c: char| !c.is_ascii_alphabetic())
+        .any(|part| words.iter().any(|word| part == *word))
+}
+
 fn has_git_signal(text: &str) -> bool {
-    text.contains("git ")
-        || text.contains("commit")
-        || text.contains("branch")
+    has_word(text, &["git", "commit", "commits", "branch", "diff", "github"])
         || text.contains("pull request")
         || text.contains("merge")
 }
 
 fn has_media_signal(text: &str) -> bool {
-    text.contains("svg")
-        || text.contains("icon")
-        || text.contains("logo")
-        || text.contains("generate an image")
-        || text.contains("generate image")
-        || text.contains("audio")
+    has_word(
+        text,
+        &[
+            "svg",
+            "icon",
+            "logo",
+            "image",
+            "images",
+            "picture",
+            "photo",
+            "audio",
+            "graph",
+            "chart",
+            "plot",
+            "diagram",
+            "matplotlib",
+            "mermaid",
+            "illustration",
+        ],
+    )
 }
 
 fn has_reverse_signal(text: &str) -> bool {
@@ -390,8 +384,8 @@ fn has_reverse_signal(text: &str) -> bool {
 
 fn has_terminal_signal(text: &str) -> bool {
     const WORDS: &[&str] = &[
-        "npm", "pnpm", "yarn", "bun ", "cargo", "pytest", "pip ", "compile", "run the tests",
-        "run tests", "install",
+        "npm", "pnpm", "yarn", "bun ", "cargo", "pytest", "pip ", "python", "compile",
+        "run the tests", "run tests", "install",
     ];
     WORDS.iter().any(|w| text.contains(w))
 }
@@ -399,6 +393,38 @@ fn has_terminal_signal(text: &str) -> bool {
 fn has_plugin_signal(text: &str) -> bool {
     const WORDS: &[&str] = &["slack", "linear", "notion", "discord", "plugin"];
     WORDS.iter().any(|w| text.contains(w))
+}
+
+/// True only when they asked for a plan *instead of* the implementation.
+/// "Research then build" is not a plan request.
+pub fn wants_plan_document(message: &str) -> bool {
+    let t = message.trim().to_ascii_lowercase();
+    let no_code = t.contains("don't implement")
+        || t.contains("do not implement")
+        || t.contains("dont implement")
+        || t.contains("without implementing")
+        || t.contains("don't write code")
+        || t.contains("do not write code")
+        || t.contains("just a plan")
+        || t.contains("plan only")
+        || t.contains("only a plan");
+    if no_code {
+        return true;
+    }
+    let plan_ask = t.contains("write a plan")
+        || t.contains("make a plan")
+        || t.contains("save a plan")
+        || t.contains("draft a plan");
+    if !plan_ask {
+        return false;
+    }
+    let also_build = t.contains("then implement")
+        || t.contains("then build")
+        || t.contains("then write")
+        || t.contains("and implement")
+        || t.contains("and build")
+        || t.contains("then code");
+    plan_ask && !also_build
 }
 
 fn is_short_continuation(text: &str) -> bool {
@@ -416,7 +442,22 @@ mod tests {
     }
 
     #[test]
-    fn questions_stay_read_only() {
+    fn research_then_build_is_not_a_plan_request() {
+        let itch = "Build a basic but fully functional developer marketplace inspired by itch.io.\nBefore coding, research itch.io properly.";
+        assert!(!wants_plan_document(itch));
+        let d = decide(itch, None, locks(), None);
+        assert_eq!(d.capability, Capability::Code);
+        assert!(!d.skills.contains(&"plan"));
+        assert!(wants_plan_document(
+            "Make a plan for auth. Don't implement yet."
+        ));
+        assert!(!wants_plan_document(
+            "Write a plan then implement the marketplace"
+        ));
+    }
+
+    #[test]
+    fn questions_are_not_forced_read_only() {
         let samples = [
             "Why does the save button stay disabled?",
             "What does send_chat_message do?",
@@ -425,20 +466,23 @@ mod tests {
         ];
         for sample in samples {
             let d = decide(sample, None, locks(), None);
-            assert_eq!(d.capability, Capability::Ask, "{sample}");
-            assert!(d.confident, "{sample}");
-            assert!(!d.packs.workspace, "{sample}");
-            assert!(!d.packs.terminal, "{sample}");
+            assert_eq!(d.capability, Capability::Code, "{sample}");
             assert!(!d.packs.web, "{sample}");
         }
+        let asked = decide(
+            "Why does the save button stay disabled?",
+            None,
+            locks(),
+            Some(Capability::Ask),
+        );
+        assert_eq!(asked.capability, Capability::Ask);
+        assert!(!asked.packs.workspace);
     }
 
     #[test]
     fn identity_questions_do_not_load_web() {
         let d = decide("what model are you", None, locks(), None);
-        assert_eq!(d.capability, Capability::Ask);
         assert!(!d.packs.web);
-        assert!(!d.packs.workspace);
         assert!(!d.packs.browse);
         assert!(!d.packs.git);
         assert!(!d.packs.media);
@@ -452,7 +496,6 @@ mod tests {
             locks(),
             None,
         );
-        assert_eq!(d.capability, Capability::Ask);
         assert!(d.packs.web);
     }
 
@@ -494,11 +537,10 @@ mod tests {
     }
 
     #[test]
-    fn subagent_update_keeps_ask() {
+    fn subagent_update_keeps_code() {
         let body = "<subagent_update>\nThread finished. Create a summary of the files it touched.\n</subagent_update>";
-        let d = decide(body, Some(Capability::Ask), locks(), None);
-        assert_eq!(d.capability, Capability::Ask);
-        assert!(!d.packs.workspace);
+        let d = decide(body, Some(Capability::Code), locks(), None);
+        assert_eq!(d.capability, Capability::Code);
     }
 
     #[test]
@@ -523,7 +565,6 @@ mod tests {
         assert!(d.packs.reverse);
     }
 
-    #[test]
     #[test]
     fn site_research_in_ask_keeps_the_browser() {
         let d = decide(
@@ -588,9 +629,17 @@ mod tests {
     }
 
     #[test]
-    fn legacy_code_hint_does_not_override_a_question() {
-        let d = decide("Why is the button disabled?", None, locks(), Some(Capability::Code));
-        assert_eq!(d.capability, Capability::Ask);
+    fn python_graph_gets_media_and_terminal() {
+        let d = decide(
+            "can you quickly just use a python library to generate a graph and send it here",
+            None,
+            locks(),
+            None,
+        );
+        assert_eq!(d.capability, Capability::Code);
+        assert!(d.packs.media);
+        assert!(d.packs.terminal);
+        assert!(d.packs.workspace);
     }
 
     #[test]

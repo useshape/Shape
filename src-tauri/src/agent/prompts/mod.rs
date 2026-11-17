@@ -3,6 +3,7 @@ pub const SYSTEM_MD: &str = include_str!("SYSTEM.MD");
 pub const CHAT_MD: &str = include_str!("CHAT.MD");
 pub const TALK_MD: &str = include_str!("TALK.MD");
 pub const TALK_VOICE_MD: &str = include_str!("TALK_VOICE.MD");
+#[allow(dead_code)]
 pub const PLAN_MD: &str = include_str!("PLAN.MD");
 #[allow(dead_code)]
 pub const REVIEW_MD: &str = include_str!("REVIEW.MD");
@@ -71,10 +72,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn plan_md_stops_after_save() {
-        assert!(PLAN_MD.contains("Do not say the user wants you to continue"));
-        assert!(PLAN_MD.contains("Wait until they click **Build**"));
-        assert!(SKILL_PLAN.contains("save_plan"));
+    fn plan_skill_does_not_block_builds() {
+        assert!(SKILL_PLAN.contains("There is no plan mode"));
+        assert!(!SKILL_PLAN.to_ascii_lowercase().contains("do not implement"));
         assert!(skill_body("plan").is_some());
         assert!(skill_body("../SYSTEM.MD").is_none());
     }

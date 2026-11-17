@@ -1,0 +1,1 @@
+Add fib.py with a function that returns the first 20 Fibonacci numbers, and a __main__ that prints them.

@@ -1,6 +1,6 @@
 "use client";
 
-import "./progress-tracker.css";
+import { cn } from "@/lib/utils";
 
 export type ProgressStep = {
     id: string;
@@ -9,61 +9,36 @@ export type ProgressStep = {
     active?: boolean;
 };
 
-/** Task checklist. Steps follow the plan; they do not tick themselves. */
-export function ProgressTracker({
-    title = "Tasks",
-    steps,
-}: {
-    title?: string;
-    steps: ProgressStep[];
-}) {
-    const total = steps.length;
-    const count = steps.filter((step) => step.done).length;
-    const progress = total ? count / total : 0;
-    if (total === 0) return null;
+/** Task rows. Steps follow the plan; they do not tick themselves. */
+export function ProgressTracker({ steps }: { steps: ProgressStep[] }) {
+    if (steps.length === 0) return null;
 
     return (
-        <div className="ui-progressc" data-complete={count === total || undefined}>
-            <div className="ui-progressc__head">
-                <h3 className="ui-progressc__title">{title}</h3>
-                <span className="ui-progressc__count" aria-hidden="true">
-                    <span className="ui-progressc__digit" key={count}>{count}</span>
-                    /{total}
-                </span>
-            </div>
-            <div
-                className="ui-progressc__bar"
-                role="progressbar"
-                aria-label={title}
-                aria-valuemin={0}
-                aria-valuemax={total}
-                aria-valuenow={count}
-                aria-valuetext={`${count} of ${total} done`}
-            >
-                <span className="ui-progressc__fill" style={{ transform: `scaleX(${progress})` }}>
-                    <span className="ui-progressc__shine" key={count} />
-                </span>
-            </div>
-            <ul className="ui-progressc__list">
-                {steps.map((step, index) => (
-                    <li key={step.id} style={{ animationDelay: `${180 + index * 90}ms` }}>
-                        <div
-                            className="ui-progressc__step"
-                            data-done={step.done || undefined}
-                            data-active={step.active || undefined}
-                        >
-                            <span className="ui-progressc__check" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" aria-hidden>
-                                    <path d="M6.5 12.5l3.5 3.5 7.5-8" pathLength={1} />
-                                </svg>
-                            </span>
-                            <span className="ui-progressc__label">
-                                <span>{step.label}</span>
-                            </span>
-                        </div>
-                    </li>
-                ))}
-            </ul>
-        </div>
+        <ul className="flex flex-col">
+            {steps.map((step) => (
+                <li key={step.id} className="flex items-center gap-2.5 py-1 -mx-3">
+                    <span
+                        aria-hidden
+                        className={cn(
+                            "grid size-4 shrink-0 place-items-center squircle-lg border",
+                            step.done
+                                ? "border-accent bg-accent text-white"
+                                : step.active
+                                  ? "border-accent-text"
+                                  : "border-white/25",
+                        )}
+                    >
+                        {step.done ? (
+                            <svg viewBox="0 0 24 24" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M6.5 12.5l3.5 3.5 7.5-8" />
+                            </svg>
+                        ) : null}
+                    </span>
+                    <span className={cn("min-w-0 truncate text-sm font-regular leading-5", step.done ? "text-text-muted" : "text-text-primary")}>
+                        {step.label}
+                    </span>
+                </li>
+            ))}
+        </ul>
     );
 }

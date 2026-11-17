@@ -1,0 +1,1 @@
+Create hello.ps1 that writes Hello from PowerShell to the console.

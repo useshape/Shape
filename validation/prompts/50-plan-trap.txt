@@ -1,0 +1,1 @@
+Look at how a personal finance dashboard is usually structured, then actually implement one in this folder: income vs spend chart (canvas or svg), transaction list, add-transaction form, totals. Local only. Do not stop at a plan or a patch plan. Write the files.

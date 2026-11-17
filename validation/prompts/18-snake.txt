@@ -1,0 +1,1 @@
+Build a tiny playable snake game in snake.html using canvas. Arrow keys, score, restart.

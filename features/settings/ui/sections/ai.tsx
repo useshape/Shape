@@ -359,7 +359,7 @@ export function AiSettingsPanel({
                 <SettingCard>
                 <SettingRow
                     title="Style"
-                    description="How often Shape asks before it edits or runs a command. Safety limits stay on."
+                    description="How often the agent asks before it edits or runs a command."
                 >
                     <SettingSelect
                         value={a.autonomy}
@@ -438,7 +438,7 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Browse" description="Open pages and take screenshots when a task needs them.">
+                <SettingRow title="Browse" description="The agent can browse the web to find information.">
                     <SettingSwitch
                         checked={a.browseEnabled}
                         onChange={(on) => {
@@ -447,7 +447,7 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Network commands" description="curl and similar tools. Off blocks them. Ask waits for you.">
+                <SettingRow title="Network commands" description="The agent can use curl and similar tools to interact with the internet.">
                     <SettingSelect
                         value={a.networkCommands}
                         options={[
@@ -461,7 +461,7 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Command limit" description="Stop a one-shot command that is still running after this long.">
+                <SettingRow title="Command limit" description="Cancel a one-shot command that is running.">
                     <SettingNumberSelect
                         value={a.commandTimeoutSec}
                         options={[120, 600, 1800]}
@@ -478,7 +478,7 @@ export function AiSettingsPanel({
                 <SettingCard>
                 <SettingRow
                     title="Computer use"
-                    description="List windows and processes. Captures ask you first. Password managers stay hidden."
+                    description="Ability to screenshot and capture windows and processes."
                 >
                     <SettingSwitch
                         checked={a.computerUse}
@@ -490,7 +490,7 @@ export function AiSettingsPanel({
                 </SettingRow>
                 <SettingRow
                     title="Shell automation"
-                    description="Run installed programs and scripts. One-liners still ask. Encoded commands and secrets stay blocked."
+                    description="Ability to run installed programs and scripts."
                 >
                     <SettingSwitch
                         checked={a.shellAutomation}
@@ -504,7 +504,7 @@ export function AiSettingsPanel({
             </SettingSection>
             <SettingSection title="Commands">
                 <SettingCard>
-                <SettingRow title="Auto-run" description="Run everything is unsandboxed on Windows. Destructive git still asks.">
+                <SettingRow title="Auto-run" description="How the agent runs commands.">
                     <SettingSelect
                         value={a.autoRunMode}
                         options={[
@@ -518,7 +518,7 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Protect destructive git" description="Force push, reset, and clean still ask.">
+                <SettingRow title="Protect destructive git" description="Ability to protect destructive git operations.">
                     <SettingSwitch
                         checked={a.protectDestructiveGit}
                         onChange={(on) => {
@@ -555,8 +555,8 @@ export function AiSettingsPanel({
             <>
             <SettingSection id="settings-ai-review" title="Review">
                 <SettingRow
-                    title="Design check"
-                    description="A fresh reader looks at a new system, contract, or migration before the work starts. Ordinary edits skip it. Free usage is used first. Your selected model is used only after that is gone."
+                    title="Code Evaluation"
+                    description="Agents can evaluate code before making changes."
                 >
                     <SettingSwitch
                         checked={a.goldfishEnabled}

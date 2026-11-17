@@ -1,0 +1,1 @@
+Create a split markdown editor: textarea on the left, live HTML preview on the right. Support headings, lists, links, and inline code. Sanitize HTML so a preview of `<script>alert(1)</script>` does not run. Single HTML file.

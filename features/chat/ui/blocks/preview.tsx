@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { mediaSrc } from "@/lib/ui/media-src";
 import { useDesignPreviewSession } from "@/lib/agent-preview/store";
 
 function isHtmlPreview(path: string, kind?: string): boolean {
@@ -11,10 +11,7 @@ function isHtmlPreview(path: string, kind?: string): boolean {
 }
 
 function resolvePreviewSrc(path: string): string {
-    if (path.startsWith("data:") || path.startsWith("http") || path.startsWith("asset:")) {
-        return path;
-    }
-    return convertFileSrc(path);
+    return mediaSrc(path);
 }
 
 /** Optional editor-hosted preview (legacy path). Primary UX is the in-chat canvas. */

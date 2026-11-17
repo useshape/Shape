@@ -1,0 +1,1 @@
+Implement rate_limit.py: TokenBucket(rate_per_sec, burst). allow() returns True until burst is exceeded, then refills over time. Include tests that fail if you ignore time (use a fake clock).

@@ -48,7 +48,7 @@ pub(super) fn tool_inspect_ports(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome
         .collect();
     if kill {
         if is_read_only_mode(ctx.mode) {
-            return error_outcome("inspect_ports", "Ask and Plan cannot kill processes.");
+            return error_outcome("inspect_ports", "Killing processes is not on this turn.");
         }
         let Some(port) = port else {
             return error_outcome("inspect_ports", "Pass port when kill is true.");

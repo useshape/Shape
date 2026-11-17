@@ -1,18 +1,17 @@
 "use client";
 
 import { GithubMark } from "@/components/ui/github-mark";
-import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
-import { Settings20Regular } from "@fluentui/react-icons/headless/svg/settings";
+import { SlideSettings24Regular } from "@fluentui/react-icons/headless/svg/slide-settings";
 
 import { type IconGlyph, Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { openSettingsWindow } from "@/lib/window/open-settings";
-import { useShapeAuth } from "@/lib/cloud/store";
 import { ChatList } from "./chats";
-import { AccountMenu, ProfileAvatar } from "./menu";
+import { AccountMenuButton } from "./menu";
+import { useChromeKind } from "@/lib/ui/chrome-platform";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { SidebarToggleBtn, AGENT_SIDEBAR_BACK_SLOT } from "../chrome";
@@ -88,13 +87,8 @@ export function AgentSidebar({
     onToggleSidebar?: () => void;
 }) {
     const github = useGitHubAuth();
-    const shapeAuth = useShapeAuth();
+    const macos = useChromeKind() === "macos";
     const showHostedNav = Boolean(overlay);
-
-    const displayName =
-        (shapeAuth.name && !/^n\/?a$/i.test(shapeAuth.name.trim()) ? shapeAuth.name.trim() : null)
-        ?? (github.loggedIn && github.username ? github.username : null)
-        ?? "Personal";
 
     const toggleSidebar = () => {
         if (onToggleSidebar) {
@@ -163,28 +157,7 @@ export function AgentSidebar({
                             )}
                             data-chrome-leading="true"
                         >
-                            {expanded ? (
-                                <AccountMenu>
-                                    <button
-                                        type="button"
-                                        aria-label="Account"
-                                        className="flex items-center gap-2 squircle-2xl px-1 py-0.5 text-left hover:bg-panel-hover"
-                                    >
-                                        <ProfileAvatar
-                                            gitAvatarUrl={github.loggedIn ? github.avatarUrl : null}
-                                            shapeUserId={shapeAuth.userId}
-                                            offline={Boolean(shapeAuth.offline)}
-                                            name={displayName}
-                                            size={20}
-                                        />
-                                        <Icon
-                                            icon={ChevronDown20Regular}
-                                            className="shrink-0 text-text-muted!"
-                                            style={{ ["--icon-size" as string]: "14px" }}
-                                        />
-                                    </button>
-                                </AccountMenu>
-                            ) : null}
+                            {expanded && !macos ? <AccountMenuButton /> : null}
                             <SidebarToggleBtn
                                 open={expanded}
                                 collapsed={!expanded}
@@ -237,14 +210,14 @@ export function AgentSidebar({
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => void openSettingsWindow()}
-                                className="flex h-9 w-full items-center justify-start gap-2 px-1.5! text-left"
+                                className="flex h-10 squircle-full! w-full items-center bg-panel-hover justify-center text-left"
                             >
-                                <Icon icon={Settings20Regular} className="shrink-0 text-text-muted" />
-                                <span className="min-w-0 flex-1 truncate">Settings</span>
+                                <Icon icon={SlideSettings24Regular} className="shrink-0 text-text-muted" />
+                                <span className="min-w-0 flex-1 truncate pr-5">Settings</span>
                             </Button>
                         </>
                     ) : (
-                        <NavItem label="Settings" icon={Settings20Regular} onClick={() => void openSettingsWindow()} collapsed />
+                        <NavItem label="Settings" icon={SlideSettings24Regular} onClick={() => void openSettingsWindow()} collapsed />
                     )}
                 </div>
             </div>

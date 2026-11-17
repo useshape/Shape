@@ -102,7 +102,7 @@ pub(super) fn tool_list_dir(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
 pub(super) fn tool_create_directory(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("create_directory", "Directory creation is not allowed in Ask or Plan mode.");
+        return blocked_outcome("create_directory", "Directory creation is not on this turn.");
     }
     let path = match get_str(args, "path") {
         Ok(s) => s,
@@ -123,7 +123,7 @@ pub(super) fn tool_create_directory(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
 
 pub(super) async fn tool_create_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("create_file", "File creation is not allowed in Ask or Plan mode.");
+        return blocked_outcome("create_file", "File creation is not on this turn.");
     }
     let path = match get_str(args, "path") {
         Ok(s) => s,
@@ -230,7 +230,7 @@ pub(super) async fn tool_save_media(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
     if is_read_only_mode(ctx.mode) {
         return blocked_outcome(
             "save_media",
-            "Saving media is not allowed in Ask or Plan mode.",
+            "Saving media is not on this turn.",
         );
     }
     let path = match get_str(args, "path") {
@@ -561,7 +561,7 @@ pub(super) fn record_checkpoint(ctx: &ToolCtx<'_>, path: &str, original_content:
 
 pub(super) async fn tool_edit_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("edit_file", "File edits are not allowed in Ask or Plan mode.");
+        return blocked_outcome("edit_file", "File edits are not on this turn.");
     }
     let target = match get_str(args, "target_file") {
         Ok(s) => s,
@@ -778,7 +778,7 @@ pub(super) fn tool_read_lints(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
 pub(super) async fn tool_apply_patch(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("apply_patch", "File edits are not allowed in Ask or Plan mode.");
+        return blocked_outcome("apply_patch", "File edits are not on this turn.");
     }
     let input = match get_str(args, "input") {
         Ok(s) => s,
@@ -934,7 +934,7 @@ pub(super) async fn tool_apply_patch(args: &Value, ctx: &ToolCtx<'_>) -> ToolOut
 
 pub(super) fn tool_delete_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("delete_file", "File deletion is not allowed in Ask or Plan mode.");
+        return blocked_outcome("delete_file", "File deletion is not on this turn.");
     }
     let path = match get_str(args, "path") {
         Ok(s) => s,
@@ -960,7 +960,7 @@ pub(super) fn tool_delete_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
 
 pub(super) fn tool_rename_file(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     if is_read_only_mode(ctx.mode) {
-        return blocked_outcome("rename_file", "File renaming is not allowed in Ask or Plan mode.");
+        return blocked_outcome("rename_file", "File renaming is not on this turn.");
     }
     let old_path = match get_str(args, "old_path") {
         Ok(s) => s,

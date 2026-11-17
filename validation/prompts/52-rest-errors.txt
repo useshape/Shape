@@ -1,0 +1,1 @@
+app.py is a tiny REST store. It always returns 200, crashes on missing JSON, and has no GET /items/{id}. Add proper 400/404/409, JSON error bodies {error}, GET by id, and a client_test.py that hits those cases against a short-lived server then exits 0. Run the test. Do not leave a server running.

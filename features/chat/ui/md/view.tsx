@@ -2,10 +2,6 @@
 
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
 import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
-import { DataTrending20Regular } from "@fluentui/react-icons/headless/svg/data-trending";
-
-
-
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,7 +17,6 @@ import { ChatLinkChip } from "./link-chip";
 import { Button } from "@/components/ui/button";
 import { commands, getProjectPath } from "@/lib/backend";
 import { resolveProjectFilePath } from "@/lib/path/utils";
-import { ChatMermaid } from "./mermaid";
 import { ChatKeyedRowsTable, MarkdownTableShell } from "./data-table";
 import { parseKeyedRows, tableCellModelId } from "@/lib/chat/fence-tables";
 import { providerIcon } from "@/lib/ui/provider-icon";
@@ -108,8 +103,47 @@ function linkifyChildren(children: React.ReactNode, reveal: RevealState | null =
     });
 }
 
+const LANGUAGE_FILE: Record<string, string> = {
+    python: "file.py",
+    py: "file.py",
+    typescript: "file.ts",
+    ts: "file.ts",
+    javascript: "file.js",
+    js: "file.js",
+    tsx: "file.tsx",
+    jsx: "file.jsx",
+    rust: "file.rs",
+    go: "file.go",
+    bash: "file.sh",
+    shell: "file.sh",
+    sh: "file.sh",
+    zsh: "file.sh",
+    powershell: "file.ps1",
+    json: "file.json",
+    css: "file.css",
+    html: "file.html",
+    markdown: "file.md",
+    md: "file.md",
+    yaml: "file.yml",
+    yml: "file.yml",
+    toml: "file.toml",
+    sql: "file.sql",
+    java: "file.java",
+    c: "file.c",
+    cpp: "file.cpp",
+    csharp: "file.cs",
+    php: "file.php",
+    ruby: "file.rb",
+    swift: "file.swift",
+    kotlin: "file.kt",
+    lua: "file.lua",
+    xml: "file.xml",
+    svg: "file.svg",
+};
+
 function CodeBlock({ language, code, ...rest }: { language: string; code: string; [k: string]: unknown }) {
     const [copied, setCopied] = useState(false);
+    const iconFile = LANGUAGE_FILE[language.toLowerCase()];
 
     const copy = () => {
         void navigator.clipboard.writeText(code).then(() => {
@@ -119,9 +153,12 @@ function CodeBlock({ language, code, ...rest }: { language: string; code: string
     };
 
     return (
-        <div className="my-1 overflow-hidden squircle-2xl bg-surface-3">
+        <div className="my-2 overflow-hidden squircle-2xl border border-border bg-transparent">
             <div className="flex items-center justify-between gap-2 pl-3 pr-2 py-1.5">
-                <span className="text-sm font-medium text-text-muted">{language}</span>
+                <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-text-muted">
+                    {iconFile ? <FileIcon name={iconFile} className="size-4" /> : null}
+                    <span className="truncate">{language}</span>
+                </span>
                 <Button
                     variant="ghost"
                     size="icon"
@@ -174,9 +211,6 @@ function createMarkdownComponents(options?: { nested?: boolean; reveal?: RevealS
 
             if (match) {
                 const language = match[1]!.toLowerCase();
-                if (language === "mermaid") {
-                    return <ChatMermaid source={codeContent} />;
-                }
                 if (language === "filter-table" || language === "records") {
                     const rows = parseKeyedRows(codeContent);
                     if (!rows) {
@@ -195,7 +229,7 @@ function createMarkdownComponents(options?: { nested?: boolean; reveal?: RevealS
 
             if (isBlock) {
                 return (
-                    <pre className="my-1 overflow-x-auto rounded-xl border border-border-subtle bg-surface-3 p-3 chat-text font-mono leading-relaxed">
+                    <pre className="my-2 overflow-x-auto squircle-2xl border border-border bg-transparent p-3 chat-text font-mono leading-relaxed">
                         <code className="block whitespace-pre-wrap text-text-primary" {...rest}>
                             {children}
                         </code>

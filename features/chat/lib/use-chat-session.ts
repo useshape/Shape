@@ -1146,7 +1146,7 @@ export function useChatSession() {
             await commands.sendChatMessage(
                 messageWithWorkflows,
                 modelToSend,
-                isTalkWorkspace(workspace) ? "Agent" : "auto",
+                isTalkWorkspace(workspace) ? "Agent" : "Code",
                 mergedRules,
                 token,
                 undefined,
@@ -1820,8 +1820,6 @@ export function useChatSession() {
             setHistoryLoading(true);
             setMessages([]);
             const known = recentConvs.find((c) => c.id === id) ?? null;
-            const cached = peekSnapshot(id);
-            const hadCache = Boolean(cached && cached.length > 0);
             const knownTitle = known?.title?.trim() || "Chat";
             conversationIdRef.current = id;
             setConversationId(id);
@@ -1832,12 +1830,6 @@ export function useChatSession() {
             scrollInstantRef.current = true;
             isNearBottomRef.current = true;
             const projectForFocus = known?.project_path ?? project_path;
-            if (!options?.force && hadCache && cached) {
-                setMessages(cached);
-                setHistoryLoading(false);
-                void commands.focusConversation(id, projectForFocus).catch(() => {});
-                return;
-            }
 
             try {
                 await commands.focusConversation(id, projectForFocus);

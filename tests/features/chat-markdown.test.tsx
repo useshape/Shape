@@ -4,15 +4,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatMarkdown } from "@/features/chat/ui/md/view";
 
-vi.mock("mermaid", () => ({
-    default: {
-        initialize: vi.fn(),
-        render: vi.fn(async () => {
-            throw new Error("invalid graph");
-        }),
-    },
-}));
-
 async function renderMarkdown(content: string): Promise<{ host: HTMLDivElement; root: Root }> {
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -26,7 +17,7 @@ async function renderMarkdown(content: string): Promise<{ host: HTMLDivElement; 
     return { host, root };
 }
 
-describe("chat markdown tables and mermaid", () => {
+describe("chat markdown tables", () => {
     let root: Root | null = null;
     let host: HTMLDivElement | null = null;
 
@@ -55,12 +46,11 @@ describe("chat markdown tables and mermaid", () => {
         expect(host.querySelector("table")).toBeTruthy();
     });
 
-    it("shows mermaid source when the graph is invalid", async () => {
-        const source = "graph TD\nA-->";
+    it("renders a mermaid fence as a code block", async () => {
+        const source = "graph TD\nA-->B";
         const mounted = await renderMarkdown("```mermaid\n" + source + "\n```\n");
         root = mounted.root;
         host = mounted.host;
         expect(host.textContent).toContain("graph TD");
-        expect(() => host!.textContent).not.toThrow();
     });
 });

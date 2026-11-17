@@ -1,0 +1,1 @@
+Build a responsive site header in index.html: skip link, logo, nav, mobile hamburger that is keyboard accessible (focus trap while open, Escape closes, aria-expanded). CSS in the same file.

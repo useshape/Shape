@@ -36,7 +36,7 @@ import {
     AUTO_FETCH_INTERVAL_PRESETS,
 } from "./shared/controls";
 import { AiSettingsPanel } from "./sections/ai";
-import { AccountSettingsPanel } from "./sections/account";
+import { AccountSettingsPanel, GitHubAccountSection } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
 import { nativeChromeKind, setChromePreview, useChromePreviewOverride } from "@/lib/ui/chrome-platform";
 import { clearRepoHistory } from "@/lib/workspace/repo-history";
@@ -278,13 +278,12 @@ function TerminalSettings({ settings }: { settings: ShapeSettings }) {
                 <SettingSelect
                     value={chromePreview}
                     options={[
-                        { value: "auto", label: `Auto (${native === "macos" ? "macOS" : native === "linux" ? "Linux" : "Windows"})` },
+                        { value: "auto", label: `Auto (${native === "macos" ? "macOS" : "Windows"})` },
                         { value: "windows", label: "Windows" },
                         { value: "macos", label: "macOS" },
-                        { value: "linux", label: "Linux" },
                     ]}
                     onChange={(v) => {
-                        if (v === "windows" || v === "macos" || v === "linux" || v === "auto") {
+                        if (v === "windows" || v === "macos" || v === "auto") {
                             setChromePreview(v);
                         }
                     }}
@@ -336,6 +335,8 @@ function TerminalSettings({ settings }: { settings: ShapeSettings }) {
 function GitSettings({ settings }: { settings: ShapeSettings }) {
     const g = settings.git;
     return (
+        <>
+        <GitHubAccountSection />
         <SettingSection id="settings-git" title="Source Control">
             <SettingRow title="Auto Fetch">
                 <SettingSwitch checked={g.autoFetch} onChange={(v) => updateSettingSection("git", { autoFetch: v })} />
@@ -363,6 +364,7 @@ function GitSettings({ settings }: { settings: ShapeSettings }) {
                 <SettingSwitch checked={g.blame.enabled} onChange={(v) => updateSettingSection("git", { blame: { enabled: v } })} />
             </SettingRow>
         </SettingSection>
+        </>
     );
 }
 
@@ -817,6 +819,27 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
                         onClick={() => {
                             void commands.clearChatHistory().then(() => {
                                 window.dispatchEvent(new CustomEvent("shape-chat-refresh"));
+                            });
+                        }}
+                    >
+                        Clear
+                    </Button>
+                </SettingRow>
+                <SettingRow
+                    title="Clear cache"
+                    description="Deletes agent scratch scripts, generated media, chat work files, and the codebase index. Chats stay."
+                >
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            void commands.clearShapeLocalData().then((cleared) => {
+                                notify.info(
+                                    "Cache cleared",
+                                    cleared.length ? cleared.join(", ") : "Nothing to clear",
+                                );
+                            }).catch((err: unknown) => {
+                                notify.error("Could not clear cache", err instanceof Error ? err.message : String(err));
                             });
                         }}
                     >

@@ -213,6 +213,10 @@ const TOOL_RESULT_CHAR_BUDGET: usize = 96_000;
 /// Never touch results from the most recent tool rounds.
 const TOOL_RESULT_KEEP_ROUNDS: usize = 4;
 const TOOL_RESULT_TRIM_CHARS: usize = 600;
+/// Keep raw tool-call arguments for this many recent rounds. Older create_file /
+/// apply_patch payloads are the main driver of 100k–1M input-token turns.
+const TOOL_CALL_ARG_KEEP_ROUNDS: usize = 2;
+const TOOL_CALL_ARG_KEEP_CHARS: usize = 1_500;
 
 /// Strip verbose tool XML from prior assistant turns, then trim middle history
 /// when the API payload is large. Recent turns stay intact (Cursor-style).
@@ -483,6 +487,70 @@ pub fn clear_old_tool_results(api_messages: &mut [Value]) -> bool {
         }
     }
     pruned_read
+}
+
+/// Drop executed tool-call argument bodies so later loops do not re-pay for them.
+pub fn compact_old_tool_call_args(api_messages: &mut [Value]) {
+    let mut starts: Vec<usize> = Vec::new();
+    for (i, msg) in api_messages.iter().enumerate() {
+        if msg.get("role").and_then(|r| r.as_str()) == Some("assistant")
+            && msg.get("tool_calls").is_some()
+        {
+            starts.push(i);
+        }
+    }
+    if starts.len() <= TOOL_CALL_ARG_KEEP_ROUNDS {
+        return;
+    }
+    let keep_from = starts[starts.len() - TOOL_CALL_ARG_KEEP_ROUNDS];
+    for msg in api_messages.iter_mut().take(keep_from) {
+        let Some(calls) = msg
+            .get_mut("tool_calls")
+            .and_then(|v| v.as_array_mut())
+        else {
+            continue;
+        };
+        for call in calls {
+            let Some(fn_obj) = call.get_mut("function").and_then(|v| v.as_object_mut()) else {
+                continue;
+            };
+            let name = fn_obj
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("tool")
+                .to_string();
+            let Some(args) = fn_obj.get("arguments").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            if args.len() <= TOOL_CALL_ARG_KEEP_CHARS {
+                continue;
+            }
+            fn_obj.insert(
+                "arguments".to_string(),
+                Value::String(compacted_tool_args(&name, args)),
+            );
+        }
+    }
+}
+
+fn compacted_tool_args(name: &str, args: &str) -> String {
+    let path = serde_json::from_str::<Value>(args)
+        .ok()
+        .and_then(|v| {
+            v.get("path")
+                .and_then(|p| p.as_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_default();
+    if path.is_empty() {
+        format!("{{\"_omitted\":true,\"tool\":\"{name}\",\"_chars\":{}}}", args.len())
+    } else {
+        format!(
+            "{{\"path\":{},\"_omitted\":true,\"_chars\":{}}}",
+            serde_json::to_string(&path).unwrap_or_else(|_| "\"\"".into()),
+            args.len()
+        )
+    }
 }
 
 fn protected_tool_round_index(api_messages: &[Value]) -> usize {
@@ -840,5 +908,50 @@ mod tests {
         let shot = api[1]["content"].as_str().unwrap();
         assert!(shot.contains("Do not call screenshot_page again"));
         assert!(!shot.contains("re-call the tool"));
+    }
+
+    #[test]
+    fn compact_old_tool_call_args_drops_create_file_bodies() {
+        let big = "x".repeat(4_000);
+        let mut api = vec![
+            json!({
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": "1",
+                    "function": {
+                        "name": "create_file",
+                        "arguments": format!("{{\"path\":\"index.html\",\"content\":\"{big}\"}}")
+                    }
+                }]
+            }),
+            json!({"role":"tool","name":"create_file","content":"Created file index.html"}),
+            json!({
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": "2",
+                    "function": {"name": "read_lints", "arguments": "{\"paths\":[\"index.html\"]}"}
+                }]
+            }),
+            json!({"role":"tool","name":"read_lints","content":"ok"}),
+            json!({
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": "3",
+                    "function": {"name": "read_lints", "arguments": "{\"paths\":[\"index.html\"]}"}
+                }]
+            }),
+            json!({"role":"tool","name":"read_lints","content":"ok"}),
+        ];
+        compact_old_tool_call_args(&mut api);
+        let args = api[0]["tool_calls"][0]["function"]["arguments"]
+            .as_str()
+            .unwrap();
+        assert!(args.contains("_omitted"));
+        assert!(args.contains("index.html"));
+        assert!(!args.contains(&big));
+        let recent = api[4]["tool_calls"][0]["function"]["arguments"]
+            .as_str()
+            .unwrap();
+        assert!(!recent.contains("_omitted"));
     }
 }

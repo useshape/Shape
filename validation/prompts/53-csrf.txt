@@ -1,0 +1,1 @@
+form.html posts a transfer with no CSRF token. Add a same-origin token pattern in this folder (token issued, checked on POST) without a real database. Document the check in a short comment. Keep it as static files plus a tiny python or node handler you actually run once to prove a request without the token is rejected.

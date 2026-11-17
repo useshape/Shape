@@ -18,25 +18,6 @@ const shots = JSON.stringify({
     ],
 });
 
-const persona = JSON.stringify({
-    url: "https://example.com/pricing",
-    personas: [
-        {
-            id: "maya",
-            name: "Maya",
-            profile: "First-time buyer, comparing two tools",
-            goal: "Start a trial without talking to sales",
-            status: "done",
-            score: 4,
-            verdict: "The page asks for a call before I know the price.",
-            first_impression: "I expected a free start.",
-            friction: ["Book a call is the only action above the fold"],
-            fixes: ["Put Start free back as the primary button"],
-            image: "/hero.png",
-        },
-    ],
-});
-
 function Msg({
     role,
     content,
@@ -100,8 +81,6 @@ The only action above the fold is Book a call.`}
                 ago={4 * 60_000}
                 content={`Wednesday is the hole. Friday is still the best day.
 
-<chart>{"title":"Signups","points":[{"label":"Mon","value":120},{"label":"Tue","value":134},{"label":"Wed","value":71},{"label":"Thu","value":128},{"label":"Fri","value":151}]}</chart>
-
 | Day | Signups | Checkout |
 | --- | --- | --- |
 | Mon | 120 | 18% |
@@ -126,18 +105,9 @@ Fri,151,21%
                 ago={2 * 60_000}
                 content={`Maya got stuck on the same button.
 
-<persona_review id="maya" status="done" url="https://example.com/pricing">${persona}</persona_review>
-
 A second pass agrees. The visit still reaches pricing, then dies on the call-to-action.
 
-\`\`\`mermaid
-flowchart LR
-  Visit --> Pricing --> Checkout
-\`\`\`
-
-<review_debate model="auto" status="done">{"verdict":{"confirmed_issues":["The Tuesday headline matches the Wednesday drop"],"disputed_points":["Traffic did not fall"],"confidence":"High","minimal_fix_plan":["Restore Start free as the primary button"]}}</review_debate>
-
-<questions id="q-headline" status="answered">{"questions":[{"id":"headline","prompt":"Which headline should we put back?","options":[{"id":"old","label":"Start free","recommended":true},{"id":"new","label":"Talk to sales"}]}],"answers":{"headline":"old"}}</questions>`}
+<review_debate model="auto" status="done"></review_debate>`}
             />
             <Msg role="user" ago={90_000} content="Start free. Use last Friday’s frames as the reference for the still." />
             <Msg
@@ -162,7 +132,11 @@ Headline is back. These are the frames from Friday. I’ll match that crop.
                 content={`<think>The headline is the only change that lines up with Wednesday.</think>
 <search query="Start free">app/pricing</search>
 <ls>app/pricing</ls>
-<git_operation op="diff" status="completed">app/pricing/page.tsx</git_operation>
+<git_operation op="diff" status="completed">[file] app/pricing/page.tsx
+@@ -12,7 +12,7 @@
+-  Talk to sales
++  Start free
+</git_operation>
 <web_visit url="https://example.com/pricing" host="example.com" title="Pricing" />
 <plugin_call id="demo-plugin" toolkit="stripe" slug="list_prices" label="List prices" status="ok">Three prices, the free one is still live.</plugin_call>
 <plugin_connect toolkit="stripe" name="Stripe" />
@@ -179,8 +153,7 @@ Headline is back. These are the frames from Friday. I’ll match that crop.
             <Msg
                 role="assistant"
                 ago={5_000}
-                generating
-                content={'<generated_image prompt="Friday campaign still">'}
+                content={`<generated_image prompt="Friday campaign still">/hero.png</generated_image>`}
             />
         </div>
     );

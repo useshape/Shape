@@ -102,6 +102,12 @@ fn under_editor_config_dir(path: &Path) -> bool {
     false
 }
 
+fn without_extended_prefix(path: PathBuf) -> PathBuf {
+    PathBuf::from(crate::core::paths::strip_extended_path_prefix(
+        &path.to_string_lossy(),
+    ))
+}
+
 /// Resolve a user-provided path to an absolute path within the project root.
 /// Returns an error if the path escapes the project boundary.
 pub fn resolve_safe_path(user_path: &str, project_root: &str) -> Result<PathBuf, AppError> {
@@ -174,14 +180,14 @@ pub fn resolve_safe_path(user_path: &str, project_root: &str) -> Result<PathBuf,
 
     // Path::starts_with matches whole components (not string prefixes), so
     // C:\proj does not authorize C:\proj-evil (CVE-2025-54794 class).
-    if !resolved.starts_with(&canonical_root) {
-        return Err(AppError::Message(format!(
-            "Access denied: path '{}' is outside the project directory.",
-            user_path
-        )));
+    if resolved.starts_with(&canonical_root) || crate::agent::scratch::is_under_scratch(&resolved)
+    {
+        return Ok(without_extended_prefix(resolved));
     }
-
-    Ok(resolved)
+    Err(AppError::Message(format!(
+        "Access denied: path '{}' is outside the project directory.",
+        user_path
+    )))
 }
 
 /// Template env files are safe to read (no secrets); real `.env*` stay blocked.
@@ -480,6 +486,11 @@ mod tests {
         let root = temp.to_string_lossy();
         let result = resolve_safe_path("src/main.ts", root.as_ref());
         assert!(result.is_ok());
+        let shown = result.unwrap().to_string_lossy().into_owned();
+        assert!(
+            !shown.contains(r"\\?\"),
+            "tool paths must not use the Windows extended prefix: {shown}"
+        );
         let _ = std::fs::remove_dir_all(&temp);
     }
 }

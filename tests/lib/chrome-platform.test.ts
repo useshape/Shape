@@ -19,6 +19,11 @@ describe("chrome platform", () => {
         expect(nativeChromeKind()).toBe("windows");
     });
 
+    it("does not treat Linux as a chrome kind", () => {
+        vi.stubGlobal("navigator", { platform: "Linux x86_64", userAgent: "X11; Linux x86_64" });
+        expect(nativeChromeKind()).toBe("windows");
+    });
+
     it("lets NEXT_PUBLIC_SHAPE_CHROME preview another titlebar", () => {
         vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
         vi.stubEnv("NEXT_PUBLIC_SHAPE_CHROME", "macos");
@@ -34,8 +39,8 @@ describe("chrome platform", () => {
 
     it("persists a preview choice", () => {
         vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
-        setChromePreview("linux");
-        expect(resolveChromeKind()).toBe("linux");
+        setChromePreview("macos");
+        expect(resolveChromeKind()).toBe("macos");
         setChromePreview("auto");
         expect(resolveChromeKind()).toBe("windows");
     });

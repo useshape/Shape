@@ -169,23 +169,28 @@ export default function Chat({
     useSyncChatGenerating(session.conversationId ?? session.activeChatTabId, session.isLoading);
 
     const taskItems = useMemo((): ComposerTaskItem[] => {
-        const lastAssistant = [...session.messages].reverse().find((m) => m.role === "assistant");
-        if (!lastAssistant) return [];
-
-        const todos = parseMessageContent(lastAssistant.content).find((c) => c.type === "todos");
-        if (!todos?.todos?.length) return [];
-
-        const items: ComposerTaskItem[] = [];
-        for (const t of todos.todos) {
-            if (t.status === "done" || t.status === "cancelled") continue;
-            items.push({
-                id: t.id || t.label,
-                label: t.label,
-                status:
-                    t.status === "active" && session.isLoading ? "running" : "pending",
-            });
+        let todos: ReturnType<typeof parseMessageContent>[number] | undefined;
+        for (let i = session.messages.length - 1; i >= 0; i--) {
+            const message = session.messages[i];
+            if (message?.role !== "assistant") continue;
+            const block = parseMessageContent(message.content).find((chunk) => chunk.type === "todos" && chunk.todos?.length);
+            if (block) {
+                todos = block;
+                break;
+            }
         }
-        return items;
+        if (!todos?.todos?.length) return [];
+        return todos.todos
+            .filter((item) => item.status !== "cancelled")
+            .map((item) => ({
+                id: item.id || item.label,
+                label: item.label,
+                status: item.status === "done"
+                    ? "done" as const
+                    : item.status === "active" && session.isLoading
+                        ? "running" as const
+                        : "pending" as const,
+            }));
     }, [session.messages, session.isLoading]);
 
     const newChatRef = React.useRef(session.handleNewChat);

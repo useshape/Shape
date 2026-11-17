@@ -24,7 +24,7 @@ export function ChatDataTable({
     rows: string[][];
 }) {
     return (
-        <div className={styles.wrap}>
+        <div className={cn(styles.wrap, "squircle-2xl")}>
             <table className={styles.table}>
                 {headers.length > 0 ? (
                     <thead>
@@ -68,5 +68,5 @@ export function ChatKeyedRowsTable({ rows }: { rows: Record<string, string>[] })
 }
 
 export function MarkdownTableShell({ children }: { children?: React.ReactNode }) {
-    return <div className={cn(styles.wrap, "my-2")}>{children}</div>;
+    return <div className={cn(styles.wrap, "squircle-2xl my-2")}>{children}</div>;
 }
