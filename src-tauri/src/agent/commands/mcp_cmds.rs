@@ -78,9 +78,15 @@ pub async fn mcp_start_oauth(
         .start_server_oauth(&id)
         .await
         .map_err(|e| AppError::Message(e))?;
-    mcp_state
+    let entry = mcp_state
         .restart_server(&server_id)
         .map_err(|e| AppError::Message(e))?;
+    if entry.status != crate::mcp::McpServerStatus::Connected {
+        let message = entry
+            .error
+            .unwrap_or_else(|| "Sign-in did not connect this server.".to_string());
+        return Err(AppError::Message(message));
+    }
     Ok(server_id)
 }
 

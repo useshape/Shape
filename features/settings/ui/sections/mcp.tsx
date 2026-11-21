@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { SearchInput } from "@/components/ui/search";
@@ -72,20 +72,21 @@ function ServerCard({
         <button
             type="button"
             onClick={onOpen}
-            className="flex h-full w-full items-start gap-3 squircle-2xl bg-surface-4 p-3 text-left transition-colors hover:bg-panel-hover"
+            className="flex h-full min-h-[4.75rem] w-full items-center gap-3 squircle-2xl bg-surface-4 p-3 text-left transition-colors hover:bg-panel-hover"
         >
             <ServerMark name={server.name} url={server.url} />
             <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                    <div className="truncate text-md font-medium text-text-primary">{server.name}</div>
-                    <span className="shrink-0 rounded-md border border-border bg-panel-hover px-1.5 text-xs">
-                        {server.origin === "file" ? "mcp.json" : statusLabel(status?.status)}
-                    </span>
-                </div>
-                <div className="line-clamp-1 text-sm text-text-muted">
+                <div className="truncate text-md font-medium leading-5 text-text-primary">{server.name}</div>
+                <div className="mt-0.5 truncate text-sm leading-5 text-text-muted">
                     {server.url || server.command || "Local server"}
                 </div>
+                {server.origin === "file" ? (
+                    <div className="mt-0.5 text-xs leading-4 text-text-muted">mcp.json</div>
+                ) : null}
             </div>
+            <span className="shrink-0 self-start rounded-md border border-border bg-panel px-1.5 py-0.5 text-xs leading-4 text-text-primary">
+                {statusLabel(status?.status)}
+            </span>
         </button>
     );
 }
@@ -145,7 +146,7 @@ function AddMcpDialog({
                 <AlertDialogHeader>
                     <AlertDialogTitle>Add MCP server</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Paste a server URL or a JSON config. This stays in Shape and is not written to mcp.json.
+                        This is not written to mcp.json.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogBody>
@@ -153,7 +154,7 @@ function AddMcpDialog({
                         value={paste}
                         onChange={(event) => setPaste(event.target.value)}
                         placeholder={'https://example.com/mcp\n\nor\n\n{ "url": "https://example.com/mcp" }'}
-                        className="min-h-32 font-mono text-sm"
+                        className="min-h-32 font-mono text-sm bg-white/5 border-none"
                     />
                     {parsed.error && paste.trim() ? (
                         <p className="text-sm text-error">{parsed.error}</p>
@@ -199,12 +200,14 @@ function ServerDetail({
     busy,
     onBack,
     onChanged,
+    reload,
 }: {
     server: ListedMcpServer;
     status?: McpStatusEntry;
     busy: boolean;
     onBack: () => void;
     onChanged: () => void;
+    reload: () => Promise<McpStatusEntry[]>;
 }) {
     const [tools, setTools] = useState<McpToolInfo[]>([]);
     const [guidance, setGuidance] = useState("");
@@ -234,12 +237,17 @@ function ServerDetail({
         setWorking(true);
         try {
             await commands.mcpStartOAuth(server.id);
-            notify.success(`${server.name} connected.`);
-            onChanged();
+            const next = await reload();
+            const mine = next.find((entry) => entry.id === server.id);
+            if (mine?.status === "connected") {
+                notify.success(`${server.name} connected.`);
+            } else {
+                notify.error(mine?.error || `${server.name} still needs sign-in.`);
+            }
             await loadTools();
         } catch (err) {
             notify.error(err instanceof Error ? err.message : "Sign-in failed. Try again.");
-            onChanged();
+            await reload().catch(() => undefined);
         } finally {
             setWorking(false);
         }
@@ -283,16 +291,22 @@ function ServerDetail({
                 <Icon icon={ArrowLeft20Regular} />
                 Back
             </Button>
-            <div className="flex items-start gap-4">
+            <div className="flex items-center gap-4">
                 <ServerMark name={server.name} url={server.url} />
                 <div className="min-w-0 flex-1">
-                    <h1 className="text-2xl font-medium text-text-primary">{server.name}</h1>
-                    <p className="mt-1 text-sm text-text-muted">
+                    <div className="flex items-center gap-2">
+                        <h1 className="truncate text-2xl font-medium leading-8 text-text-primary">{server.name}</h1>
+                        <span className="shrink-0 rounded-md border border-border bg-surface-3 px-1.5 py-0.5 text-xs leading-4 text-text-primary">
+                            {statusLabel(status?.status)}
+                        </span>
+                    </div>
+                    <p className="mt-1 truncate text-sm leading-5 text-text-muted">
                         {server.url || server.command || "Local server"}
+                        {server.origin === "file" ? " · mcp.json" : ""}
                     </p>
                     {status?.error ? <p className="mt-2 text-sm text-error">{status.error}</p> : null}
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                     {status?.status === "needs_auth" ? (
                         <Button size="sm" disabled={busy || working} onClick={() => void signIn()}>
                             {working ? "Waiting for the browser…" : "Sign in"}
@@ -362,21 +376,52 @@ export function McpSettingsView() {
     const [openId, setOpenId] = useState<string | null>(null);
     const [adding, setAdding] = useState(false);
     const [busy, setBusy] = useState(false);
+    const statusGen = useRef(0);
+
+    const readStatus = useCallback(async () => {
+        const gen = ++statusGen.current;
+        const next = await commands.getMcpStatus();
+        if (statusGen.current === gen) setStatuses(next);
+        return next;
+    }, []);
+
+    const reloadConnected = useCallback(async () => {
+        const gen = ++statusGen.current;
+        const listed = await listMcpServers();
+        setServers(listed);
+        const next = await syncActiveMcpServers();
+        if (statusGen.current === gen) setStatuses(next);
+        return next;
+    }, []);
 
     const refresh = useCallback(async () => {
         try {
             const listed = await listMcpServers();
             setServers(listed);
-            const next = await syncActiveMcpServers();
-            setStatuses(next);
+            await readStatus();
         } catch (err) {
             notify.error(err instanceof Error ? err.message : "Could not load MCP servers.");
         }
-    }, []);
+    }, [readStatus]);
 
     useEffect(() => {
-        void refresh();
-    }, [refresh]);
+        let cancelled = false;
+        const gen = ++statusGen.current;
+        void (async () => {
+            try {
+                const listed = await listMcpServers();
+                if (cancelled) return;
+                setServers(listed);
+                const next = await syncActiveMcpServers();
+                if (!cancelled && statusGen.current === gen) setStatuses(next);
+            } catch (err) {
+                if (!cancelled) notify.error(err instanceof Error ? err.message : "Could not load MCP servers.");
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -404,6 +449,7 @@ export function McpSettingsView() {
                             setBusy(false);
                             void refresh();
                         }}
+                        reload={reloadConnected}
                     />
                 ) : (
                     <div className="mx-auto w-full max-w-5xl">
@@ -418,12 +464,12 @@ export function McpSettingsView() {
                                 </Button>
                             </div>
                         </div>
-                        <div className="mt-4">
+                        <div className="mt-4 max-w-md">
                             <SearchInput
                                 placeholder="Search servers"
                                 value={query}
                                 onChange={(event) => setQuery(event.target.value)}
-                                className="min-w-0 flex-1"
+                                className="w-full"
                             />
                         </div>
                         <div className="mt-6">
@@ -458,7 +504,11 @@ export function McpSettingsView() {
                 onAdded={(id) => {
                     setAdding(false);
                     setOpenId(id);
-                    void refresh();
+                    void (async () => {
+                        const listed = await listMcpServers();
+                        setServers(listed);
+                        setStatuses(await syncActiveMcpServers());
+                    })();
                 }}
             />
         </div>

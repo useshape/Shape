@@ -212,11 +212,12 @@ impl McpState {
                     && cfg.auth == McpAuthType::Oauth
                     && get_token(&cfg.id).is_some()
                 {
-                    // Token saved but client not loaded yet — avoid yellow "Not connected".
+                    // Sign-in already saved a token. Show that even if the client
+                    // has not been inserted into the live map yet.
                     McpStatusEntry {
                         id: cfg.id.clone(),
                         name: cfg.name.clone(),
-                        status: McpServerStatus::Error,
+                        status: McpServerStatus::Connected,
                         tool_count: 0,
                         error: None,
                         auth: cfg.auth.clone(),

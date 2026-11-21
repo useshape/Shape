@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { PluginLogo } from "@/components/ui/plugin-logo";
 import { commands } from "@/lib/backend/commands";
+import { useShapeAuth } from "@/lib/cloud/store";
 import { startPluginConnect } from "@/lib/plugins/api";
+import { ComposioHandoff } from "@/features/settings/ui/sections/composio-handoff";
 
 export function PluginConnectCard({
     toolkit,
@@ -18,6 +20,8 @@ export function PluginConnectCard({
 }) {
     const label = name?.trim() || toolkit.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     const [busy, setBusy] = useState(false);
+    const [url, setUrl] = useState<string | null>(null);
+    const auth = useShapeAuth();
 
     return (
         <div
@@ -38,13 +42,27 @@ export function PluginConnectCard({
                 onClick={() => {
                     setBusy(true);
                     void startPluginConnect(toolkit)
-                        .then((res) => commands.openUrlExternal(res.redirectUrl))
+                        .then((res) => setUrl(res.redirectUrl))
                         .catch(() => {})
                         .finally(() => setBusy(false));
                 }}
             >
                 Authorize
             </button>
+            <ComposioHandoff
+                open={Boolean(url)}
+                pluginName={label}
+                userId={auth.userId}
+                name={auth.name}
+                email={auth.email}
+                offline={auth.offline}
+                onCancel={() => setUrl(null)}
+                onContinue={() => {
+                    if (!url) return;
+                    void commands.openUrlExternal(url);
+                    setUrl(null);
+                }}
+            />
         </div>
     );
 }
