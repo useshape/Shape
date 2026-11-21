@@ -50,8 +50,7 @@ function reducedMotion() {
 }
 
 /** Overlapping mask bands across the full panel. The left stays transparent so the blur has no box edge. */
-function blurMask(index: number, count: number) {
-    const origin = 0.32;
+function blurMask(index: number, count: number, origin = 0.32) {
     const span = 1 - origin;
     const segments = count + 1;
     const pct = (step: number) => {
@@ -73,7 +72,17 @@ function blurMask(index: number, count: number) {
  * masked to a band that overlaps its neighbors, so the right edge ramps from
  * sharp to fully blurred instead of one flat blur.
  */
-function ProgressiveBlur({ id, max = BLUR_MAX, wash = 1 }: { id: string; max?: number; wash?: number }) {
+function ProgressiveBlur({
+    id,
+    max = BLUR_MAX,
+    wash = 1,
+    origin = 0.32,
+}: {
+    id: string;
+    max?: number;
+    wash?: number;
+    origin?: number;
+}) {
     return (
         <div
             id={id}
@@ -83,7 +92,7 @@ function ProgressiveBlur({ id, max = BLUR_MAX, wash = 1 }: { id: string; max?: n
         >
             {Array.from({ length: BLUR_LAYERS }, (_, index) => {
                 const blurPx = max / 2 ** (BLUR_LAYERS - 1 - index);
-                const mask = blurMask(index, BLUR_LAYERS);
+                const mask = blurMask(index, BLUR_LAYERS, origin);
                 return (
                     <div
                         key={index}
@@ -115,9 +124,10 @@ function ProgressiveBlur({ id, max = BLUR_MAX, wash = 1 }: { id: string; max?: n
 export function useEdgeReveal<T extends HTMLElement>(
     open: boolean,
     id: string,
-    options?: { strength?: number },
+    options?: { strength?: number; origin?: number },
 ) {
     const strength = options?.strength ?? 1;
+    const origin = options?.origin ?? 0.32;
     const bendRef = useRef<T>(null);
     const [prevOpen, setPrevOpen] = useState(open);
     const [opening, setOpening] = useState(false);
@@ -163,7 +173,9 @@ export function useEdgeReveal<T extends HTMLElement>(
         </svg>
     );
 
-    const blur = opening ? <ProgressiveBlur id={`${id}-blur`} max={BLUR_MAX * strength} wash={Math.min(1, strength)} /> : null;
+    const blur = opening ? (
+        <ProgressiveBlur id={`${id}-blur`} max={BLUR_MAX * strength} wash={Math.min(1, strength)} origin={origin} />
+    ) : null;
 
     return { bendRef: bendRef as RefObject<T>, opening, present, filter, blur };
 }

@@ -5,6 +5,7 @@ import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
 import { SlideSettings24Regular } from "@fluentui/react-icons/headless/svg/slide-settings";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type IconGlyph, Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
@@ -91,6 +92,57 @@ export function AgentSidebar({
     const macos = useChromeKind() === "macos";
     const showHostedNav = Boolean(overlay);
     const reveal = useEdgeReveal<HTMLElement>(open && expanded, "sidebar-edge");
+    const [sideWidth, setSideWidth] = useState(320);
+    const [sideResizing, setSideResizing] = useState(false);
+    const [sideTabNear, setSideTabNear] = useState(false);
+    const sideWidthRef = useRef(320);
+    const sideDragging = useRef(false);
+    const sideRef = useRef<HTMLElement>(null);
+    const sideInnerRef = useRef<HTMLDivElement>(null);
+    const sideTabRef = useRef<HTMLButtonElement>(null);
+
+    const paintSidebar = useCallback((px: number) => {
+        const shell = sideRef.current;
+        const inner = sideInnerRef.current;
+        if (shell) {
+            shell.style.transition = "none";
+            shell.style.width = `${px}px`;
+            shell.style.flexBasis = `${px}px`;
+        }
+        if (inner) inner.style.width = `${px}px`;
+    }, []);
+
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!sideDragging.current) return;
+            const shell = sideRef.current;
+            const left = shell?.getBoundingClientRect().left ?? 0;
+            const max = Math.max(220, Math.min(480, Math.round(window.innerWidth * 0.42)));
+            const next = Math.max(200, Math.min(max, Math.round(e.clientX - left)));
+            const tab = sideTabRef.current;
+            if (tab) {
+                const lean = Math.max(-5, Math.min(5, (e.clientX - tab.getBoundingClientRect().left) * 0.12));
+                tab.style.transform = `translate(calc(-50% + ${lean}px), -50%)`;
+            }
+            sideWidthRef.current = next;
+            paintSidebar(next);
+        };
+        const onUp = () => {
+            if (!sideDragging.current) return;
+            sideDragging.current = false;
+            setSideResizing(false);
+            setSideWidth(sideWidthRef.current);
+            if (sideTabRef.current) sideTabRef.current.style.transform = "translate(-50%, -50%)";
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+        };
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+        return () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+        };
+    }, [paintSidebar]);
 
     const toggleSidebar = () => {
         if (onToggleSidebar) {
@@ -113,20 +165,39 @@ export function AgentSidebar({
         <>
         {reveal.filter}
         <aside
+            ref={sideRef}
             aria-hidden={!open}
+            style={{
+                width: !open ? 0 : !expanded ? 48 : sideWidth,
+                minWidth: 0,
+                flexBasis: !open ? 0 : !expanded ? 48 : sideWidth,
+                transition: sideResizing ? "none" : "width 420ms cubic-bezier(0.16, 1, 0.3, 1), flex-basis 420ms cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
             className={cn(
                 "relative z-20 flex h-full shrink-0 flex-col overflow-hidden bg-sidebar text-text-primary",
-                "transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
-                !open ? "w-0" : expanded ? "w-80" : "w-12",
+                !expanded && open && "w-12",
             )}
+            onMouseMove={(e) => {
+                if (!expanded || !open || sideDragging.current) return;
+                const bounds = e.currentTarget.getBoundingClientRect();
+                const dist = Math.hypot(e.clientX - bounds.right, e.clientY - (bounds.top + bounds.height / 2));
+                const near = dist < 72;
+                setSideTabNear((prev) => (prev === near ? prev : near));
+            }}
+            onMouseLeave={() => {
+                if (!sideDragging.current) setSideTabNear(false);
+            }}
         >
             <div
-                ref={reveal.bendRef}
+                ref={(node) => {
+                    sideInnerRef.current = node;
+                    reveal.bendRef.current = node;
+                }}
                 className={cn(
-                    "flex h-full min-h-0 shrink-0 flex-col",
-                    expanded ? "w-80" : "w-12",
+                    "relative flex h-full min-h-0 flex-col",
                     !open && "pointer-events-none",
                 )}
+                style={{ width: !open ? 0 : !expanded ? 48 : sideWidth }}
             >
                 {showHostedNav ? (
                     <>
@@ -238,6 +309,35 @@ export function AgentSidebar({
                         <NavItem label="Settings" icon={SlideSettings24Regular} onClick={() => void openSettingsWindow()} collapsed />
                     )}
                 </div>
+                {expanded && open ? (
+                <button
+                    ref={sideTabRef}
+                    type="button"
+                    aria-label="Resize sidebar"
+                    className={cn(
+                        "absolute top-1/2 right-0 z-40 flex h-11 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center",
+                        "transition-opacity duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                        sideTabNear || sideResizing ? "opacity-100" : "opacity-0",
+                    )}
+                    style={{ transform: "translate(50%, -50%)" }}
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        sideDragging.current = true;
+                        setSideResizing(true);
+                        setSideTabNear(true);
+                        document.body.style.cursor = "col-resize";
+                        document.body.style.userSelect = "none";
+                    }}
+                >
+                    <span
+                        className={cn(
+                            "block w-[3px] rounded-full bg-text-muted/55 shadow-[0_1px_1px_rgba(0,0,0,0.45)]",
+                            "transition-[height,background-color] duration-150",
+                            sideResizing ? "h-9 bg-text-primary/80" : "h-7",
+                        )}
+                    />
+                </button>
+            ) : null}
             </div>
             {reveal.blur}
         </aside>

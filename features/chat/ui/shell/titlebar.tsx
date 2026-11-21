@@ -14,7 +14,6 @@ import { Breadcrumb, BreadcrumbItem } from "@/components/ui/breadcrumb";
 import { getRepoName } from "@/lib/workspace/repo-history";
 import { useProjectState } from "@/lib/backend";
 import { AGENT_CHROME_ACTIONS_SLOT, AGENT_TABS_SLOT } from "@/features/agent/chrome";
-import { WorkspaceBranchSwitch } from "@/features/agent/workspace/branch-switch";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -147,7 +146,6 @@ export function ChatTitlebar({
 
     const actions = (
         <div className="flex items-center gap-2">
-            {project_path ? <WorkspaceBranchSwitch /> : null}
             <Tooltip content={terminalOpen ? "Hide terminal" : "Show terminal"}>
                 <button
                     type="button"
@@ -231,7 +229,7 @@ export function ChatTitlebar({
     );
 
     const crumb = (
-        <div className="flex h-full min-w-0 flex-1 items-center overflow-hidden pl-1">
+        <div className="flex h-full min-w-0 flex-1 items-center overflow-hidden">
             <div className="min-w-0 shrink-0" data-no-drag>
                 <Breadcrumb className="w-auto min-w-0 max-w-full overflow-hidden" aria-label="Project">
                     {repo ? (

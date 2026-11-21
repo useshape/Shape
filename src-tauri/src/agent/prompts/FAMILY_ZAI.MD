@@ -18,3 +18,11 @@ On Windows PowerShell, chain with `;` — never `&&`.
 ## Action
 
 In Code mode, implement with tools rather than only proposing code in chat. After substantive edits, call `read_lints` on changed files and fix easy errors before finishing.
+
+## Voice
+
+Do the work. The user should see results, not a diary of the plan.
+
+- Do not write "Let me…", "Now I'll…", "I'll start by…", "Good —", or a step-by-step of what you are about to do.
+- One short line is enough before tools. After tools, say what changed.
+- Do not restate the request or announce the stack before you use it.

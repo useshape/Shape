@@ -44,6 +44,7 @@ type CachedProfile = {
   creditsIncluded: number;
   freeAutoPercent: number | null;
   currentPeriodEnd?: string | null;
+  imageUrl?: string | null;
   cachedAt: number;
 };
 
@@ -62,6 +63,7 @@ const DEFAULT_STATE: ShapeAuthState = {
   creditsIncluded: 0,
   freeAutoPercent: null,
   currentPeriodEnd: null,
+  imageUrl: null,
   accessToken: null,
 };
 
@@ -243,6 +245,7 @@ function applyCachedProfile(token: string, profile: CachedProfile) {
     creditsIncluded: profile.creditsIncluded ?? 0,
     freeAutoPercent: profile.freeAutoPercent,
     currentPeriodEnd: profile.currentPeriodEnd ?? null,
+    imageUrl: profile.imageUrl ?? null,
     accessToken: token,
   });
 }
@@ -391,6 +394,7 @@ async function applyToken(token: string | null, allowRefresh = true) {
       creditsIncluded: account.creditsIncluded,
       freeAutoPercent: account.freeAutoPercent,
       currentPeriodEnd: account.currentPeriodEnd ?? null,
+      imageUrl: account.imageUrl ?? null,
       cachedAt: Date.now(),
     });
     setState({
@@ -408,6 +412,7 @@ async function applyToken(token: string | null, allowRefresh = true) {
       creditsIncluded: account.creditsIncluded,
       freeAutoPercent: account.freeAutoPercent,
       currentPeriodEnd: account.currentPeriodEnd ?? null,
+      imageUrl: account.imageUrl ?? null,
       accessToken: token,
     });
     void identifyTelemetryUser(account.id, { tier: account.tier });
