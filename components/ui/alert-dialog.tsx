@@ -58,7 +58,7 @@ function AlertDialogHeader({ className, ...props }: React.ComponentProps<"div">)
 }
 
 function AlertDialogBody({ className, ...props }: React.ComponentProps<"div">) {
-    return <div className={cn("space-y-3 px-3 pb-2", className)} {...props} />;
+    return <div className={cn("space-y-3", className)} {...props} />;
 }
 
 function AlertDialogFooter({ className, ...props }: React.ComponentProps<"div">) {

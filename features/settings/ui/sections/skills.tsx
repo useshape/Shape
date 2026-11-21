@@ -98,8 +98,8 @@ export function SkillsSettings() {
     return (
         <SettingSection
             id="settings-skills"
-            title="Skills"
-            description="Markdown the agent follows when you @mention it."
+            title=""
+            description=""
         >
             <input
                 ref={inputRef}
@@ -156,10 +156,8 @@ export function SkillsSettings() {
                         </Button>
                     </SettingRow>
                 ))}
-                <div className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-text-muted uppercase">
-                    <span>Discovered</span>
-                    <span className="text-text-muted">&middot;</span>
-                    <span className="text-xs font-normal normal-case">.claude, .agents, .github, .shape and your folders</span>
+                <div className="flex items-center gap-2 px-3.5 py-2 text-sm font-normal text-text-muted">
+                    <span>Auto</span>
                     <Button
                         variant="ghost"
                         size="icon"
@@ -172,10 +170,10 @@ export function SkillsSettings() {
                     </Button>
                 </div>
                 {error && !busy ? (
-                    <div className="px-3.5 pb-2.5 text-xs text-text-muted">{error}</div>
+                    <div className="px-3.5 py-2 text-md text-text-muted">{error}</div>
                 ) : null}
                 {rows.length === 0 && !error ? (
-                    <div className="px-3.5 pb-2.5 text-xs text-text-muted">
+                    <div className="px-3.5 py-2 text-md text-text-muted">
                         {busy
                             ? "Scanning for skill files…"
                             : projectPath
@@ -193,7 +191,7 @@ export function SkillsSettings() {
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-xs"
+                                className="text-sm"
                                 aria-label={d.status === "changed" ? ("Update " + d.name) : ("Import " + d.name)}
                                 onClick={() => importDiscoveredSkill(d)}
                             >

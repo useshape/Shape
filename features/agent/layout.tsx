@@ -18,6 +18,7 @@ import { startAgentBackgroundExitToasts } from "@/features/chat/lib/agent-termin
 import { useWindowControls } from "@/features/agent/workbench/titlebar/hooks/use-window-controls";
 import { WindowControls } from "@/features/agent/workbench/titlebar/ui/window-controls";
 import { normalizePath } from "@/lib/path/utils";
+import { useEdgeReveal } from "./edge-reveal";
 
 const MIN_WORKSPACE = 360;
 const MIN_WORKSPACE_SOFT = 280;
@@ -28,6 +29,9 @@ const WINDOW_MIN_HEIGHT = 500;
 const WINDOW_MIN_WIDTH = 1000;
 const MAX_WORKSPACE_RATIO = 0.72;
 const MAX_WORKSPACE_PX = 1200;
+/** Cursor travel past the chat's comfort width before the panel springs on top. */
+const WORKSPACE_RUBBER = 72;
+const WORKSPACE_RUBBER_GAIN = 0.22;
 const SPLASH_KEY = "shape-agent-splash-seen";
 
 function layoutMinWidth(sidebarOpen: boolean, workspaceOpen: boolean) {
@@ -112,10 +116,18 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const [splash, setSplash] = useState(false);
     const [splashVisible, setSplashVisible] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
+    const [floatPanel, setFloatPanel] = useState(false);
+    const [dockedWidth, setDockedWidth] = useState<number | null>(null);
+    const [springing, setSpringing] = useState(false);
+    const [tabShift, setTabShift] = useState(0);
+    const [tabNear, setTabNear] = useState(false);
     const [navSlot, setNavSlot] = useState<HTMLElement | null>(null);
     const [sidebarFlyout, setSidebarFlyout] = useState(false);
     const flyoutTimer = useRef<number | null>(null);
+    const peekArmed = useRef(true);
     const dragging = useRef(false);
+    const floatRef = useRef(false);
+    const springTimer = useRef<number | null>(null);
     const widthRef = useRef(560);
 
     useEffect(() => {
@@ -198,17 +210,33 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
-    const clampWorkspace = useCallback(
-        (x: number, winW = typeof window === "undefined" ? 1280 : window.innerWidth) => {
+    const workspaceLimits = useCallback(
+        (winW = typeof window === "undefined" ? 1280 : window.innerWidth) => {
             const sidebar = sidebarOpen ? SIDEBAR_EXPANDED : 0;
-            const maxByChat = Math.max(0, winW - sidebar - MIN_CHAT - WORKSPACE_GUTTER);
+            const comfort = Math.max(MIN_WORKSPACE_SOFT, winW - sidebar - MIN_CHAT - WORKSPACE_GUTTER);
+            const overlayCap = Math.max(comfort, Math.min(MAX_WORKSPACE_PX, winW - sidebar - 120));
             const maxByRatio = Math.min(MAX_WORKSPACE_PX, Math.floor(winW * MAX_WORKSPACE_RATIO));
-            const max = Math.min(maxByChat, maxByRatio);
-            if (max < MIN_WORKSPACE_SOFT) return 0;
-            return Math.min(max, Math.max(MIN_WORKSPACE_SOFT, x));
+            return { comfort, overlayCap, dockMax: Math.min(comfort, maxByRatio) };
         },
         [sidebarOpen],
     );
+
+    const clampWorkspace = useCallback(
+        (x: number, winW = typeof window === "undefined" ? 1280 : window.innerWidth) => {
+            const { dockMax } = workspaceLimits(winW);
+            if (dockMax < MIN_WORKSPACE_SOFT) return 0;
+            return Math.min(dockMax, Math.max(MIN_WORKSPACE_SOFT, x));
+        },
+        [workspaceLimits],
+    );
+
+    const springTo = useCallback((next: boolean) => {
+        if (springTimer.current) window.clearTimeout(springTimer.current);
+        setSpringing(true);
+        setFloatPanel(next);
+        floatRef.current = next;
+        springTimer.current = window.setTimeout(() => setSpringing(false), 280);
+    }, []);
 
     const prevActiveFile = useRef<string | null>(null);
     useEffect(() => {
@@ -249,6 +277,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
         setSidebarFlyout(false);
         setSidebarOpen((prev) => {
             const next = !prev;
+            if (!next) peekArmed.current = false;
             try {
                 localStorage.setItem("shape-agent-sidebar", String(next));
             } catch {
@@ -259,12 +288,14 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, []);
 
     const openSidebarFlyout = useCallback(() => {
+        if (!peekArmed.current) return;
         if (flyoutTimer.current) window.clearTimeout(flyoutTimer.current);
         flyoutTimer.current = null;
         setSidebarFlyout(true);
     }, []);
 
     const closeSidebarFlyout = useCallback(() => {
+        peekArmed.current = true;
         if (flyoutTimer.current) window.clearTimeout(flyoutTimer.current);
         flyoutTimer.current = window.setTimeout(() => setSidebarFlyout(false), 180);
     }, []);
@@ -366,19 +397,53 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const onMove = (e: MouseEvent) => {
             if (!dragging.current) return;
-            const next = clampWorkspace(window.innerWidth - e.clientX);
-            if (next < MIN_WORKSPACE_SOFT) return;
-            widthRef.current = next;
-            setWorkspaceWidth(next);
+            const { comfort, overlayCap } = workspaceLimits();
+            const pointer = Math.max(MIN_WORKSPACE_SOFT, window.innerWidth - e.clientX - WORKSPACE_GUTTER);
+            setTabShift(Math.max(-5, Math.min(5, e.movementX * 0.45)));
+            if (!floatRef.current) {
+                if (pointer <= comfort) {
+                    widthRef.current = pointer;
+                    setWorkspaceWidth(pointer);
+                    return;
+                }
+                const over = pointer - comfort;
+                if (over < WORKSPACE_RUBBER) {
+                    widthRef.current = comfort + over * WORKSPACE_RUBBER_GAIN;
+                    setWorkspaceWidth(widthRef.current);
+                    return;
+                }
+                setDockedWidth(widthRef.current);
+                springTo(true);
+                widthRef.current = Math.min(overlayCap, pointer);
+                setWorkspaceWidth(widthRef.current);
+                return;
+            }
+            if (pointer < comfort - 28) {
+                setDockedWidth(null);
+                springTo(false);
+                widthRef.current = Math.min(comfort, pointer);
+                setWorkspaceWidth(widthRef.current);
+                return;
+            }
+            widthRef.current = Math.min(overlayCap, Math.max(comfort, pointer));
+            setWorkspaceWidth(widthRef.current);
         };
         const onUp = () => {
             if (!dragging.current) return;
             dragging.current = false;
             setIsResizing(false);
+            setTabShift(0);
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
+            if (!floatRef.current) {
+                const { comfort } = workspaceLimits();
+                if (widthRef.current > comfort) {
+                    widthRef.current = comfort;
+                    setWorkspaceWidth(comfort);
+                }
+            }
             try {
-                localStorage.setItem("shape-agent-workspace-width", String(widthRef.current));
+                localStorage.setItem("shape-agent-workspace-width", String(Math.round(widthRef.current)));
             } catch {
                 /* ignore */
             }
@@ -389,14 +454,27 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
         };
-    }, [clampWorkspace]);
+    }, [springTo, workspaceLimits]);
 
     useEffect(() => {
         const apply = () => {
-            const next = clampWorkspace(widthRef.current);
+            const { comfort, overlayCap, dockMax } = workspaceLimits();
+            if (floatRef.current) {
+                const next = Math.min(overlayCap, Math.max(comfort, widthRef.current));
+                if (next <= comfort) {
+                    floatRef.current = false;
+                    setFloatPanel(false);
+                }
+                setWorkspaceFits(true);
+                setWorkspaceWidth((prev) => (prev === next ? prev : next));
+                widthRef.current = next;
+                return;
+            }
+            const next = dockMax < MIN_WORKSPACE_SOFT ? 0 : Math.min(dockMax, Math.max(MIN_WORKSPACE_SOFT, widthRef.current));
             setWorkspaceFits(next > 0);
             if (next > 0) {
                 setWorkspaceWidth((prev) => (prev === next ? prev : next));
+                widthRef.current = next;
             }
         };
         apply();
@@ -416,7 +494,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             window.removeEventListener("resize", apply);
             unlisten?.();
         };
-    }, [clampWorkspace, sidebarOpen]);
+    }, [sidebarOpen, workspaceLimits]);
 
     useEffect(() => {
         const wantWorkspace = workspaceOpen && Boolean(project_path);
@@ -487,6 +565,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const overlayOpen = overlay != null;
     const showWorkspace = Boolean(project_path) && !overlayOpen;
     const rightExpanded = workspaceOpen && showWorkspace && workspaceFits;
+    const workspaceReveal = useEdgeReveal<HTMLDivElement>(rightExpanded, "workspace-edge", { strength: 0.4 });
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
@@ -575,48 +654,92 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 </div>
                 {showWorkspace && project_path ? (
                     <>
+                        {workspaceReveal.filter}
                         <div
-                            role="separator"
-                            aria-orientation="vertical"
-                            aria-label="Resize workspace"
+                            style={
+                                floatPanel
+                                    ? {
+                                          width: (dockedWidth ?? workspaceWidth) + 12,
+                                          minWidth: 0,
+                                          flexGrow: 0,
+                                          flexShrink: 0,
+                                          flexBasis: (dockedWidth ?? workspaceWidth) + 12,
+                                      }
+                                    : {
+                                          width: rightExpanded ? workspaceWidth + 12 : 0,
+                                          minWidth: 0,
+                                          flexGrow: 0,
+                                          flexShrink: 0,
+                                          flexBasis: rightExpanded ? workspaceWidth + 12 : 0,
+                                          transition:
+                                              isResizing
+                                                  ? "none"
+                                                  : "width 420ms cubic-bezier(0.16, 1, 0.3, 1), flex-basis 420ms cubic-bezier(0.16, 1, 0.3, 1)",
+                                      }
+                            }
                             className={cn(
-                                "group relative z-30 w-0 shrink-0",
-                                !rightExpanded && "pointer-events-none opacity-0",
-                            )}
-                            onMouseDown={(e) => {
-                                if (!rightExpanded) return;
-                                e.preventDefault();
-                                dragging.current = true;
-                                setIsResizing(true);
-                                document.body.style.cursor = "col-resize";
-                                document.body.style.userSelect = "none";
-                            }}
-                        >
-                            <div className="absolute inset-y-3 -left-1.5 w-3 cursor-col-resize" />
-                        </div>
-                        <div
-                            style={{
-                                width: rightExpanded ? workspaceWidth + 12 : 0,
-                                flex: "0 0 auto",
-                            }}
-                            className={cn(
-                                "h-full min-w-0 overflow-hidden",
-                                rightExpanded ? "pr-1" : "pointer-events-none p-0",
-                                !isResizing &&
-                                    "transition-[width] duration-200 ease-[var(--ease-out)]",
+                                "relative h-full overflow-visible",
+                                (rightExpanded || workspaceReveal.present) && "pr-1",
+                                !rightExpanded && "pointer-events-none",
                             )}
                             aria-hidden={!rightExpanded}
                         >
-                            {rightExpanded ? (
+                            {workspaceReveal.present ? (
                                 <div
-                                    style={{ width: workspaceWidth }}
-                                    className="relative flex h-full flex-col overflow-hidden"
+                                    ref={workspaceReveal.bendRef}
+                                    style={{
+                                        width: workspaceWidth,
+                                        transition: springing
+                                            ? "width 240ms cubic-bezier(0.16, 1.28, 0.32, 1)"
+                                            : undefined,
+                                    }}
+                                    className={cn(
+                                        "relative flex h-full min-w-0 flex-col",
+                                        floatPanel && "absolute inset-y-0 right-0 z-30",
+                                    )}
+                                    onMouseMove={(e) => {
+                                        const bounds = e.currentTarget.getBoundingClientRect();
+                                        const dist = Math.hypot(e.clientX - bounds.left, e.clientY - (bounds.top + bounds.height / 2));
+                                        setTabNear(dist < 72);
+                                    }}
+                                    onMouseLeave={() => {
+                                        if (!dragging.current) setTabNear(false);
+                                    }}
                                 >
+                                    {rightExpanded ? (
+                                        <button
+                                            type="button"
+                                            aria-label="Resize workspace"
+                                            className={cn(
+                                                "absolute top-1/2 left-0 z-40 flex h-11 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center",
+                                                "transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                                tabNear || isResizing ? "opacity-100" : "opacity-0",
+                                            )}
+                                            style={{ transform: `translate(calc(-50% + ${tabShift}px), -50%)` }}
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                dragging.current = true;
+                                                setIsResizing(true);
+                                                setTabNear(true);
+                                                document.body.style.cursor = "col-resize";
+                                                document.body.style.userSelect = "none";
+                                            }}
+                                        >
+                                            <span
+                                                className={cn(
+                                                    "block w-[3px] rounded-full bg-text-muted/55 shadow-[0_1px_1px_rgba(0,0,0,0.45)]",
+                                                    "transition-[height,background-color] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                                    isResizing ? "h-9 bg-text-primary/80" : "h-7",
+                                                )}
+                                            />
+                                        </button>
+                                    ) : null}
                                     <AgentWorkspace
                                         projectPath={project_path}
                                         expanded
                                         onExpand={() => persistWorkspace(true)}
                                     />
+                                    {workspaceReveal.blur}
                                 </div>
                             ) : null}
                         </div>

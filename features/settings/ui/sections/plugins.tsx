@@ -45,6 +45,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { SettingCard, SettingRow, SettingSection, SettingSelect, SettingSwitch, SETTING_CONTROL_BTN } from "../shared/controls";
+import { ComposioHandoff } from "./composio-handoff";
 import { Skeleton } from "@/features/git/ui/shared/skeletons";
 
 const APPROVAL_OPTIONS: Array<{ value: AutoRunModeSetting; label: string }> = [
@@ -552,6 +553,7 @@ export function PluginsSettingsView() {
     const [query, setQuery] = useState("");
     const [category, setCategory] = useState("all");
     const [openToolkit, setOpenToolkit] = useState<string | null>(null);
+    const [handoff, setHandoff] = useState<{ name: string; url: string } | null>(null);
 
     const load = useCallback(
         async (force = false, quiet = false) => {
@@ -657,8 +659,7 @@ export function PluginsSettingsView() {
         setBusy(plugin.toolkit);
         try {
             const { redirectUrl } = await startPluginConnect(plugin.toolkit);
-            await commands.openUrlExternal(redirectUrl);
-            notify.info(`Finish connecting ${plugin.name} in the browser.`);
+            setHandoff({ name: plugin.name, url: redirectUrl });
         } catch (err) {
             setBusy(null);
             const message = err instanceof ShapeApiError ? err.message : "Could not start connect.";
@@ -797,6 +798,24 @@ export function PluginsSettingsView() {
                     </div>
                 )}
             </div>
+            <ComposioHandoff
+                open={Boolean(handoff)}
+                pluginName={handoff?.name ?? "this app"}
+                userId={auth.userId}
+                name={auth.name}
+                email={auth.email}
+                offline={auth.offline}
+                onCancel={() => {
+                    setHandoff(null);
+                    setBusy(null);
+                }}
+                onContinue={() => {
+                    if (!handoff) return;
+                    void commands.openUrlExternal(handoff.url);
+                    notify.info(`Finish connecting ${handoff.name} in the browser.`);
+                    setHandoff(null);
+                }}
+            />
         </div>
     );
 }

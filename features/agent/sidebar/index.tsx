@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { SidebarToggleBtn, AGENT_SIDEBAR_BACK_SLOT } from "../chrome";
 import type { AgentOverlay } from "../overlay";
+import { useEdgeReveal } from "../edge-reveal";
 
 export const AGENT_SIDEBAR_NAV_SLOT = "shape-agent-sidebar-nav";
 
@@ -89,6 +90,7 @@ export function AgentSidebar({
     const github = useGitHubAuth();
     const macos = useChromeKind() === "macos";
     const showHostedNav = Boolean(overlay);
+    const reveal = useEdgeReveal<HTMLElement>(open && expanded, "sidebar-edge");
 
     const toggleSidebar = () => {
         if (onToggleSidebar) {
@@ -108,20 +110,22 @@ export function AgentSidebar({
     };
 
     return (
+        <>
+        {reveal.filter}
         <aside
             aria-hidden={!open}
             className={cn(
                 "relative z-20 flex h-full shrink-0 flex-col overflow-hidden bg-sidebar text-text-primary",
-                "transition-[width,border-color] duration-[var(--transition-base)] ease-[var(--ease-out)]",
-                !open ? "w-0 border-r-transparent" : expanded ? "w-80" : "w-12",
+                "transition-[width] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
+                !open ? "w-0" : expanded ? "w-80" : "w-12",
             )}
         >
             <div
+                ref={reveal.bendRef}
                 className={cn(
                     "flex h-full min-h-0 shrink-0 flex-col",
                     expanded ? "w-80" : "w-12",
-                    "transition-[opacity,transform] duration-[var(--transition-base)] ease-[var(--ease-out)]",
-                    !open && "pointer-events-none -translate-x-full opacity-0",
+                    !open && "pointer-events-none",
                 )}
             >
                 {showHostedNav ? (
@@ -205,22 +209,38 @@ export function AgentSidebar({
                                     Connect GitHub
                                 </Button>
                             ) : null}
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => void openSettingsWindow()}
-                                className="flex h-10 squircle-full! w-full items-center bg-panel-hover justify-center text-left"
-                            >
-                                <Icon icon={SlideSettings24Regular} className="shrink-0 text-text-muted" />
-                                <span className="min-w-0 flex-1 truncate pr-5">Settings</span>
-                            </Button>
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={newChat}
+                                    className="flex h-10 min-w-0 flex-1 items-center justify-start squircle-full! bg-panel-hover px-3 text-left"
+                                >
+                                    <Icon icon={Compose20Regular} className="shrink-0 text-text-muted" />
+                                    <span className="min-w-0 flex-1 truncate">New chat</span>
+                                </Button>
+                                <Tooltip content="Settings" side="top" delayDuration={80}>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Settings"
+                                        onClick={() => void openSettingsWindow()}
+                                        className="size-10 shrink-0 squircle-full! bg-panel-hover"
+                                    >
+                                        <Icon icon={SlideSettings24Regular} className="text-text-muted" />
+                                    </Button>
+                                </Tooltip>
+                            </div>
                         </>
                     ) : (
                         <NavItem label="Settings" icon={SlideSettings24Regular} onClick={() => void openSettingsWindow()} collapsed />
                     )}
                 </div>
             </div>
+            {reveal.blur}
         </aside>
+        </>
     );
 }
