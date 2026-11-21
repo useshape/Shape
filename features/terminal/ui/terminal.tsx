@@ -92,6 +92,26 @@ const lastPtySize = new Map<number, { cols: number; rows: number }>();
 
 const globalTerminalStore = terminalSessionStore;
 
+export function readTerminalPreview(cwd: string): { title: string; line: string } {
+    const id = globalTerminalStore.activeProjectTabs[cwd] || globalTerminalStore.activeProjectTabs["global"] || null;
+    const tab = globalTerminalStore.tabs.find((item) => item.id === id);
+    const inst = id ? globalTerminalStore.instances.get(id) : undefined;
+    let line = "";
+    const term = inst?.term;
+    if (term) {
+        const buf = term.buffer.active;
+        const last = buf.baseY + buf.cursorY;
+        for (let y = last; y >= Math.max(0, last - 30); y--) {
+            const text = buf.getLine(y)?.translateToString(true).trim();
+            if (text) {
+                line = text;
+                break;
+            }
+        }
+    }
+    return { title: tab?.title || "Terminal", line };
+}
+
 export async function refitAllTerminals() {
     if (isLayoutResizing()) return;
     const { invoke } = await import("@tauri-apps/api/core");

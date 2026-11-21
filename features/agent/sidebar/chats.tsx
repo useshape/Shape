@@ -2,7 +2,6 @@
 
 import { Checkmark } from "@/components/ui/checkmark";
 import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
-import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
 import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
 import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
@@ -482,7 +481,7 @@ function SessionRow({
 }
 
 export function ChatList({
-    onNewChat,
+    onNewChat: _onNewChat,
 }: {
     onNewChat: () => void;
     /** @deprecated unified Sessions list — ignored */
@@ -728,14 +727,6 @@ export function ChatList({
                         {filtered.map((c) => (
                             <SessionRow key={c.id} {...rowProps(c)} />
                         ))}
-                        <button
-                            type="button"
-                            onClick={onNewChat}
-                            className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm text-text-muted hover:bg-panel-hover hover:text-text-secondary"
-                        >
-                            <Icon icon={Compose20Regular} className="shrink-0" />
-                            <span>New chat</span>
-                        </button>
                     </div>
                 )}
             </ScrollArea>

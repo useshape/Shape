@@ -9,4 +9,5 @@ export type AccountSummary = {
   creditsIncluded: number;
   freeAutoPercent: number | null;
   currentPeriodEnd?: string | null;
+  imageUrl?: string | null;
 };

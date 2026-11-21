@@ -50,11 +50,11 @@ export function Breadcrumb({
         className,
       )}
     >
-      <ol className="flex items-center gap-1 px-1">
+      <ol className="flex h-full items-center gap-1 px-1 leading-none">
         {items.map((item, index) => (
           <Fragment key={item.key ?? index}>
             {index > 0 && (
-              <Icon icon={ChevronRight20Regular} className="icon-sm" />
+              <Icon icon={ChevronRight20Regular} className="icon-sm shrink-0 self-center" />
             )}
             {item}
           </Fragment>
@@ -95,7 +95,7 @@ export function BreadcrumbItem({
       <li
         aria-current="page"
         className={cn(
-          "flex items-center gap-1.5 text-sm whitespace-nowrap text-text-secondary",
+          "flex items-center gap-1.5 text-sm leading-none whitespace-nowrap text-text-secondary",
           className,
         )}
       >
@@ -105,7 +105,7 @@ export function BreadcrumbItem({
   }
 
   const interactiveClass = cn(
-    "-mx-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-md whitespace-nowrap text-text-tertiary",
+    "-mx-1 flex items-center gap-1.5 rounded-md px-1 py-0 text-sm leading-none whitespace-nowrap text-text-tertiary",
     "transition-colors duration-150 ease outline-none",
     "hover:bg-background-primary-hover hover:text-text-secondary",
     "focus-visible:ring-2 focus-visible:ring-border-focus-ring",
