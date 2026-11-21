@@ -22,7 +22,7 @@ import { useEdgeReveal } from "./edge-reveal";
 
 const MIN_WORKSPACE = 360;
 const MIN_WORKSPACE_SOFT = 280;
-const MIN_CHAT = 380;
+const MIN_CHAT = 700;
 const SIDEBAR_EXPANDED = 304;
 const WORKSPACE_GUTTER = 12;
 const WINDOW_MIN_HEIGHT = 500;
@@ -118,7 +118,6 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const [isResizing, setIsResizing] = useState(false);
     const [floatPanel, setFloatPanel] = useState(false);
     const [dockedWidth, setDockedWidth] = useState<number | null>(null);
-    const [springing, setSpringing] = useState(false);
     const [tabShift, setTabShift] = useState(0);
     const [tabNear, setTabNear] = useState(false);
     const [navSlot, setNavSlot] = useState<HTMLElement | null>(null);
@@ -127,7 +126,10 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const peekArmed = useRef(true);
     const dragging = useRef(false);
     const floatRef = useRef(false);
-    const springTimer = useRef<number | null>(null);
+    const dockedRef = useRef(0);
+    const shellRef = useRef<HTMLDivElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+    const tabRef = useRef<HTMLButtonElement>(null);
     const widthRef = useRef(560);
 
     useEffect(() => {
@@ -231,11 +233,8 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     );
 
     const springTo = useCallback((next: boolean) => {
-        if (springTimer.current) window.clearTimeout(springTimer.current);
-        setSpringing(true);
         setFloatPanel(next);
         floatRef.current = next;
-        springTimer.current = window.setTimeout(() => setSpringing(false), 280);
     }, []);
 
     const prevActiveFile = useRef<string | null>(null);
@@ -395,44 +394,73 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     }, [project_path, persistWorkspace, toggleSidebar, toggleWorkspace]);
 
     useEffect(() => {
+        const paint = (panelPx: number, slotPx: number) => {
+            const shell = shellRef.current;
+            const panel = panelRef.current;
+            if (shell) {
+                shell.style.transition = "none";
+                shell.style.width = `${slotPx}px`;
+                shell.style.flexBasis = `${slotPx}px`;
+            }
+            if (panel) {
+                panel.style.transition = "none";
+                panel.style.width = `${panelPx}px`;
+            }
+        };
         const onMove = (e: MouseEvent) => {
             if (!dragging.current) return;
             const { comfort, overlayCap } = workspaceLimits();
             const pointer = Math.max(MIN_WORKSPACE_SOFT, window.innerWidth - e.clientX - WORKSPACE_GUTTER);
-            setTabShift(Math.max(-5, Math.min(5, e.movementX * 0.45)));
+            const handle = tabRef.current;
+            if (handle) {
+                const lean = Math.max(-5, Math.min(5, (handle.getBoundingClientRect().left - e.clientX) * 0.12));
+                handle.style.transform = `translate(calc(-50% + ${lean}px), -50%)`;
+            }
             if (!floatRef.current) {
                 if (pointer <= comfort) {
                     widthRef.current = pointer;
-                    setWorkspaceWidth(pointer);
+                    paint(pointer, pointer + 12);
                     return;
                 }
                 const over = pointer - comfort;
                 if (over < WORKSPACE_RUBBER) {
-                    widthRef.current = comfort + over * WORKSPACE_RUBBER_GAIN;
-                    setWorkspaceWidth(widthRef.current);
+                    const resisted = comfort + over * WORKSPACE_RUBBER_GAIN;
+                    widthRef.current = resisted;
+                    paint(resisted, resisted + 12);
                     return;
                 }
-                setDockedWidth(widthRef.current);
+                const frozen = widthRef.current;
+                dockedRef.current = frozen;
+                setDockedWidth(frozen);
                 springTo(true);
-                widthRef.current = Math.min(overlayCap, pointer);
-                setWorkspaceWidth(widthRef.current);
+                const next = Math.min(overlayCap, pointer);
+                widthRef.current = next;
+                setWorkspaceWidth(next);
+                paint(next, frozen + 12);
                 return;
             }
+            const docked = dockedRef.current || comfort;
             if (pointer < comfort - 28) {
+                dockedRef.current = 0;
                 setDockedWidth(null);
                 springTo(false);
-                widthRef.current = Math.min(comfort, pointer);
-                setWorkspaceWidth(widthRef.current);
+                const next = Math.min(comfort, pointer);
+                widthRef.current = next;
+                setWorkspaceWidth(next);
+                paint(next, next + 12);
                 return;
             }
-            widthRef.current = Math.min(overlayCap, Math.max(comfort, pointer));
-            setWorkspaceWidth(widthRef.current);
+            const next = Math.min(overlayCap, Math.max(comfort, pointer));
+            widthRef.current = next;
+            paint(next, docked + 12);
         };
         const onUp = () => {
             if (!dragging.current) return;
             dragging.current = false;
             setIsResizing(false);
             setTabShift(0);
+            setWorkspaceWidth(widthRef.current);
+            if (tabRef.current) tabRef.current.style.transform = "translate(-50%, -50%)";
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
             if (!floatRef.current) {
@@ -565,7 +593,10 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
     const overlayOpen = overlay != null;
     const showWorkspace = Boolean(project_path) && !overlayOpen;
     const rightExpanded = workspaceOpen && showWorkspace && workspaceFits;
-    const workspaceReveal = useEdgeReveal<HTMLDivElement>(rightExpanded, "workspace-edge", { strength: 0.4 });
+    const workspaceReveal = useEdgeReveal<HTMLDivElement>(rightExpanded, "workspace-edge", {
+        strength: 0.72,
+        origin: 0,
+    });
     const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
     return (
@@ -613,7 +644,10 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                 <SidebarPeek shown={sidebarFlyout} onEnter={openSidebarFlyout} onLeave={closeSidebarFlyout} />
             )}
 
-            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel squircle-l-2xl rounded-r-lg m-1">
+            <div className={cn(
+                "relative mb-1 mr-1 mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel squircle-l-2xl rounded-r-lg",
+                sidebarOpen ? "ml-1" : "ml-0",
+            )}>
                 <AgentChrome
                     rightOpen={rightExpanded}
                     onToggleRight={toggleWorkspace}
@@ -656,6 +690,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                     <>
                         {workspaceReveal.filter}
                         <div
+                            ref={shellRef}
                             style={
                                 floatPanel
                                     ? {
@@ -686,13 +721,11 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                         >
                             {workspaceReveal.present ? (
                                 <div
-                                    ref={workspaceReveal.bendRef}
-                                    style={{
-                                        width: workspaceWidth,
-                                        transition: springing
-                                            ? "width 240ms cubic-bezier(0.16, 1.28, 0.32, 1)"
-                                            : undefined,
+                                    ref={(node) => {
+                                        panelRef.current = node;
+                                        workspaceReveal.bendRef.current = node;
                                     }}
+                                    style={{ width: workspaceWidth }}
                                     className={cn(
                                         "relative flex h-full min-w-0 flex-col",
                                         floatPanel && "absolute inset-y-0 right-0 z-30",
@@ -708,6 +741,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                 >
                                     {rightExpanded ? (
                                         <button
+                                            ref={tabRef}
                                             type="button"
                                             aria-label="Resize workspace"
                                             className={cn(

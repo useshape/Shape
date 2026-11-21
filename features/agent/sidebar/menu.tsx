@@ -28,21 +28,23 @@ import {
 
 export function ProfileAvatar({
     gitAvatarUrl,
+    shapeImageUrl,
     shapeUserId,
     offline,
     name,
     size = 28,
 }: {
     gitAvatarUrl: string | null;
+    /** Clerk photo from the signed-in Shape account. Wins over GitHub. */
+    shapeImageUrl?: string | null;
     shapeUserId: string | null;
     offline: boolean;
     name: string;
     size?: number;
 }) {
     const [failed, setFailed] = useState(false);
-    const imageSrc =
-        gitAvatarUrl
-        ?? (shapeUserId && !offline ? `${SHAPE_API_BASE}/api/avatar/${shapeUserId}` : null);
+    const shapeSrc = shapeUserId && !offline ? `${SHAPE_API_BASE}/api/avatar/${shapeUserId}` : null;
+    const imageSrc = shapeImageUrl || gitAvatarUrl || shapeSrc;
 
     if (!imageSrc || failed) return null;
 
@@ -90,6 +92,7 @@ export function AccountMenu({
                 <div className="flex items-center gap-2.5 px-2 py-1">
                     <ProfileAvatar
                         size={20}
+                        shapeImageUrl={shapeAuth.imageUrl}
                         gitAvatarUrl={githubAuth.loggedIn ? githubAuth.avatarUrl : null}
                         shapeUserId={shapeAuth.userId}
                         offline={Boolean(shapeAuth.offline)}
@@ -170,10 +173,14 @@ export function AccountMenuButton({
     className,
     side = "bottom",
     align = "start",
+    chevron = true,
+    avatarSize = 20,
 }: {
     className?: string;
     side?: "top" | "bottom";
     align?: "start" | "end";
+    chevron?: boolean;
+    avatarSize?: number;
 }) {
     const shapeAuth = useShapeAuth();
     const githubAuth = useGitHubAuth();
@@ -188,22 +195,26 @@ export function AccountMenuButton({
                 type="button"
                 aria-label="Account"
                 className={cn(
-                    "flex items-center gap-2 squircle-2xl px-1 py-0.5 text-left hover:bg-panel-hover",
+                    "flex items-center squircle-2xl py-0.5 text-left hover:bg-panel-hover",
+                    chevron ? "gap-2 px-1" : "px-0.5",
                     className,
                 )}
             >
                 <ProfileAvatar
+                    shapeImageUrl={shapeAuth.imageUrl}
                     gitAvatarUrl={githubAuth.loggedIn ? githubAuth.avatarUrl : null}
                     shapeUserId={shapeAuth.userId}
                     offline={Boolean(shapeAuth.offline)}
                     name={displayName}
-                    size={20}
+                    size={avatarSize}
                 />
-                <Icon
-                    icon={ChevronDown20Regular}
-                    className="shrink-0 text-text-muted!"
-                    style={{ ["--icon-size" as string]: "14px" }}
-                />
+                {chevron ? (
+                    <Icon
+                        icon={ChevronDown20Regular}
+                        className="shrink-0 text-text-muted!"
+                        style={{ ["--icon-size" as string]: "14px" }}
+                    />
+                ) : null}
             </button>
         </AccountMenu>
     );

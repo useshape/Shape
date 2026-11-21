@@ -106,7 +106,7 @@ export function AgentChrome({
             {!sidebarOpen && onToggleSidebar ? (
                 <div
                     data-sidebar-peek-toggle=""
-                    className="relative z-10 flex shrink-0 items-center pl-1"
+                    className="relative z-10 flex h-full shrink-0 items-center pl-2"
                     data-no-drag
                     onMouseEnter={onSidebarHoverStart}
                     onMouseLeave={onSidebarHoverEnd}
@@ -116,7 +116,10 @@ export function AgentChrome({
             ) : null}
             <div
                 id={AGENT_TABS_SLOT}
-                className="relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden pl-2"
+                className={cn(
+                    "relative z-10 flex h-full min-w-0 flex-1 items-center overflow-hidden",
+                    sidebarOpen ? "pl-3" : "pl-1",
+                )}
             />
 
             <div className="relative z-10 ml-auto flex shrink-0 items-center gap-0.5 px-1" data-no-drag>
@@ -131,8 +134,8 @@ export function AgentChrome({
                         <Icon icon={PanelRight20Filled} />
                     </Btn>
                 ) : null}
-                {padWindowControls ? <WindowControlsSpacer /> : null}
-                {macos ? <AccountMenuButton align="end" /> : null}
+                {padWindowControls && !macos ? <WindowControlsSpacer /> : null}
+                {macos ? <AccountMenuButton align="end" chevron={false} avatarSize={16} /> : null}
             </div>
         </div>
     );

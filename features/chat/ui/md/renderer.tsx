@@ -1250,7 +1250,7 @@ export function MessageRenderer({
                         content={shown}
                         isGenerating={isGenerating}
                         isLast={isLastSegment}
-                        plain={surface === "talk" || (!isLastSegment && !!isGenerating)}
+                        plain={surface === "talk"}
                     />
                 </div>
             );

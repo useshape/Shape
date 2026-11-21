@@ -1,6 +1,5 @@
 "use client";
 
-import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
 import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 
 
@@ -13,7 +12,6 @@ import { Icon } from "@/components/ui/icon";
 import { FadeTruncate } from "@/components/ui/fade-truncate";
 import { TabBarShell } from "@/features/editor/ui/tabs/tab-bar-shell";
 import {
-    WORKBENCH_TAB_ACTION_BUTTON_CLASS,
     WORKBENCH_TAB_CLOSE_BUTTON_CLASS,
     WORKBENCH_TAB_CONTENT_ACTIVE_CLASS,
     WORKBENCH_TAB_CONTENT_CLASS,
@@ -219,8 +217,8 @@ function SortableChatTab({
 
 /** Chat conversation tabs — same TabBarShell as workspace / editor tabs. */
 export function ChatTabBar({
-    title,
-    onNewChat,
+    title: _title,
+    onNewChat: _onNewChat,
     tabs,
     activeTabId,
     onSelectTab,
@@ -291,16 +289,6 @@ export function ChatTabBar({
             itemIds={list.map((t) => t.id)}
             onDragEnd={handleDragEnd}
             className="h-full w-auto min-w-0 flex-1 bg-transparent px-1"
-            listEnd={
-                <button
-                    type="button"
-                    onClick={onNewChat}
-                    className={cn(WORKBENCH_TAB_ACTION_BUTTON_CLASS, "ml-0.5 shrink-0 self-center")}
-                    aria-label="New chat"
-                >
-                    <Icon icon={Add20Regular} />
-                </button>
-            }
         >
             {list.map((tab) => (
                 <SortableChatTab
