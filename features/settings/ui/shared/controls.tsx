@@ -23,7 +23,7 @@ const settingCardClass = "overflow-hidden squircle-[18px] bg-settings-card";
 
 /** Shared chrome for settings action / select triggers. */
 export const SETTING_CONTROL_BTN =
-    "h-9 min-w-0 justify-between gap-1.5 border border-border bg-panel-hover px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10";
+    "h-8 min-w-0 justify-between gap-1.5 border border-border px-3 font-normal text-text-primary hover:bg-white/12 [[data-theme=light]_&]:bg-black/6 [[data-theme=light]_&]:hover:bg-black/10";
 
 export function SettingCard({
     children,

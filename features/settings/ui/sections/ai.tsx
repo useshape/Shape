@@ -642,11 +642,12 @@ export function AiSettingsPanel({
                                 {indexing ? "Indexing…" : "Re-index"}
                             </Button>
                         </div>
-                        <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
+                        <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/10">
                             <div
                                 className={cn(
-                                    "h-full rounded-full bg-success",
-                                    indexing && indexPhase === "scanning" && "w-1/3 animate-pulse",
+                                    "h-full rounded-full",
+                                    indexing ? "index-bar-green" : "bg-success",
+                                    indexing && indexPhase === "scanning" && "w-1/3",
                                 )}
                                 style={
                                     indexing && indexPhase === "scanning"

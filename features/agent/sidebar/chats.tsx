@@ -1,6 +1,5 @@
 "use client";
 
-import { Add20Regular } from "@fluentui/react-icons/headless/svg/add";
 import { Checkmark } from "@/components/ui/checkmark";
 import { ChevronRight20Regular } from "@fluentui/react-icons/headless/svg/chevron-right";
 import { Compose20Regular } from "@fluentui/react-icons/headless/svg/compose";
@@ -266,7 +265,6 @@ function ChatRow({
     const actions: { key: string; label: string; icon: IconGlyph; run: () => void; danger?: boolean; sep?: boolean }[] = [
         { key: "open", label: "Open", icon: Open20Regular, run: openChat },
         { key: "rename", label: "Rename", icon: Edit20Regular, run: startRename },
-        { key: "new", label: "New Chat", icon: Add20Regular, run: () => window.dispatchEvent(new CustomEvent("shape-chat-new")) },
         { key: "copy", label: "Copy Title", icon: Copy20Regular, sep: true, run: () => void navigator.clipboard.writeText(title) },
         ...(path
             ? [{ key: "reveal", label: "Reveal Folder", icon: FolderOpen20Regular, run: () => void commands.revealPath(path).catch(() => {}) }]
