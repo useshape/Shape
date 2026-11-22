@@ -1,63 +1,72 @@
-Shape is currently licensed under BSL 1.1, with plans to transition to an open-source license with the release of 2.0.0.
-
 <p align="center">
   <a href="https://useshape.org">
     <img src="./public/hero.png" alt="Chat next to the open folder" width="880">
   </a>
 </p>
 
-<p align="center">
+<p align="start">
   <a href="https://github.com/useshape/Shape/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/useshape/Shape?style=flat-square"></a>
   <a href="https://github.com/useshape/Shape/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/useshape/Shape/ci.yml?style=flat-square&branch=main&label=ci"></a>
   <a href="https://discord.gg/MMCEDVZKYf"><img alt="Discord" src="https://img.shields.io/discord/1517927888240906330?style=flat-square&label=discord"></a>
 </p>
 
-<p align="center">
-  <a href="https://useshape.org">Website</a> ·
+<p align="start">
+  <a href="https://useshape.org">Get started for free</a> ·
   <a href="https://useshape.org/docs">Docs</a> ·
   <a href="https://useshape.org/download">Download</a> ·
   <a href="https://discord.gg/MMCEDVZKYf">Discord</a>
 </p>
 
-Shape is a Windows desktop agent. You open a folder you work in. Chat sits beside the files, Git, and a terminal. You describe the change. Shape reads the project, answers in the thread, and edits files when you ask. Shape shows a diff for each edit. You commit when you want a commit.
+Shape is a coding agent for all your needs, in a simple, uncomplicated modern. interface.
 
-## Work from the composer
+## What It Can Do
 
-Pick a mode before you send.
+View, read, and edit files.
 
-- **Code** edits files and can run commands.
-- **Ask** reads the project and leaves files alone.
-- **Plan** writes the approach and waits.
-- **Visual** works on UI. Pair it with the in-app browser to see the screen.
-- **Review** looks for a bug and proposes a small fix.
+Browse the web and interact with websites.
 
-Type `@` to attach a file or folder. Type `/` to run a saved prompt.
+Create plans and manage tasks.
 
-[Agent](https://useshape.org/docs/agent/overview)
+Launch multiple subagents to work in parallel.
+
+Reverse-engineer programs and analyse how they work.
+
+Review code before implementation and after major changes.
+
+Run commands and scripts.
+
+Capture screenshots of applications for review.
+
+Generate images and other media.
+
+
+[Extra Info](https://useshape.org/docs/agent/overview)
 
 ## Models
 
-Auto is included on Free. Paid plans add Claude, GPT, Gemini, Grok, DeepSeek, Qwen, and the rest of the catalog. You spend credits when you pick a named model.
+Powered by Shape Cloud, with access to models from over 10 providers.
 
-![Claude, GPT, Gemini, Grok, DeepSeek, Qwen](./docs/images/readme/models.svg)
+Explore the available models and their pricing below.
 
-[Models](https://useshape.org/docs/get-started/models)
+[View Pricing](https://useshape.org/pricing)
 
 ## Plugins
 
-Connect GitHub, Figma, Linear, Slack, Notion, Stripe, Supabase, Vercel, and other accounts. You sign in once under Settings, then ask in the thread: open a pull request, list Linear bugs, post a diff summary to Slack.
+Native support for 20+ plugins, including MCP integrations, allowing you to extend functionality and connect external tools and services.
 
-![GitHub, Figma, Linear, Slack, Notion, Stripe, Supabase, Vercel](./docs/images/readme/plugins.svg)
+[Explore MCP Integrations](https://useshape.org/docs/customize/mcp)
 
-A plugin is a connected account. A tool that runs on your machine is [MCP](https://useshape.org/docs/customize/mcp).
-
-[Plugins](https://useshape.org/docs/customize/plugins)
+[Explore Plugins](https://useshape.org/docs/customize/plugins)
 
 ## Install
 
-Windows 10 or 11, 64-bit. [Installer](https://useshape.org/download). Older builds: [Releases](https://github.com/useshape/Shape/releases).
+Available for Windows 10 or later (64-bit and ARM64) and macOS 12 or later (Apple Silicon and Intel).
 
-Stable is the tested channel. On nightly you get the newest installer, and that installer can break.
+[Download Installer](https://useshape.org/download)
+
+[View Previous Releases](https://github.com/useshape/Shape/releases)
+
+Stable releases are recommended. Nightly builds provide the latest updates but may be unstable.
 
 ## Build from source
 
@@ -80,6 +89,16 @@ TypeScript, React, Next.js App Router, Tauri 2, Rust.
 
 ## License
 
-[Business Source License 1.1](./LICENSE). Code you send is under the same license.
+This repository is currently licensed under the Business Source License 1.1 (BSL 1.1), with plans to transition to an open-source license in version 2.0.0. Contributions are subject to the same license.
+
+[Business Source License 1.1](./LICENSE)
 
 Copyright © 2026 Shape.
+
+## Legal
+
+[End User License Agreement](https://useshape.org/eula)
+
+[Terms of Service](https://useshape.org/terms)
+
+[Privacy Policy](https://useshape.org/privacy)

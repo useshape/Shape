@@ -6,8 +6,6 @@ import { useChatSession } from "../lib/use-chat-session";
 import { groupChatMessages } from "../lib/chat-session-utils";
 import { publishChatCrumb } from "../lib/chat-crumb";
 import { ChatTitlebar, resolveChatCrumbTitle } from "./shell/titlebar";
-import { DemoChat } from "./shell/demo-chat";
-import { DEMO_CHAT_TAB_ID } from "./shell/tabs";
 import { ChatInput } from "./composer/input";
 import { ChatMessageList } from "./message/list";
 import { ChatErrorDialog } from "./blocks/error";
@@ -241,18 +239,13 @@ export default function Chat({
     }, [session.messages, session.conversationId, session.activeChatTabId]);
 
     const activeTab = session.openChatTabs.find((tab) => tab.id === session.activeChatTabId);
-    const gallery = session.activeChatTabId === DEMO_CHAT_TAB_ID;
-    const conv = (session.recentConvs ?? []).find(
-        (item) => item.id === (gallery ? session.conversationId : session.activeChatTabId),
-    );
-    const crumbTitle = gallery
-        ? (activeTab?.title?.trim() || "UI")
-        : resolveChatCrumbTitle({
-            chatTitle: session.chatTitle,
-            tabTitle: activeTab?.title,
-            convTitle: conv?.title,
-            messages: session.messages,
-        });
+    const conv = (session.recentConvs ?? []).find((item) => item.id === session.activeChatTabId);
+    const crumbTitle = resolveChatCrumbTitle({
+        chatTitle: session.chatTitle,
+        tabTitle: activeTab?.title,
+        convTitle: conv?.title,
+        messages: session.messages,
+    });
 
     React.useEffect(() => {
         publishChatCrumb({
@@ -290,7 +283,7 @@ export default function Chat({
         { streaming: session.isLoading },
     );
 
-    const isEmpty = !gallery && session.messages.length === 0 && !session.historyLoading;
+    const isEmpty = session.messages.length === 0 && !session.historyLoading;
     const emptyStage = isEmpty && !embedded && !talk;
     const emptyStageRef = React.useRef<HTMLDivElement>(null);
     const emptyStackRef = React.useRef<HTMLDivElement>(null);
@@ -410,20 +403,13 @@ export default function Chat({
     const chatColumn = (
         <>
             <div className={cn("relative min-h-0 flex-1", emptyStage && "hidden")}>
-                {gallery ? (
-                    <div className={cn("absolute inset-0 z-0 flex flex-col overflow-y-auto overflow-x-clip no-scrollbar select-text", insetX)}>
-                        <div className={cn("mx-auto flex min-h-full w-full min-w-0 flex-col", columnWidth, embedded ? "pb-16 pt-5" : "pb-24 pt-12")}>
-                            <DemoChat />
-                        </div>
-                    </div>
-                ) : null}
                 {slotIds.map((id) => {
                     const live = id === activeKey;
                     const slotMessages = live ? session.messages : snaps.current.get(id) ?? [];
                     return (
                         <div
                             key={id}
-                            hidden={!live || gallery}
+                            hidden={!live}
                             ref={live ? session.scrollContainerRef : undefined}
                             data-chat-scroll={live ? "" : undefined}
                             onScroll={live ? session.handleScroll : undefined}
@@ -470,7 +456,7 @@ export default function Chat({
                     className="pointer-events-none absolute inset-x-0 top-0 z-20 h-20 bg-linear-to-b from-panel to-transparent"
                     aria-hidden
                 />
-                {turnCount >= 2 && !embedded && !emptyStage && !gallery ? (
+                {turnCount >= 2 && !embedded && !emptyStage ? (
                     <div className="pointer-events-none absolute inset-y-0 right-1 z-10 hidden w-9 py-6 md:flex lg:right-3">
                         <div className="pointer-events-auto flex h-full w-full items-stretch justify-end">
                             <ChatHistoryStepper
@@ -506,7 +492,7 @@ export default function Chat({
                         </div>
                     </div>
                 </div>
-            ) : viewingThread || gallery ? null : (
+            ) : viewingThread ? null : (
                 <div className={cn("relative z-20 w-full shrink-0 overflow-visible", insetX)}>
                     <div className={cn("relative mx-auto w-full overflow-visible", columnWidth)}>
                         <div

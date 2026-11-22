@@ -722,6 +722,19 @@ function isLightWorkflow(blocks: Chunk[]): boolean {
     });
 }
 
+/** True when this run should paint a row. A short lookup does not get one. */
+export function workflowIsVisible(blocks: Chunk[], isActive?: boolean): boolean {
+    const visible = blocks.filter((b) => isRenderableWorkflowBlock(b, isActive));
+    const pending = visible.some(
+        (b) =>
+            (b.type === "terminal_command" || b.type === "edit_pending" || b.type === "plugin_call")
+            && b.commandStatus === "pending",
+    );
+    if (visible.length === 0) return false;
+    if (!pending && isLightWorkflow(visible)) return false;
+    return true;
+}
+
 function turnSummary(blocks: Chunk[], stats: ReturnType<typeof computeTurnStats>, isActive?: boolean, activityLabel?: string | null) {
     const status = [...blocks].reverse().find((b) => b.type === "status" && b.content?.trim());
     if (status?.content?.trim()) return status.content.trim();
@@ -805,7 +818,7 @@ export function TurnWorkflowSummary({
         setOpen(!!isActive);
     }
 
-    if (visible.length === 0 || (pendingBlocks.length === 0 && isLightWorkflow(visible))) {
+    if (!workflowIsVisible(blocks, isActive)) {
         return <>{children}</>;
     }
 

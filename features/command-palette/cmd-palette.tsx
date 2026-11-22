@@ -1,7 +1,6 @@
 "use client";
 
 import { Delete20Filled } from "@fluentui/react-icons/headless/svg/delete";
-import { MailInbox20Regular } from "@fluentui/react-icons/headless/svg/mail-inbox";
 
 
 import { providerIcon } from "@/lib/ui/provider-icon";
@@ -788,7 +787,6 @@ export function CommandPalette() {
                                         {action.archive || action.delete ? <ContextMenuSeparator /> : null}
                                         {action.archive ? (
                                             <ContextMenuItem onClick={() => action.archive?.()}>
-                                                <Icon icon={MailInbox20Regular} />
                                                 {action.muted ? "Unarchive" : "Archive"}
                                             </ContextMenuItem>
                                         ) : null}
@@ -797,7 +795,6 @@ export function CommandPalette() {
                                                 className="text-error"
                                                 onClick={(e) => action.delete?.(e as unknown as React.MouseEvent)}
                                             >
-                                                <Icon icon={Delete20Filled} />
                                                 Delete
                                             </ContextMenuItem>
                                         ) : null}

@@ -1,19 +1,10 @@
 "use client";
 
-import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 import { Globe20Filled } from "@fluentui/react-icons/headless/svg/globe";
 import { Search20Regular } from "@fluentui/react-icons/headless/svg/search";
-import { Sparkle20Filled } from "@fluentui/react-icons/headless/svg/sparkle";
-import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
 
-
-
-import React, { useState } from "react";
-import { type IconGlyph, Icon } from "@/components/ui/icon";
-
-
-import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
-import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import React from "react";
+import { Icon } from "@/components/ui/icon";
 import { FileIcon } from "@/components/ui/file-icon";
 import { DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown";
 import {
@@ -34,7 +25,6 @@ import { looksLikeProseMarkdown } from "../md/stream";
 import { openProjectFile } from "@/lib/window/open-project-file";
 import { resolveProjectFilePath } from "@/lib/path/utils";
 import { TerminalCommandStep } from "./terminal-live";
-import { parseWebSearchHits, WebSearchBlock } from "./search";
 
 export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "search", "grep", "status", "web_search", "web_result", "web_visit", "search_result",
@@ -44,6 +34,7 @@ export const WORKFLOW_CHUNK_TYPES = new Set<Chunk["type"]>([
     "plugin_call",
     "subagent",
     "subagent_ref",
+    "re_view",
 ]);
 
 function resolvePath(filePath: string): string {
@@ -343,12 +334,10 @@ function ToolContextMenu({
             <ContextMenuContent className="min-w-44">
                 {path ? (
                     <ContextMenuItem onClick={() => void openProjectFile(path)}>
-                        <Icon icon={Open20Regular} />
                         Open
                     </ContextMenuItem>
                 ) : null}
                 <ContextMenuItem onClick={() => void navigator.clipboard.writeText(path || copy)}>
-                    <Icon icon={Clipboard20Regular} />
                     {path ? "Copy path" : "Copy"}
                 </ContextMenuItem>
             </ContextMenuContent>
@@ -883,24 +872,6 @@ export function ReadGroup({
         </div>
     );
 }
-function computeGroupHeader(visible: Chunk[]): { icon: IconGlyph; label: string } {
-    const hasThink = visible.some((b) => b.type === "think" || b.type === "thought");
-    const hasExplore = visible.some((b) =>
-        ["search", "grep", "cat", "ls", "search_result", "web_search", "web_result", "web_visit", "inspect_runtime"].includes(b.type),
-    );
-    const hasEdit = visible.some((b) =>
-        ["edit", "create_file", "mkdir", "delete_file", "rename_file"].includes(b.type),
-    );
-    const hasCommand = visible.some((b) => b.type === "terminal_command" || b.type === "run");
-
-    if (hasEdit && hasExplore) return { icon: Edit20Regular, label: "Explored and edited" };
-    if (hasEdit) return { icon: Edit20Regular, label: "Edited files" };
-    if (hasCommand && !hasExplore) return { icon: WindowConsole20Regular, label: "Ran commands" };
-    if (hasExplore) return { icon: Search20Regular, label: "Explored codebase" };
-    if (hasThink) return { icon: Sparkle20Filled, label: "Thought" };
-    return { icon: Sparkle20Filled, label: "Worked" };
-}
-
 export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
     const inFlight = isActive ?? block.isGenerating;
     switch (block.type) {
@@ -1180,178 +1151,6 @@ export function isRenderableWorkflowBlock(block: Chunk, isActive?: boolean) {
     return getWorkflowActionConfig(block, isActive) !== null;
 }
 
-/** Runs up to this size render as plain inline rows; larger runs get a collapsible summary. */
-const INLINE_GROUP_MAX = 3;
-
-/**
- * One consecutive run of tool actions, rendered in place between prose
- * segments. Small runs show as flat rows; long runs collapse into a summary
- * line ("Explored codebase · 12 steps") once the turn finishes. The message's
- * single bottom status indicator owns the spinner  -  no spinner here.
- */
-export function AgentWorkflow({
-    blocks,
-    isActive,
-    isFileEditResolved,
-}: {
-    blocks: Chunk[];
-    isActive?: boolean;
-    isFileEditResolved?: (file: string, replacement?: string) => boolean;
-}) {
-    const visibleBlocks = blocks.filter((b) => isRenderableWorkflowBlock(b, isActive));
-    const collapsible = visibleBlocks.length > INLINE_GROUP_MAX;
-
-    // Open while streaming, collapse once the run finishes. Render-time state
-    // adjustment (not an effect) per React guidance.
-    const [isOpen, setIsOpen] = useState(!!isActive);
-    const [prevActive, setPrevActive] = useState(isActive);
-    if (isActive !== prevActive) {
-        setPrevActive(isActive);
-        setIsOpen(!!isActive);
-    }
-
-    if (visibleBlocks.length === 0) return null;
-
-    const rows = (
-        <div className="flex flex-col gap-0.5">
-            {groupWorkflowRows(visibleBlocks).map((row, i) => {
-                if (row.kind === "git_stage_group") {
-                    return <GitStageGroup key={`stage-${i}`} paths={row.paths} />;
-                }
-                if (row.kind === "read_group") {
-                    const names = [
-                        ...new Set(
-                            row.files
-                                .map((f) => f.path.split(/[\\/]/).pop() || f.path)
-                                .filter(Boolean),
-                        ),
-                    ];
-                    const detail =
-                        names.length === 0
-                            ? null
-                            : names.length === 1
-                              ? names[0]
-                              : `${names[0]} and more`;
-                    return (
-                        <ActionLine
-                            key={`reads-${i}`}
-                            action="Explored"
-                            detail={detail}
-                            menu={names.length > 1 ? <MoreMenu items={row.files.map((file) => file.path)} paths={row.files.map((file) => file.path)} /> : undefined}
-                        />
-                    );
-                }
-                if (row.kind === "search_group") {
-                    return (
-                        <div key={`searches-${i}`} className="flex flex-col">
-                            {condenseSearchQueries(row.queries).map((group, n) => (
-                                <ActionLine
-                                    key={`searches-${i}-${n}`}
-                                    action="Searched"
-                                    detail={group.label}
-                                    menu={group.items.length > 1 ? <MoreMenu items={group.items} /> : undefined}
-                                />
-                            ))}
-                        </div>
-                    );
-                }
-                if (row.kind === "web_trail") {
-                    const queries = row.blocks
-                        .map((b) => (b.query || "").trim())
-                        .filter(Boolean);
-                    const results = row.blocks.flatMap((b) => {
-                        if (b.type === "web_visit") {
-                            return [{
-                                title: b.visitTitle || b.visitHost || "Visited",
-                                url: b.visitUrl || "",
-                                snippet: b.visitHost ? `Visited ${b.visitHost}` : "",
-                            }];
-                        }
-                        return parseWebSearchHits(b.content || "");
-                    });
-                    const seen = new Set<string>();
-                    const unique = results.filter((hit) => {
-                        const key = hit.url || hit.title;
-                        if (!key || seen.has(key)) return false;
-                        seen.add(key);
-                        return true;
-                    });
-                    return (
-                        <WebSearchBlock
-                            key={`web-${i}`}
-                            query={queries[queries.length - 1]}
-                            searches={queries.length}
-                            results={unique}
-                            isActive={row.blocks.some((b) => b.isGenerating)}
-                        />
-                    );
-                }
-                if (row.kind === "write_group") {
-                    const names = [...new Set(row.paths.map((p) => p.split(/[\\/]/).pop() || p).filter(Boolean))];
-                    const detail =
-                        names.length === 0
-                            ? null
-                            : names.length === 1
-                              ? names[0]
-                              : `${names[0]} and more`;
-                    return (
-                        <ActionLine
-                            key={`writes-${i}`}
-                            action="Edited"
-                            detail={detail}
-                            menu={names.length > 1 ? <MoreMenu items={row.paths} paths={row.paths} /> : undefined}
-                        />
-                    );
-                }
-                if (row.kind === "list_group") {
-                    return (
-                        <ActionLine
-                            key={`lists-${i}`}
-                            action="Listed"
-                            detail={row.count > 1 ? `${row.count} folders` : "folders"}
-                        />
-                    );
-                }
-                if (row.kind === "subagent_group") {
-                    return (
-                        <div key={`subs-${i}`} className="flex flex-col">
-                            <ActionLine action="Spawning" detail="subagents" />
-                            {row.blocks.map((block, index) => (
-                                <ActionItem key={block.file || index} block={block} isFileEditResolved={isFileEditResolved} />
-                            ))}
-                        </div>
-                    );
-                }
-                return (
-                    <ActionItem
-                        key={i}
-                        block={row.block}
-                        isFileEditResolved={isFileEditResolved}
-                    />
-                );
-            })}
-        </div>
-    );
-
-    if (!collapsible) {
-        return <div className="flex flex-col w-full my-1 select-none">{rows}</div>;
-    }
-
-    const header = splitActionLabel(computeGroupHeader(visibleBlocks).label);
-
-    return (
-        <div className="my-1 flex w-full select-none flex-col">
-            <ActionLine
-                action={header.action}
-                detail={header.detail}
-                open={isOpen}
-                onOpenChange={setIsOpen}
-            >
-                {rows}
-            </ActionLine>
-        </div>
-    );
-}
 
 function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
     const fileName = path.split(/[\\/]/).pop() || path;
@@ -1433,8 +1232,7 @@ export function ActionItem({
     }
 
     if (block.type === "edit_pending" && (block.commandStatus || "pending") === "pending") {
-        // Edit approval cards live in TurnWorkflowSummary; keep a compact
-        // fallback if this legacy AgentWorkflow path still renders one.
+        // Edit approval cards live in TurnWorkflowSummary.
         return (
             <ActionLine
                 action="Pending"

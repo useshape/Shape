@@ -3,8 +3,6 @@ import { ArrowShuffle24Regular } from "@fluentui/react-icons/headless/svg/arrow-
 import { BranchFork20Regular } from "@fluentui/react-icons/headless/svg/branch-fork";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
-import { SelectAllOn20Regular } from "@fluentui/react-icons/headless/svg/select-all-on";
-import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { Edit20Regular } from "@fluentui/react-icons/headless/svg/edit";
 import { Flag20Regular } from "@fluentui/react-icons/headless/svg/flag";
 import { Folder20Filled } from "@fluentui/react-icons/headless/svg/folder";
@@ -500,25 +498,21 @@ function ChatMessageItemInner({
             </ContextMenuTrigger>
             <ContextMenuContent>
                 <ContextMenuItem onClick={handleCopy}>
-                    <Icon icon={Clipboard20Regular} />
                     Copy
                     <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
                 </ContextMenuItem>
                 {typeof index === "number" && index >= 0 && onRestore ? (
                     <ContextMenuItem onClick={() => onRestore(index)}>
-                        <Icon icon={ArrowShuffle24Regular} />
                         Restore checkpoint
                     </ContextMenuItem>
                 ) : null}
                 {typeof index === "number" && index >= 0 && onFork ? (
                     <ContextMenuItem onClick={() => onFork(index)}>
-                        <Icon icon={BranchFork20Regular} />
                         Branch chat from here
                     </ContextMenuItem>
                 ) : null}
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={handleSelectAll}>
-                    <Icon icon={SelectAllOn20Regular} />
                     Select All
                     <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
                 </ContextMenuItem>
@@ -811,37 +805,31 @@ function ChatMessageItemInner({
         </ContextMenuTrigger>
         <ContextMenuContent>
             <ContextMenuItem onClick={handleCopy}>
-                <Icon icon={Clipboard20Regular} />
                 Copy
                 <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
             </ContextMenuItem>
             {role === "assistant" && typeof index === "number" && index >= 0 && onRedo ? (
                 <ContextMenuItem onClick={() => onRedo(index)}>
-                    <Icon icon={ArrowClockwise20Regular} />
                     Regenerate
                 </ContextMenuItem>
             ) : null}
             {role === "assistant" ? (
                 <ContextMenuItem onClick={() => speakMessage(content)}>
-                    <Icon icon={Speaker220Regular} />
                     Read aloud
                 </ContextMenuItem>
             ) : null}
             {role === "assistant" && timestamp ? (
                 <ContextMenuItem onClick={() => void navigator.clipboard.writeText(String(timestamp))}>
-                    <Icon icon={Clipboard20Regular} />
                     Copy message ID
                 </ContextMenuItem>
             ) : null}
             {role === "assistant" ? (
                 <ContextMenuItem onClick={() => setReportOpen(true)}>
-                    <Icon icon={Flag20Regular} />
                     Report message
                 </ContextMenuItem>
             ) : null}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={handleSelectAll}>
-                <Icon icon={SelectAllOn20Regular} />
                 Select All
                 <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
             </ContextMenuItem>

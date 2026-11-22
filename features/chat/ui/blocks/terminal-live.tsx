@@ -1,8 +1,6 @@
 "use client";
 
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
-import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
-import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Info20Regular } from "@fluentui/react-icons/headless/svg/info";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
@@ -349,12 +347,10 @@ function TerminalCommandRow({
         </ContextMenuTrigger>
         <ContextMenuContent className="min-w-44">
             <ContextMenuItem onClick={() => void navigator.clipboard.writeText(command)}>
-                <Icon icon={Copy20Regular} />
                 Copy command
             </ContextMenuItem>
             {output.trim() ? (
                 <ContextMenuItem onClick={() => void navigator.clipboard.writeText(output)}>
-                    <Icon icon={Clipboard20Regular} />
                     Copy output
                 </ContextMenuItem>
             ) : null}

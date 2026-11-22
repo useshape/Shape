@@ -44,4 +44,14 @@ describe("chrome platform", () => {
         setChromePreview("auto");
         expect(resolveChromeKind()).toBe("windows");
     });
+
+    it("ignores preview overrides in production", () => {
+        vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+        vi.stubEnv("NODE_ENV", "production");
+        vi.stubEnv("NEXT_PUBLIC_SHAPE_CHROME", "macos");
+        window.history.replaceState({}, "", "/?shape-chrome=macos");
+        setChromePreview("macos");
+        expect(resolveChromeKind()).toBe("windows");
+        expect(window.localStorage.getItem("shape:chrome-preview")).toBeNull();
+    });
 });

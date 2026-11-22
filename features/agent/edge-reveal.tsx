@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export const EDGE_REVEAL_MS = 420;
 
@@ -177,5 +177,5 @@ export function useEdgeReveal<T extends HTMLElement>(
         <ProgressiveBlur id={`${id}-blur`} max={BLUR_MAX * strength} wash={Math.min(1, strength)} origin={origin} />
     ) : null;
 
-    return { bendRef: bendRef as RefObject<T>, opening, present, filter, blur };
+    return { bendRef, opening, present, filter, blur };
 }

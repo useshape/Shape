@@ -38,6 +38,7 @@ import {
 import { AiSettingsPanel } from "./sections/ai";
 import { AccountSettingsPanel, GitHubAccountSection } from "./sections/account";
 import { applyTelemetryPreference } from "@/lib/telemetry";
+import { setMockChats, useMockChats } from "@/lib/dev/mock-chats";
 import { nativeChromeKind, setChromePreview, useChromePreviewOverride } from "@/lib/ui/chrome-platform";
 import { clearRepoHistory } from "@/lib/workspace/repo-history";
 import { SHAPE_API_BASE } from "@/lib/cloud/api";
@@ -274,21 +275,23 @@ function TerminalSettings({ settings }: { settings: ShapeSettings }) {
     const native = nativeChromeKind();
     return (
         <SettingSection id="settings-terminal" title="Integrated Terminal">
-            <SettingRow title="Window chrome" description="Preview Windows or macOS titlebar controls.">
-                <SettingSelect
-                    value={chromePreview}
-                    options={[
-                        { value: "auto", label: `Auto (${native === "macos" ? "macOS" : "Windows"})` },
-                        { value: "windows", label: "Windows" },
-                        { value: "macos", label: "macOS" },
-                    ]}
-                    onChange={(v) => {
-                        if (v === "windows" || v === "macos" || v === "auto") {
-                            setChromePreview(v);
-                        }
-                    }}
-                />
-            </SettingRow>
+            {process.env.NODE_ENV !== "production" ? (
+                <SettingRow title="Window chrome" description="Preview Windows or macOS titlebar controls.">
+                    <SettingSelect
+                        value={chromePreview}
+                        options={[
+                            { value: "auto", label: `Auto (${native === "macos" ? "macOS" : "Windows"})` },
+                            { value: "windows", label: "Windows" },
+                            { value: "macos", label: "macOS" },
+                        ]}
+                        onChange={(v) => {
+                            if (v === "windows" || v === "macos" || v === "auto") {
+                                setChromePreview(v);
+                            }
+                        }}
+                    />
+                </SettingRow>
+            ) : null}
             <SettingRow title="Default Shell">
                 <SettingSelect
                     value={t.defaultShell}
@@ -597,6 +600,7 @@ function NodeSettings({ settings }: { settings: ShapeSettings }) {
 
 function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
     const dev = settings.developer;
+    const mockChats = useMockChats();
 
     return (
         <>
@@ -607,6 +611,11 @@ function DeveloperSettings({ settings }: { settings: ShapeSettings }) {
                         onChange={(v) => updateSettingSection("developer", { enableDevTools: v })}
                     />
                 </SettingRow>
+                {process.env.NODE_ENV !== "production" ? (
+                    <SettingRow title="Screenshot chats" description="Replace the session list with sample conversations. Nothing is saved.">
+                        <SettingSwitch checked={mockChats} onChange={setMockChats} />
+                    </SettingRow>
+                ) : null}
             </SettingSection>
         </>
     );

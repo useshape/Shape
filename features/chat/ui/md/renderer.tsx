@@ -1,9 +1,6 @@
 "use client";
 
-import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
-
 import React, { useEffect, useMemo } from "react";
-import { cn } from "@/lib/utils";
 import { stripLeakedToolCode, stripOrphanThinkTags } from "./stream";
 import { ChatMarkdown } from "./view";
 import { syncSubagentsFromChunks } from "@/features/agent/subagents/store";
@@ -12,7 +9,7 @@ import {
     isRenderableWorkflowBlock,
     WORKFLOW_CHUNK_TYPES,
 } from '../blocks/workflow';
-import { TurnWorkflowSummary } from '../blocks/turn';
+import { TurnWorkflowSummary, workflowIsVisible } from '../blocks/turn';
 import { GeneratingIndicator } from '../blocks/generating';
 import { PluginConnectCard } from '../blocks/plugin-connect';
 import { PlanningBlock, PlanSavedBlock } from '../blocks/plan';
@@ -23,8 +20,9 @@ import { SentFileCard } from '../blocks/sent-file';
 import { ReviewDebatePanel } from '../blocks/debate';
 import { BrowseChatCard } from '../blocks/browse-frame';
 import { GeneratingMediaFrame } from '../blocks/border-glow';
-import { ShownImages } from '../blocks/place-map';
-import { parseQuestionsPayload, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
+import { PlaceMap, ShownImages } from '../blocks/place-map';
+import { ChartBlock, InsightCard } from '../blocks/chart';
+import { parseQuestionsPayload, QuestionsCard, type AgentQuestion, type QuestionAnswers } from '../blocks/questions';
 import { hostnameOf } from '@/lib/ui/favicon';
 
 function hostnameFromUrl(url: string): string {
@@ -1236,11 +1234,13 @@ export function MessageRenderer({
         if (segment.kind === 'workflow') {
             const isFirst = index === firstWorkflowIndex;
             const isLastWf = index === lastWorkflowIndex;
+            const active = !!isGenerating && isLastWf;
+            if (!workflowIsVisible(segment.blocks, active)) return null;
             return (
                 <div key={`wf-${index}`} className="my-1.5 w-full min-w-0 overflow-visible contain-layout">
                     <TurnWorkflowSummary
                         blocks={segment.blocks}
-                        isActive={!!isGenerating && isLastWf}
+                        isActive={active}
                         durationMs={isFirst ? durationMs : undefined}
                         activityLabel={isLastWf ? activityLabel : null}
                         conversationId={conversationId}
@@ -1316,16 +1316,16 @@ export function MessageRenderer({
             );
         }
         if (chunk.type === 'place_map') {
-            return null;
+            return <PlaceMap key={`map-${index}`} content={chunk.content} />;
         }
         if (chunk.type === 'shown_images') {
             return <ShownImages key={`photos-${index}`} content={chunk.content} />;
         }
         if (chunk.type === 'chart') {
-            return null;
+            return <ChartBlock key={`chart-${index}`} content={chunk.content} />;
         }
         if (chunk.type === 'insight_card') {
-            return null;
+            return <InsightCard key={`insight-${index}`} content={chunk.content} />;
         }
         if (chunk.type === 'browse_session') {
             if (index !== lastBrowseIndex) return null;
@@ -1466,7 +1466,17 @@ export function MessageRenderer({
             return null;
         }
         if (chunk.type === 'question') {
-            return null;
+            const questions = chunk.questions || [];
+            if (questions.length === 0) return null;
+            return (
+                <QuestionsCard
+                    key={`ask-${chunk.commandId || index}`}
+                    askId={chunk.commandId}
+                    status={chunk.commandStatus}
+                    questions={questions}
+                    answers={chunk.answers}
+                />
+            );
         }
         return null;
     });
