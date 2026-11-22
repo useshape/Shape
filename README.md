@@ -11,7 +11,7 @@
 </p>
 
 <p align="start">
-  <a href="https://useshape.org">Get started for free</a> ·
+  <a href="https://useshape.org">Get started for Free</a> ·
   <a href="https://useshape.org/docs">Docs</a> ·
   <a href="https://useshape.org/download">Download</a> ·
   <a href="https://discord.gg/MMCEDVZKYf">Discord</a>
