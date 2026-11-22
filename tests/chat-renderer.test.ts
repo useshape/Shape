@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dedupeTerminalChunks, parseMessageContent } from "@/features/chat/ui/md/renderer";
+import { WORKFLOW_CHUNK_TYPES } from "@/features/chat/ui/blocks/workflow";
+import { workflowIsVisible } from "@/features/chat/ui/blocks/turn";
 import { preprocessChatMarkdown, repairStreamGlitches } from "@/features/chat/ui/md/stream";
 
 describe("parseMessageContent", () => {
@@ -71,6 +73,21 @@ describe("parseMessageContent", () => {
         expect(q?.commandStatus).toBe("pending");
         expect(q?.questions?.[0]?.prompt).toContain("visual concept");
         expect(q?.questions?.[0]?.options[0]?.recommended).toBe(true);
+    });
+
+    it("keeps reverse-engineer steps visible and hides one short lookup", () => {
+        const view = parseMessageContent(
+            '<re_view tool="identify" path="bin/app.exe" summary="PE32">\nFormat\tPE32\n</re_view>',
+        );
+        const step = view.find((chunk) => chunk.type === "re_view");
+        expect(step?.command).toBe("identify");
+        expect(step?.file).toBe("bin/app.exe");
+        expect(step?.query).toBe("PE32");
+        expect(WORKFLOW_CHUNK_TYPES.has("re_view")).toBe(true);
+        expect(workflowIsVisible(view)).toBe(true);
+
+        const lookup = parseMessageContent('<search_result query="pricing">pricing page</search_result>');
+        expect(workflowIsVisible(lookup)).toBe(false);
     });
 
     it("dedupes edit_pending chunks for the same id, keeping applied over pending", () => {

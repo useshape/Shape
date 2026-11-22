@@ -11,19 +11,19 @@
   --surface-1: #181818;
   --surface-2: #1b1b1b;
   --surface-3: #202020;
-  --surface-4: #292828;
+  --surface-4: #292929;
   --settings-card: #2a2a2a;
 
   /* ── Role surfaces (Cursor-like: chrome recessed, canvas elevated) ── */
-  --chrome: #191919;
-  --sidebar: #222121;
-  --editor: #191919;
+  --chrome: #1b1b1b;
+  --sidebar: #252525;
+  --editor: #1a1a1a;
   --base: #f2f2f2;
 
   /* Compat aliases for existing class names */
   --background: var(--chrome);
   --foreground: var(--base);
-  --panel: #1a1919;
+  --panel: #1d1d1d;
   --panel-secondary: var(--surface-2);
   --panel-active: rgba(255, 255, 255, 0.06);
   --panel-hover: rgba(255, 255, 255, 0.04);

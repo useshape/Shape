@@ -25,7 +25,12 @@ export function nativeChromeKind(): ChromeKind {
     return "windows";
 }
 
+function chromePreviewEnabled(): boolean {
+    return process.env.NODE_ENV !== "production";
+}
+
 function previewChromeKind(): ChromeKind | null {
+    if (!chromePreviewEnabled()) return null;
     if (typeof window !== "undefined") {
         const fromQuery = parseChrome(new URLSearchParams(window.location.search).get(QUERY_KEY));
         if (fromQuery) return fromQuery;
@@ -48,6 +53,7 @@ export function chromePreviewOverride(): ChromeKind | "auto" {
 }
 
 export function setChromePreview(kind: ChromeKind | "auto") {
+    if (!chromePreviewEnabled()) return;
     if (typeof window === "undefined") return;
     try {
         if (kind === "auto") window.localStorage.removeItem(STORAGE_KEY);

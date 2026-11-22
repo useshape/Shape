@@ -41,18 +41,6 @@ export type ChatTab = {
 /** Draft / unsaved conversation sentinel — still used by the chat session store. */
 export const NEW_CHAT_TAB_ID = "__new_chat__";
 
-/** Local gallery. Not a saved conversation. */
-export const DEMO_CHAT_TAB_ID = "__demo_chat__";
-
-export function isDemoChatTabId(id: string): boolean {
-    return id === DEMO_CHAT_TAB_ID;
-}
-
-export function withDemoTab(tabs: ChatTab[]): ChatTab[] {
-    if (tabs.some((tab) => tab.id === DEMO_CHAT_TAB_ID)) return tabs;
-    return [...tabs, { id: DEMO_CHAT_TAB_ID, title: "UI" }];
-}
-
 export function isEphemeralChatTabId(id: string): boolean {
     return id === NEW_CHAT_TAB_ID;
 }
@@ -217,7 +205,7 @@ function SortableChatTab({
 
 /** Chat conversation tabs — same TabBarShell as workspace / editor tabs. */
 export function ChatTabBar({
-    title: _title,
+    title,
     onNewChat: _onNewChat,
     tabs,
     activeTabId,
@@ -295,7 +283,7 @@ export function ChatTabBar({
                     key={tab.id}
                     tab={tab}
                     isActive={tab.id === active}
-                    canClose={Boolean(onCloseTab) && tab.id !== DEMO_CHAT_TAB_ID && list.length > 1}
+                    canClose={Boolean(onCloseTab) && list.length > 1}
                     onSelect={(id) => onSelectTab?.(id)}
                     onClose={onCloseTab}
                     onCloseOthers={onCloseTab ? closeOthers : undefined}

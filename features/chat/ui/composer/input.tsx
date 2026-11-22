@@ -7,11 +7,6 @@ import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
-import { ClipboardPaste20Regular } from "@fluentui/react-icons/headless/svg/clipboard-paste";
-import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
-import { Cut20Regular } from "@fluentui/react-icons/headless/svg/cut";
-import { SelectAllOn20Regular } from "@fluentui/react-icons/headless/svg/select-all-on";
-import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
 import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
@@ -1301,12 +1296,10 @@ export function ChatInput({
                             </ContextMenuTrigger>
                             <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
                                 <ContextMenuItem onClick={() => document.execCommand("cut")}>
-                                    <Icon icon={Cut20Regular} />
                                     Cut
                                     <ContextMenuShortcut>Ctrl+X</ContextMenuShortcut>
                                 </ContextMenuItem>
                                 <ContextMenuItem onClick={() => document.execCommand("copy")}>
-                                    <Icon icon={Copy20Regular} />
                                     Copy
                                     <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
                                 </ContextMenuItem>
@@ -1330,7 +1323,6 @@ export function ChatInput({
                                         });
                                     }}
                                 >
-                                    <Icon icon={ClipboardPaste20Regular} />
                                     Paste
                                     <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
                                 </ContextMenuItem>
@@ -1343,7 +1335,6 @@ export function ChatInput({
                                         el.select();
                                     }}
                                 >
-                                    <Icon icon={SelectAllOn20Regular} />
                                     Select All
                                     <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
                                 </ContextMenuItem>
@@ -1351,7 +1342,6 @@ export function ChatInput({
                                 <ContextMenuItem
                                     onClick={() => document.getElementById("chat-media-upload")?.click()}
                                 >
-                                    <Icon icon={MoviesAndTv24Regular} />
                                     Upload photos & files
                                 </ContextMenuItem>
                                 {inputValue ? (
@@ -1362,7 +1352,6 @@ export function ChatInput({
                                             } as React.ChangeEvent<HTMLTextAreaElement>)
                                         }
                                     >
-                                        <Icon icon={Dismiss20Regular} />
                                         Clear
                                     </ContextMenuItem>
                                 ) : null}

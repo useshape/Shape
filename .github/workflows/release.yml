@@ -66,12 +66,12 @@ jobs:
             os: macos
             arch: aarch64
             target: aarch64-apple-darwin
-            bundles: dmg
-          - runner: macos-13
+            bundles: "app,dmg"
+          - runner: macos-latest
             os: macos
             arch: x86_64
             target: x86_64-apple-darwin
-            bundles: dmg
+            bundles: "app,dmg"
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -111,13 +111,77 @@ jobs:
           SHAPE_CLOUD_BUILD_SECRET: ${{ secrets.SHAPE_CLOUD_BUILD_SECRET }}
           # Bake production website into Next + Rust (release binaries ignore runtime redirects).
           NEXT_PUBLIC_SHAPE_WEBSITE_URL: https://www.useshape.org
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          set -euo pipefail
           if [ -z "${SHAPE_CLOUD_BUILD_SECRET:-}" ]; then
             echo "SHAPE_CLOUD_BUILD_SECRET secret is required for release builds" >&2
             exit 1
           fi
+          if [ "${{ matrix.os }}" = "macos" ]; then
+            export MACOSX_DEPLOYMENT_TARGET=12.0
+          fi
+
+          KEYCHAIN_PATH=""
+          CERT_PATH=""
+          SIGNING_JSON=""
+          cleanup_signing() {
+            if [ -n "$KEYCHAIN_PATH" ]; then
+              security delete-keychain "$KEYCHAIN_PATH" >/dev/null 2>&1 || true
+            fi
+            if [ -n "$CERT_PATH" ]; then
+              rm -f "$CERT_PATH"
+            fi
+            if [ -n "$SIGNING_JSON" ]; then
+              rm -f "$SIGNING_JSON"
+            fi
+          }
+          trap cleanup_signing EXIT
+
+          TAURI_CONFIG_ARGS=()
+          if [ "${{ matrix.os }}" = "macos" ] \
+            && [ -n "${APPLE_CERTIFICATE:-}" ] \
+            && [ -n "${APPLE_CERTIFICATE_PASSWORD:-}" ] \
+            && [ -n "${APPLE_SIGNING_IDENTITY:-}" ] \
+            && [ -n "${APPLE_ID:-}" ] \
+            && [ -n "${APPLE_PASSWORD:-}" ] \
+            && [ -n "${APPLE_TEAM_ID:-}" ]; then
+            echo "Apple signing secrets present; importing certificate for this build"
+            WORK="${RUNNER_TEMP:-/tmp}"
+            KEYCHAIN_PATH="$WORK/shape-signing.keychain-db"
+            CERT_PATH="$WORK/shape-cert.p12"
+            SIGNING_JSON="$WORK/shape-macos-signing.json"
+            KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            node -e 'require("fs").writeFileSync(process.argv[1], Buffer.from(String(process.env.APPLE_CERTIFICATE||"").replace(/\s+/g,""), "base64"))' "$CERT_PATH"
+            security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security list-keychains -d user -s "$KEYCHAIN_PATH"
+            security default-keychain -s "$KEYCHAIN_PATH"
+            rm -f "$CERT_PATH"
+            CERT_PATH=""
+            node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({bundle:{macOS:{signingIdentity:process.env.APPLE_SIGNING_IDENTITY,hardenedRuntime:true}}}))' "$SIGNING_JSON"
+            TAURI_CONFIG_ARGS=(--config "$SIGNING_JSON")
+          else
+            if [ "${{ matrix.os }}" = "macos" ]; then
+              echo "Apple signing secrets absent; leaving signingIdentity unset"
+            fi
+            unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+          fi
+
           if [ -n "${{ matrix.target }}" ]; then
-            npm run tauri -- build --bundles "${{ matrix.bundles }}" --target "${{ matrix.target }}"
+            if [ ${#TAURI_CONFIG_ARGS[@]} -gt 0 ]; then
+              npm run tauri -- build --bundles "${{ matrix.bundles }}" --target "${{ matrix.target }}" "${TAURI_CONFIG_ARGS[@]}"
+            else
+              npm run tauri -- build --bundles "${{ matrix.bundles }}" --target "${{ matrix.target }}"
+            fi
           else
             npm run tauri -- build --bundles "${{ matrix.bundles }}"
           fi

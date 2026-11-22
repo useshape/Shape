@@ -4,7 +4,14 @@ import React from "react";
 import { listen } from "@tauri-apps/api/event";
 import { commands, Conversation, useProjectState } from "@/lib/backend";
 import { useChatStream } from "./chat-stream-store";
-import { NEW_CHAT_TAB_ID, isDemoChatTabId, isEphemeralChatTabId, isThreadTabId, placeThreadTab, withDemoTab, type ChatTab } from "../ui/shell/tabs";
+import { NEW_CHAT_TAB_ID, isEphemeralChatTabId, isThreadTabId, placeThreadTab, type ChatTab } from "../ui/shell/tabs";
+import { isMockChatId, mockConversation, mockConversations, useMockChats } from "@/lib/dev/mock-chats";
+
+const RETIRED_UI_TAB_ID = "__demo_chat__";
+
+function dropRetiredTabs(tabs: ChatTab[]): ChatTab[] {
+    return tabs.filter((tab) => tab.id !== RETIRED_UI_TAB_ID);
+}
 import { openChatHistoryMenu } from "../ui/shell/history";
 import { parseMessageContent, type Chunk } from "../ui/md/renderer";
 import {
@@ -206,7 +213,7 @@ export function useChatSession() {
     const [recentConvs, setRecentConvs] = React.useState<Conversation[]>([]);
     const [chatTitle, setChatTitle] = React.useState<string>("New Chat");
     const [openChatTabs, setOpenChatTabs] = React.useState<ChatTab[]>(() =>
-        withDemoTab([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]),
+        dropRetiredTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]),
     );
     const [activeChatTabId, setActiveChatTabId] = React.useState<string>(NEW_CHAT_TAB_ID);
     const [selectedModel, setSelectedModel] = React.useState(
@@ -318,25 +325,24 @@ export function useChatSession() {
             const remembered = lastLaneChat(mode);
             let loadedId: string | null = null;
             if (persisted) {
-                const tabs = withDemoTab(persisted.tabs.filter((t) => !isThreadTabId(t.id)));
+                const tabs = dropRetiredTabs(persisted.tabs.filter((t) => !isThreadTabId(t.id)));
                 if (!tabs.some((t) => t.id === NEW_CHAT_TAB_ID)) {
                     tabs.unshift({ id: NEW_CHAT_TAB_ID, title: "New Chat" });
                 }
-                const activeId = isThreadTabId(persisted.activeId)
+                const activeId = isThreadTabId(persisted.activeId) || persisted.activeId === RETIRED_UI_TAB_ID
                     ? NEW_CHAT_TAB_ID
                     : persisted.activeId;
                 setOpenChatTabs(tabs);
                 setActiveChatTabId(activeId);
                 if (
-                    !isDemoChatTabId(activeId)
-                    && activeId !== NEW_CHAT_TAB_ID
+                    activeId !== NEW_CHAT_TAB_ID
                     && !isEphemeralChatTabId(activeId)
                     && laneFor(activeId, laneFallback) === mode
                 ) {
                     loadedId = activeId;
                 }
             } else {
-                setOpenChatTabs(withDemoTab([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]));
+                setOpenChatTabs(dropRetiredTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]));
                 setActiveChatTabId(NEW_CHAT_TAB_ID);
             }
             if (!loadedId && remembered && laneFor(remembered, laneFallback) === mode) {
@@ -356,7 +362,7 @@ export function useChatSession() {
                     }
                 } catch {
                     if (!cancelled) {
-                        setOpenChatTabs(withDemoTab([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]));
+                        setOpenChatTabs(dropRetiredTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]));
                         setActiveChatTabId(NEW_CHAT_TAB_ID);
                     }
                 }
@@ -718,13 +724,18 @@ export function useChatSession() {
         activeChatTabIdRef.current = activeChatTabId;
     }, [activeChatTabId]);
 
+    const conversationIdRef = React.useRef(conversationId);
+    const pendingResumeRef = React.useRef(new Map<string, string>());
+
     const refreshMetadata = React.useCallback(async () => {
+        if (isMockChatId(conversationIdRef.current) && mockConversation(conversationIdRef.current)) return;
         try {
             const convs = isTalkWorkspace(workspaceModeId)
                 ? await commands.getConversations(undefined, true)
                 : await commands.getConversations(storePath ?? undefined);
             const title = await commands.getChatTitle();
             const convId = await commands.getCurrentConversationId();
+            if (isMockChatId(conversationIdRef.current)) return;
             setRecentConvs(convs);
             setChatTitle(title);
             setConversationId(convId);
@@ -736,8 +747,6 @@ export function useChatSession() {
         }
     }, [storePath, workspaceModeId, syncOpenTabs]);
 
-    const conversationIdRef = React.useRef(conversationId);
-    const pendingResumeRef = React.useRef(new Map<string, string>());
     React.useEffect(() => {
         conversationIdRef.current = conversationId;
     }, [conversationId]);
@@ -754,6 +763,8 @@ export function useChatSession() {
 
     const refreshHistory = React.useCallback(
         async (reloadConversation = false) => {
+            const viewingMock = conversationIdRef.current;
+            if (isMockChatId(viewingMock) && mockConversation(viewingMock)) return;
             if (isLoadingRef.current && !reloadConversation) {
                 await refreshMetadata();
                 return;
@@ -765,6 +776,7 @@ export function useChatSession() {
                     : await commands.getConversations(storePath ?? undefined);
                 const title = await commands.getChatTitle();
                 const convId = await commands.getCurrentConversationId();
+                if (isMockChatId(conversationIdRef.current)) return;
                 if (!isPlaceholderView(viewAtStart) && conversationIdRef.current !== viewAtStart) return;
                 if (!isPlaceholderView(viewAtStart) && viewAtStart && convId !== viewAtStart) return;
 
@@ -960,6 +972,7 @@ export function useChatSession() {
         ) {
             return false;
         }
+        if (isMockChatId(conversationIdRef.current)) return false;
         sendingInFlightRef.current = true;
         const systemResume =
             fromQueue
@@ -1708,13 +1721,13 @@ export function useChatSession() {
             if (convId) {
                 setOpenChatTabs((prev) => {
                     const others = prev.filter((tab) => tab.id !== NEW_CHAT_TAB_ID && tab.id !== convId);
-                    return withDemoTab([{ id: convId, title }, ...others]);
+                    return dropRetiredTabs([{ id: convId, title }, ...others]);
                 });
                 setActiveChatTabId(convId);
             } else {
                 setOpenChatTabs((prev) => {
                     const others = prev.filter((tab) => tab.id !== NEW_CHAT_TAB_ID);
-                    return withDemoTab([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }, ...others]);
+                    return dropRetiredTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }, ...others]);
                 });
                 setActiveChatTabId(NEW_CHAT_TAB_ID);
             }
@@ -1733,17 +1746,13 @@ export function useChatSession() {
     >(async () => {});
 
     const handleReorderChatTabs = (next: ChatTab[]) => {
-        setOpenChatTabs(withDemoTab(next));
+        setOpenChatTabs(dropRetiredTabs(next));
     };
 
     const handleSelectChatTab = async (tabId: string) => {
         if (tabId === activeChatTabId) return;
         setSendError(null);
-        if (isDemoChatTabId(tabId)) {
-            setActiveChatTabId(tabId);
-            return;
-        }
-        if (tabId === NEW_CHAT_TAB_ID) {
+        if (tabId === RETIRED_UI_TAB_ID || tabId === NEW_CHAT_TAB_ID) {
             await handleNewChat();
             return;
         }
@@ -1751,7 +1760,7 @@ export function useChatSession() {
     };
 
     const handleCloseChatTab = async (tabId: string) => {
-        if (isDemoChatTabId(tabId)) return;
+        if (tabId === RETIRED_UI_TAB_ID) return;
         if (isIncognitoChat() && tabId === conversationIdRef.current) {
             await purgeIncognitoConversation(tabId);
             await setIncognitoChat(false);
@@ -1769,7 +1778,7 @@ export function useChatSession() {
         }
         const remaining = openChatTabs.filter((tab) => tab.id !== tabId && !childIds.includes(tab.id));
         if (remaining.length === 0) {
-            setOpenChatTabs(withDemoTab([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]));
+            setOpenChatTabs(dropRetiredTabs([{ id: NEW_CHAT_TAB_ID, title: "New Chat" }]));
             setActiveChatTabId(NEW_CHAT_TAB_ID);
             setMessages([]);
             setConversationId(null);
@@ -1781,7 +1790,7 @@ export function useChatSession() {
             );
             return;
         }
-        setOpenChatTabs(withDemoTab(remaining));
+        setOpenChatTabs(dropRetiredTabs(remaining));
         if (tabId === activeChatTabId) {
             const next = remaining[remaining.length - 1];
             await handleSelectChatTab(next.id);
@@ -1826,6 +1835,21 @@ export function useChatSession() {
 
     const handleLoadConversation = React.useCallback(
         async (id: string, options?: { force?: boolean }) => {
+            const sample = mockConversation(id, project_path || "");
+            if (sample) {
+                clearNextChat();
+                conversationIdRef.current = id;
+                setConversationId(id);
+                setCurrentConversationId(id);
+                setViewingConversation(id);
+                setChatTitle(sample.title);
+                syncOpenTabs(id, sample.title);
+                scrollInstantRef.current = true;
+                isNearBottomRef.current = true;
+                setMessages(sample.history);
+                setHistoryLoading(false);
+                return;
+            }
             clearNextChat();
             const isSameConversation = id === conversationIdRef.current;
             const hasVisibleMessages = messagesRef.current.length > 0;
@@ -1911,10 +1935,7 @@ export function useChatSession() {
         const onLoad = (e: Event) => {
             const id = (e as CustomEvent<{ id?: string }>).detail?.id;
             if (!id || (id === conversationIdRef.current && messagesRef.current.length > 0)) return;
-            if (isDemoChatTabId(id)) {
-                setActiveChatTabId(id);
-                return;
-            }
+            if (id === RETIRED_UI_TAB_ID) return;
             void handleLoadConversation(id);
         };
         const onReload = (event: Event) => {
@@ -1932,6 +1953,26 @@ export function useChatSession() {
             window.removeEventListener("shape-reload-view", onReload as EventListener);
         };
     }, [handleLoadConversation]);
+
+    const mockChatsOn = useMockChats();
+    const mockChatsOnRef = React.useRef(mockChatsOn);
+    React.useEffect(() => {
+        if (mockChatsOnRef.current === mockChatsOn) return;
+        mockChatsOnRef.current = mockChatsOn;
+        if (mockChatsOn) {
+            const first = mockConversations(project_path || "")[0];
+            if (!first) return;
+            window.dispatchEvent(new CustomEvent("shape-chat-active", { detail: { id: first.id } }));
+            window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id: first.id } }));
+            return;
+        }
+        const id = conversationIdRef.current;
+        if (!isMockChatId(id)) return;
+        void commands.getCurrentConversationId().then((real) => {
+            if (real) void handleLoadConversation(real, { force: true });
+            else void handleNewChatRef.current();
+        }).catch(() => {});
+    }, [mockChatsOn, project_path, handleLoadConversation]);
 
     React.useEffect(() => {
         const onRename = (e: Event) => {

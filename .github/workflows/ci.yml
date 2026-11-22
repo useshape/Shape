@@ -39,3 +39,33 @@ jobs:
 
       - name: Test
         run: npm run test:all
+
+  macos:
+    name: macOS compile
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+
+      - name: Build runtime
+        run: npm run build:runtime
+
+      - name: Check aarch64-apple-darwin
+        run: cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-darwin
+
+      - name: Check x86_64-apple-darwin
+        run: cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-apple-darwin

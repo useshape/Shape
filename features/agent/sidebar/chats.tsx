@@ -29,12 +29,13 @@ import { RevealName } from "@/components/ui/reveal-name";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useIsChatGenerating } from "@/features/chat/lib/generating-chats";
-import { DEMO_CHAT_TAB_ID, isThreadTabId, NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
+import { isThreadTabId, NEW_CHAT_TAB_ID } from "@/features/chat/ui/shell/tabs";
 import {
     clearChatUnread,
     getUnreadChatIds,
     getUnreadChatIdsServer,
     markChatUnread,
+    CHAT_COLOR_HEX,
     type ChatColor,
     subscribeUnreadChats,
 } from "@/lib/sidebar/chat-list-meta";
@@ -66,6 +67,7 @@ import {
 } from "@/features/agent/subagents/store";
 import { listen } from "@tauri-apps/api/event";
 import { ScrollArea } from "@/components/ui/scroll";
+import { isMockChatId, mockChatIsUnread, mockConversations, useMockChats } from "@/lib/dev/mock-chats";
 type ChatSort = "recent" | "oldest" | "name-asc" | "name-desc";
 type ChatFilter = "all" | "unread";
 
@@ -232,7 +234,7 @@ function ChatRow({
     const commitRename = () => {
         const next = draft.trim();
         setRenaming(false);
-        if (!next || next === title) {
+        if (!next || next === title || isMockChatId(id)) {
             setDraft(title);
             return;
         }
@@ -243,12 +245,14 @@ function ChatRow({
     };
 
     const remove = () => {
+        if (isMockChatId(id)) return;
         void commands.deleteConversation(id).catch(() => {});
         window.dispatchEvent(new CustomEvent("shape-chat-close-tab", { detail: { id } }));
         window.dispatchEvent(new CustomEvent("shape-chat-refresh"));
     };
 
     const archive = () => {
+        if (isMockChatId(id)) return;
         void commands
             .setConversationArchived(id, true)
             .then(() => window.dispatchEvent(new CustomEvent("shape-chat-refresh")))
@@ -275,12 +279,13 @@ function ChatRow({
     const menuItems = (
         Item: (props: { onClick?: () => void; className?: string; children?: ReactNode }) => ReactNode,
         Separator: () => ReactNode,
+        withIcons = true,
     ) =>
         actions.map((action) => (
             <Fragment key={action.key}>
                 {action.sep ? Separator() : null}
                 <Item onClick={action.run} className={action.danger ? "text-error" : undefined}>
-                    <Icon icon={action.icon} />
+                    {withIcons ? <Icon icon={action.icon} /> : null}
                     {action.label}
                 </Item>
             </Fragment>
@@ -418,6 +423,7 @@ function ChatRow({
                     {menuItems(
                         (props) => <ContextMenuItem {...props} />,
                         () => <ContextMenuSeparator />,
+                        false,
                     )}
                 </ContextMenuContent>
             </ContextMenu>
@@ -488,6 +494,7 @@ export function ChatList({
     listKind?: "chat";
 }) {
     const { project_path } = useProjectState();
+    const mockOn = useMockChats();
     const [chats, setChats] = useState<Conversation[]>([]);
     const seenChatIds = useRef<Set<string> | null>(null);
     const freshChatIds = useRef(new Set<string>());
@@ -596,8 +603,10 @@ export function ChatList({
         };
     }, [project_path]);
 
+    const source = mockOn ? mockConversations(project_path || "") : chats;
+
     const visible = useMemo(() => {
-        const live = chats.filter((c) => !c.archived && c.kind !== "thread" && !isThreadTabId(c.id));
+        const live = source.filter((c) => !c.archived && c.kind !== "thread" && !isThreadTabId(c.id));
         const sorted = [...live];
         sorted.sort((a, b) => {
             if (sort === "name-asc") {
@@ -614,7 +623,7 @@ export function ChatList({
             return sort === "oldest" ? delta : -delta;
         });
         return sorted;
-    }, [chats, sort]);
+    }, [source, sort]);
 
     const filtered = useMemo(() => {
         if (filter === "unread") return visible.filter((c) => unreadIds.has(c.id));
@@ -630,13 +639,13 @@ export function ChatList({
         chat,
         projectPath: project_path || "",
         activeId,
-        unread: unreadIds.has(chat.id),
+        unread: mockOn ? mockChatIsUnread(chat.id) : unreadIds.has(chat.id),
         color: null as ChatColor | null,
         edge: "none" as const,
         subagents: allSubagents.filter((card) => card.parentId === chat.id),
         selecting: selectedIds.length > 0,
         selected: selected.has(chat.id),
-        fresh: freshChatIds.current.has(chat.id),
+        fresh: mockOn ? false : freshChatIds.current.has(chat.id),
         onToggleSelect: () => toggleSelect(chat.id),
     });
 
@@ -698,7 +707,7 @@ export function ChatList({
             </div>
 
             <ScrollArea fadeFrom="from-sidebar" className="min-h-0 flex-1 px-1.5 pb-2">
-                {!project_path ? (
+                {!project_path && !mockOn ? (
                     <button
                         type="button"
                         onClick={() => window.dispatchEvent(new Event("shape-new-project"))}
@@ -709,21 +718,6 @@ export function ChatList({
                     </button>
                 ) : (
                     <div className="space-y-0.5">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                window.dispatchEvent(new CustomEvent("shape-chat-active", { detail: { id: DEMO_CHAT_TAB_ID } }));
-                                window.dispatchEvent(new CustomEvent("shape-chat-load", { detail: { id: DEMO_CHAT_TAB_ID } }));
-                            }}
-                            className={cn(
-                                "flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm",
-                                activeId === DEMO_CHAT_TAB_ID
-                                    ? "bg-panel-hover text-text-primary"
-                                    : "text-text-muted hover:bg-panel-hover hover:text-text-secondary",
-                            )}
-                        >
-                            <span className="min-w-0 flex-1 truncate">UI</span>
-                        </button>
                         {filtered.map((c) => (
                             <SessionRow key={c.id} {...rowProps(c)} />
                         ))}
