@@ -605,6 +605,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                         void import("@/lib/notifications/desktop").then(({ showDesktopNotification }) =>
                             showDesktopNotification("generationComplete", "Shape", "Generation finished"),
                         );
+                        void import("@/lib/notifications/complete-sound").then(({ playCompletionSound }) =>
+                            playCompletionSound(),
+                        );
                     }
                     return;
                 }
@@ -620,6 +623,9 @@ export function ChatStreamProvider({ children }: { children: React.ReactNode }) 
                 } else if (!error) {
                     void import("@/lib/notifications/desktop").then(({ showDesktopNotification }) =>
                         showDesktopNotification("generationComplete", "Shape", "Generation finished"),
+                    );
+                    void import("@/lib/notifications/complete-sound").then(({ playCompletionSound }) =>
+                        playCompletionSound(),
                     );
                 }
                 // Cancelled turns are persisted server-side — resync so Stop

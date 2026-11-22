@@ -106,6 +106,11 @@ pub async fn git_switch_branch(repo_path: String, branch_name: String) -> Result
 }
 
 #[tauri::command]
+pub fn set_git_commit_attribution(enabled: bool) {
+    crate::commands::git::set_commit_attribution(enabled);
+}
+
+#[tauri::command]
 pub async fn git_commit(repo_path: String, message: String) -> Result<(), AppError> {
     service::git_commit(repo_path, message).await
 }

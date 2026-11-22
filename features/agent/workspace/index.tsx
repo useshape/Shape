@@ -295,17 +295,8 @@ export function AgentWorkspace({
                             <EditorSplitProvider>
                                 <div className="flex h-full min-h-0 flex-col">
                                     <FileBar path={active.path} />
-                                    <div className="flex min-h-0 flex-1">
-                                        <div className="min-h-0 min-w-0 flex-1 bg-sidebar" style={SIDEBAR_SURFACE}>
-                                            <FileEditor path={active.path} />
-                                        </div>
-                                        <div className="w-64 shrink-0">
-                                            <FileTree
-                                                projectPath={projectPath}
-                                                activePath={active.path}
-                                                onOpenFile={openFile}
-                                            />
-                                        </div>
+                                    <div className="min-h-0 min-w-0 flex-1 bg-sidebar" style={SIDEBAR_SURFACE}>
+                                        <FileEditor path={active.path} />
                                     </div>
                                 </div>
                             </EditorSplitProvider>

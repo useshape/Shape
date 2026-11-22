@@ -2,14 +2,18 @@
 
 import { ArrowLeft20Regular } from "@fluentui/react-icons/headless/svg/arrow-left";
 import { ArrowSortDown20Regular } from "@fluentui/react-icons/headless/svg/arrow-sort-down";
-import { ArrowSync20Regular } from "@fluentui/react-icons/headless/svg/arrow-sync";
+import { ArrowSync20Filled } from "@fluentui/react-icons/headless/svg/arrow-sync";
 import { BranchRequest20Regular } from "@fluentui/react-icons/headless/svg/branch-request";
 import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Filter20Regular } from "@fluentui/react-icons/headless/svg/filter";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
-import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
+import { Open20Filled } from "@fluentui/react-icons/headless/svg/open";
+import { Link20Filled } from "@fluentui/react-icons/headless/svg/link";
+import { Book20Filled } from "@fluentui/react-icons/headless/svg/book";
+import { Wrench20Filled } from "@fluentui/react-icons/headless/svg/wrench";
+import { DocumentBulletList20Filled } from "@fluentui/react-icons/headless/svg/document-bullet-list";
 import { TextNumberListLtr20Regular } from "@fluentui/react-icons/headless/svg/text-number-list-ltr";
 
 
@@ -26,9 +30,11 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { commands, useProjectState } from "@/lib/backend";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import { cn } from "@/lib/utils";
@@ -354,25 +360,38 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
     if (selected && pane !== "list") {
         return (
             <div className="flex h-full min-h-0 flex-col bg-panel">
-                <div className="flex shrink-0 items-start gap-2 px-3 pt-3 pb-2">
+                <div className="flex shrink-0 items-center gap-2 px-3 py-2">
                     {pane === "full" ? (
                     <button
                         type="button"
                         aria-label="Back to list"
                         onClick={() => selectPr(null)}
-                        className="mt-0.5 flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
+                        className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                     >
                         <Icon icon={ArrowLeft20Regular} />
                     </button>
                     ) : null}
-                    <div className="min-w-0 flex-1">
-                        <p className="text-xs text-text-muted">
-                            {selected.repo} #{selected.number}
-                        </p>
-                        <h2 className="font-medium leading-snug text-text-primary">
-                            {selected.title}
-                        </h2>
-                    </div>
+                    <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
+                        {selected.title}
+                    </h2>
+                    <span
+                        className={cn(
+                            "size-2 shrink-0 rounded-full",
+                            selected.ci === "success" && "bg-success",
+                            selected.ci === "failure" && "bg-error",
+                            selected.ci === "pending" && "bg-warning",
+                            (!selected.ci || selected.ci === "unknown") && "bg-text-muted",
+                        )}
+                        title={
+                            selected.ci === "success"
+                                ? "Checks passed"
+                                : selected.ci === "failure"
+                                  ? "Checks failed"
+                                  : selected.ci === "pending"
+                                    ? "Checks running"
+                                    : "No checks"
+                        }
+                    />
                     <div className="flex shrink-0 items-center gap-0.5">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -399,7 +418,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="min-w-52">
                                 <DropdownMenuItem onClick={() => void load()}>
-                                    <Icon icon={ArrowSync20Regular} />
+                                    <Icon icon={ArrowSync20Filled} />
                                     Refresh
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -419,6 +438,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                         )
                                     }
                                 >
+                                    <Icon icon={Book20Filled} />
                                     Explain this PR
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
@@ -428,14 +448,36 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                         )
                                     }
                                 >
+                                    <Icon icon={Wrench20Filled} />
                                     Fix findings in a thread
                                 </DropdownMenuItem>
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                        <Icon icon={DocumentBulletList20Filled} />
+                                        Files{files.length ? ` (${files.length})` : ""}
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="max-h-72 min-w-56 overflow-y-auto">
+                                        {filesLoading ? (
+                                            <DropdownMenuItem disabled>Loading files…</DropdownMenuItem>
+                                        ) : files.length === 0 ? (
+                                            <DropdownMenuItem disabled>No files</DropdownMenuItem>
+                                        ) : (
+                                            files.map((file) => (
+                                                <DropdownMenuItem key={file.filename} disabled>
+                                                    <span className="min-w-0 flex-1 truncate">{file.filename}</span>
+                                                    <span className="text-xs text-success">+{file.additions}</span>
+                                                    <span className="text-xs text-error">−{file.deletions}</span>
+                                                </DropdownMenuItem>
+                                            ))
+                                        )}
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
                                 <DropdownMenuSeparator />
                                 {selected.url ? (
                                     <DropdownMenuItem
                                         onClick={() => void commands.openUrlExternal(selected.url!)}
                                     >
-                                        <Icon icon={Open20Regular} />
+                                        <Icon icon={Open20Filled} />
                                         Open on GitHub
                                     </DropdownMenuItem>
                                 ) : null}
@@ -446,6 +488,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                                             notify.success("Link copied");
                                         }}
                                     >
+                                        <Icon icon={Link20Filled} />
                                         Copy link
                                     </DropdownMenuItem>
                                 ) : null}
@@ -454,112 +497,16 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                     </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2 px-3 pb-3 text-xs text-text-muted">
-                    {selected.avatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={selected.avatar} alt="" className="size-4 rounded-full" />
-                    ) : null}
-                    <span>{selected.author}</span>
-                    {selected.updated ? <span>· updated {selected.updated}</span> : null}
-                </div>
-
-                {selected.baseRef || selected.headRef ? (
-                    <div className="flex shrink-0 items-center gap-1.5 px-3 pb-3 text-xs">
-                        <span className="rounded-md bg-panel-hover px-1.5 py-0.5 text-text-secondary">
-                            {selected.baseRef || "main"}
-                        </span>
-                        <span className="text-text-muted">←</span>
-                        <span className="rounded-md bg-panel-hover px-1.5 py-0.5 text-text-secondary">
-                            {selected.headRef || "branch"}
-                        </span>
-                    </div>
-                ) : null}
-
-                <Tabs defaultValue="summary" className="flex min-h-0 flex-1 flex-col">
-                    <div className="px-3">
-                        <TabsList>
-                            <TabsTrigger value="summary">Summary</TabsTrigger>
-                            <TabsTrigger value="files">
-                                Files{files.length ? ` ${files.length}` : ""}
-                            </TabsTrigger>
-                            <TabsTrigger value="timeline">Timeline</TabsTrigger>
-                        </TabsList>
-                    </div>
-                    <TabsContent value="summary" className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-3">
-                        <div className="mb-4 grid gap-2 text-sm">
-                            <div className="flex gap-2">
-                                <span className="w-20 shrink-0 text-text-muted">Reviewers</span>
-                                <span className="text-text-secondary">
-                                    {reviewers.length
-                                        ? reviewers.map((r) => r.login).join(", ")
-                                        : "None"}
-                                </span>
-                            </div>
-                            <div className="flex gap-2">
-                                <span className="w-20 shrink-0 text-text-muted">Labels</span>
-                                <span className="flex flex-wrap gap-1">
-                                    {selected.labels.length ? (
-                                        selected.labels.map((label) => (
-                                            <span
-                                                key={label.name}
-                                                className="rounded-full px-1.5 py-0.5 text-2xs"
-                                                style={{
-                                                    backgroundColor: `#${label.color}22`,
-                                                    color: `#${label.color}`,
-                                                }}
-                                            >
-                                                {label.name}
-                                            </span>
-                                        ))
-                                    ) : (
-                                        <span className="text-text-muted">None</span>
-                                    )}
-                                </span>
-                            </div>
-                            <div className="flex gap-2">
-                                <span className="w-20 shrink-0 text-text-muted">Comments</span>
-                                <span className="text-text-secondary">{commentCount} comments</span>
-                            </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6">
+                    {selected.body?.trim() ? (
+                        <div className="relative max-h-28 overflow-hidden text-sm text-text-secondary">
+                            <GitMarkdown content={selected.body} />
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-panel to-transparent" />
                         </div>
-                        <p className="mb-2 text-sm font-medium text-text-primary">Description</p>
-                        {selected.body?.trim() ? (
-                            <div className="text-sm text-text-secondary">
-                                <GitMarkdown content={selected.body} />
-                            </div>
-                        ) : (
-                            <p className="text-sm text-text-muted">No description</p>
-                        )}
-                    </TabsContent>
-                    <TabsContent value="files" className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-3">
-                        {filesLoading ? (
-                            <p className="text-sm text-text-muted">Loading files…</p>
-                        ) : files.length === 0 ? (
-                            <p className="text-sm text-text-muted">No files listed</p>
-                        ) : (
-                            <ul className="flex flex-col gap-0.5">
-                                {files.map((file) => (
-                                    <li
-                                        key={file.filename}
-                                        className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm"
-                                    >
-                                        <FileIcon name={file.filename} className="size-4 shrink-0" />
-                                        <span className="min-w-0 flex-1 truncate text-text-primary">
-                                            {file.filename}
-                                        </span>
-                                        <span className="shrink-0 text-xs text-success">+{file.additions}</span>
-                                        <span className="shrink-0 text-xs text-error">−{file.deletions}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </TabsContent>
-                    <TabsContent value="timeline" className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-3">
-                        <p className="text-sm text-text-muted">
-                            {selected.author} opened this pull request
-                            {selected.updated ? ` · ${selected.updated}` : ""}.
-                        </p>
-                    </TabsContent>
-                </Tabs>
+                    ) : (
+                        <p className="text-sm text-text-muted">No description</p>
+                    )}
+                </div>
             </div>
         );
     }
@@ -617,7 +564,7 @@ export function PullRequestsPanel({ pane = "full" }: { pane?: "list" | "detail" 
                     onClick={() => void load()}
                     className="flex size-7 items-center justify-center rounded-md text-text-muted hover:bg-panel-hover hover:text-text-primary"
                 >
-                    <Icon icon={ArrowSync20Regular} />
+                    <Icon icon={ArrowSync20Filled} />
                 </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">

@@ -15,12 +15,21 @@ import {
 import { commands, useProjectState } from "@/lib/backend";
 import { getShapeAccessToken } from "@/lib/cloud/store";
 import { notify } from "@/features/notifications";
+import { getSettings } from "@/lib/settings";
 import { loginGitHub, useGitHubAuth } from "@/lib/github/store";
 import {
     GenerateStarButton,
     streamTextInto,
 } from "@/features/git/ui/shared/generate-star";
 import { cn } from "@/lib/utils";
+
+function attributedPrBody(body: string): string {
+    const text = body.trim();
+    if (getSettings().git.prAttribution === false) return text;
+    if (text.includes("Authored with Shape")) return text;
+    const line = "Authored with Shape";
+    return text ? `${text}\n\n${line}` : line;
+}
 
 function parseDraft(raw: string): { title: string; body: string } {
     const text = raw.trim();
@@ -126,7 +135,7 @@ export function CreatePullRequestDialog({
                 `/repos/${owner}/${repo}/pulls`,
                 JSON.stringify({
                     title: title.trim(),
-                    body: body.trim(),
+                    body: attributedPrBody(body),
                     head,
                     base,
                 }),

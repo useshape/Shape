@@ -261,7 +261,7 @@ export function bindingApplies(when: string, target: EventTarget | null): boolea
     const parts = (when || "global").split("||").map((part) => part.trim()).filter(Boolean);
     const kinds = new Set<string>(["global"]);
     if (el?.closest("[data-terminal-root='true']")) kinds.add("terminalFocus");
-    if (el?.closest(".monaco-editor, [data-editor-root='true']")) {
+    if (el?.closest(".cm-editor, .monaco-editor, [data-editor-root='true']")) {
         kinds.add("editorFocus");
         kinds.add("editorTextFocus");
     }

@@ -46,7 +46,7 @@ import {
 
 function Keycap({ children }: { children: React.ReactNode }) {
     return (
-        <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded-sm bg-input-bg px-2 py-0.5 text-sm font-medium text-text-secondary">
+        <kbd className="inline-flex min-w-[1.5rem] items-center justify-center font-sans squircle-xl bg-panel-hover px-2 py-0.5 text-sm font-regular text-text-secondary">
             {children}
         </kbd>
     );
@@ -294,18 +294,17 @@ export function KeyboardShortcutsView() {
         <div className="relative h-full min-h-0 bg-panel">
             <div className="absolute inset-0 overflow-y-auto px-6 pt-8 pb-6 lg:px-8">
                 <div className="mx-auto w-full max-w-5xl">
-                    <h1 className="text-2xl font-medium text-text-primary">Shortcuts</h1>
+                    <h1 className="text-2xl font-regular text-text-primary">Shortcuts</h1>
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                         <SearchInput
                             placeholder="Search shortcuts"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            className="min-w-[220px] flex-1"
+                            className="min-w-[220px] flex-1 bg-transparent h-9!"
                         />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button type="button" variant="ghost" size="sm" className={SETTING_CONTROL_BTN}>
-                                    <Icon icon={ArrowDownload20Regular} />
                                     Import
                                 </Button>
                             </DropdownMenuTrigger>
@@ -328,7 +327,6 @@ export function KeyboardShortcutsView() {
                             className={SETTING_CONTROL_BTN}
                             onClick={() => void onExportJson()}
                         >
-                            <Icon icon={ArrowUpload20Regular} />
                             Export
                         </Button>
                         <Button
@@ -346,7 +344,7 @@ export function KeyboardShortcutsView() {
                         </Button>
                     </div>
 
-                    <div className="mt-6 overflow-hidden rounded-lg border border-border bg-surface-2 divide-y divide-border">
+                    <div className="mt-6 overflow-hidden squircle-2xl bg-surface-4 divide-y divide-border-subtle">
                         {filtered.length === 0 ? (
                             <div className="px-4 py-10 text-center text-sm text-text-muted">
                                 No keybindings match “{query}”
@@ -359,8 +357,8 @@ export function KeyboardShortcutsView() {
                                         className="flex items-center gap-4 px-4 py-3.5"
                                     >
                                         <div className="min-w-0 flex-1">
-                                            <div className="text-sm font-medium text-text-primary">{b.label}</div>
-                                            <div className="mt-0.5 text-sm text-text-muted">
+                                            <div className="text-sm font-regular text-text-primary">{b.label}</div>
+                                            <div className="mt-0.5 text-xs text-text-muted">
                                                 {b.description || b.when}
                                             </div>
                                         </div>

@@ -35,6 +35,7 @@ export function TerminalDock() {
     const heightRef = useRef(DEFAULT_H);
     const dragging = useRef(false);
     const lineRef = useRef(false);
+    const settle = useRef(0);
     const dockRef = useRef<HTMLDivElement>(null);
     const tabRef = useRef<HTMLButtonElement>(null);
 
@@ -164,7 +165,7 @@ export function TerminalDock() {
             const tab = tabRef.current;
             if (tab) {
                 const lean = Math.max(-4, Math.min(4, (tab.getBoundingClientRect().top - e.clientY) * 0.12));
-                tab.style.transform = `translate(-50%, calc(-50% + ${lean}px))`;
+                tab.style.transform = `translate(-50%, calc(-100% + ${lean}px))`;
             }
             if (lineRef.current && pointer < SNAP_H + 28) {
                 heightRef.current = LINE_H;
@@ -178,30 +179,51 @@ export function TerminalDock() {
             heightRef.current = pointer;
             paint(pointer);
         };
-        const onUp = () => {
-            if (!dragging.current) return;
-            dragging.current = false;
-            setResizing(false);
-            if (heightRef.current <= SNAP_H) {
-                heightRef.current = LINE_H;
-                lineRef.current = true;
-                setLineMode(true);
-            } else if (heightRef.current < MIN_H) {
-                heightRef.current = MIN_H;
-                lineRef.current = false;
-                setLineMode(false);
-            } else {
-                lineRef.current = false;
-                setLineMode(false);
+        const finish = (px: number, line: boolean) => {
+            const dock = dockRef.current;
+            if (dock) {
+                dock.style.transition = "";
+                dock.style.height = "";
             }
-            setHeight(heightRef.current);
-            if (tabRef.current) tabRef.current.style.transform = "translate(-50%, -50%)";
-            clearBodyResize();
+            heightRef.current = px;
+            lineRef.current = line;
+            setLineMode(line);
+            setHeight(px);
+            setResizing(false);
             try {
-                localStorage.setItem(HEIGHT_KEY, String(heightRef.current));
+                localStorage.setItem(HEIGHT_KEY, String(px));
             } catch {
                 /* ignore */
             }
+        };
+        const onUp = () => {
+            if (!dragging.current) return;
+            dragging.current = false;
+            if (tabRef.current) tabRef.current.style.transform = "translate(-50%, -100%)";
+            clearBodyResize();
+            const dock = dockRef.current;
+            const from = heightRef.current;
+            const shouldLine = from <= SNAP_H;
+            const to = shouldLine ? LINE_H : from < MIN_H ? MIN_H : from;
+            const id = ++settle.current;
+            if (!dock || Math.abs(from - to) < 1) {
+                finish(to, shouldLine);
+                return;
+            }
+            dock.style.transition = "height 300ms cubic-bezier(0.22, 1, 0.36, 1)";
+            dock.style.height = `${to}px`;
+            const done = (event: TransitionEvent) => {
+                if (event.propertyName !== "height") return;
+                if (settle.current !== id) return;
+                dock.removeEventListener("transitionend", done);
+                finish(to, shouldLine);
+            };
+            dock.addEventListener("transitionend", done);
+            window.setTimeout(() => {
+                if (settle.current !== id) return;
+                dock.removeEventListener("transitionend", done);
+                finish(to, shouldLine);
+            }, 360);
         };
         window.addEventListener("mousemove", onMove);
         window.addEventListener("mouseup", onUp);
@@ -240,60 +262,70 @@ export function TerminalDock() {
         <div
             ref={dockRef}
             className={cn(
-                "z-20 shrink-0 overflow-hidden",
+                "relative z-20 shrink-0 overflow-visible",
                 full ? "absolute inset-x-0 bottom-0" : "relative",
                 "transition-[height,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
                 open ? "m-3" : "pointer-events-none m-0",
                 resizing && "transition-none",
             )}
-            style={{ height: open ? (lineMode ? LINE_H : height) : 0 }}
+            style={
+                resizing
+                    ? undefined
+                    : { height: open ? (lineMode ? LINE_H : height) : 0 }
+            }
             aria-hidden={!open}
             onMouseMove={(e) => {
                 const bounds = e.currentTarget.getBoundingClientRect();
                 const dist = Math.hypot(e.clientX - (bounds.left + bounds.width / 2), e.clientY - bounds.top);
-                const near = dist < 72;
+                const near = dist < 128;
                 setTabNear((prev) => (prev === near ? prev : near));
             }}
             onMouseLeave={() => {
                 if (!dragging.current) setTabNear(false);
             }}
         >
+            {open ? (
+                <button
+                    ref={tabRef}
+                    type="button"
+                    aria-label="Resize terminal"
+                    className={cn(
+                        "absolute top-0 left-1/2 z-40 flex h-4 w-11 cursor-row-resize items-center justify-center",
+                        "transition-opacity duration-150",
+                        tabNear || resizing ? "opacity-100" : "opacity-0",
+                    )}
+                    style={{ transform: "translate(-50%, -100%)" }}
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        settle.current += 1;
+                        const dock = dockRef.current;
+                        if (dock) {
+                            dock.style.transition = "none";
+                            dock.style.height = `${dock.getBoundingClientRect().height}px`;
+                        }
+                        dragging.current = true;
+                        setResizing(true);
+                        setTabNear(true);
+                        document.body.style.cursor = "row-resize";
+                        document.body.style.userSelect = "none";
+                        document.body.classList.add("resizing-vertical");
+                    }}
+                >
+                    <span
+                        className={cn(
+                            "block h-[3px] -translate-y-3 rounded-full bg-text-muted/55 shadow-[0_1px_1px_rgba(0,0,0,0.45)]",
+                            "transition-[width,background-color] duration-150",
+                            resizing ? "w-30 bg-text-primary/80" : "w-30",
+                        )}
+                    />
+                </button>
+            ) : null}
             <div
                 className={cn(
                     "relative flex h-full flex-col overflow-hidden squircle-2xl border border-border bg-panel",
                     lineMode ? "justify-center px-3" : "rounded-xl px-2 pb-2",
                 )}
             >
-                {open ? (
-                    <button
-                        ref={tabRef}
-                        type="button"
-                        aria-label="Resize terminal"
-                        className={cn(
-                            "absolute top-0 left-1/2 z-40 flex h-4 w-11 -translate-x-1/2 cursor-row-resize items-center justify-center",
-                            "transition-opacity duration-150",
-                            tabNear || resizing ? "opacity-100" : "opacity-0",
-                        )}
-                        style={{ transform: "translate(-50%, -50%)" }}
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            dragging.current = true;
-                            setResizing(true);
-                            setTabNear(true);
-                            document.body.style.cursor = "row-resize";
-                            document.body.style.userSelect = "none";
-                            document.body.classList.add("resizing-vertical");
-                        }}
-                    >
-                        <span
-                            className={cn(
-                                "block h-[3px] rounded-full bg-text-muted/55 shadow-[0_1px_1px_rgba(0,0,0,0.45)]",
-                                "transition-[width,background-color] duration-150",
-                                resizing ? "w-9 bg-text-primary/80" : "w-7",
-                            )}
-                        />
-                    </button>
-                ) : null}
                 {lineMode ? (
                     <div className="flex h-9 min-w-0 items-center gap-3">
                         <span className="max-w-[38%] shrink-0 truncate text-sm text-text-primary">{preview.title}</span>

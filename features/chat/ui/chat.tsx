@@ -380,8 +380,11 @@ export default function Chat({
             talkSurface={talk}
             talkName={talkName}
             talkMark={talkMark}
+            activityLabel={session.activityLabel}
+            optimizingPrompt={session.optimizingPrompt}
             reasoningEffort={session.reasoningEffort}
             setReasoningEffort={session.setReasoningEffort}
+            historyMessages={session.messages}
             pendingEdits={session.pendingEdits}
             onAcceptAllEdits={() => void session.handleAcceptAll()}
             onRejectAllEdits={() => void session.handleRejectAll()}

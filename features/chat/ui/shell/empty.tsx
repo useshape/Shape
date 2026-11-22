@@ -35,31 +35,8 @@ export function ChatEmptyState() {
     return (
         <div className="flex w-full items-center justify-center px-2">
             <h1 className="flex min-w-0 flex-wrap pb-10 items-baseline justify-center gap-x-2 text-3xl font-normal leading-[1.2] text-text-primary">
-                <span>What do you want to</span>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <button
-                            type="button"
-                            className="underline decoration-text-muted underline-offset-4 hover:decoration-text-primary"
-                        >
-                            {mode.verb}
-                        </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-72">
-                        {WORKSPACE_MODES.map((item) => (
-                            <DropdownMenuItem key={item.id} onSelect={() => setWorkspaceMode(item.id)}>
-                                <span className="flex min-w-0 flex-1 flex-col">
-                                    <span>{item.id}</span>
-                                    <span className="text-xs text-text-muted">{item.description}</span>
-                                </span>
-                                {item.id === modeId ? (
-                                    <Icon icon={Checkmark20Regular} className="text-text-muted" />
-                                ) : null}
-                            </DropdownMenuItem>
-                        ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-                {folder ? <span>in {folder}</span> : null}
+                <span>What's next on the agenda for</span>
+                {folder ? <span>{folder}</span> : null}
             </h1>
         </div>
     );

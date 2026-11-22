@@ -613,11 +613,32 @@ pub fn seal_browse_markup(content: &str) -> String {
     let block = &content[start..end];
     let url = xml_attr(block, "url");
     let title = xml_attr(block, "title");
-    let image = LAST_FRAME.lock().ok().and_then(|guard| guard.clone()).unwrap_or_default();
-    let body = if image.is_empty() {
-        String::new()
+    let existing = block
+        .split_once('>')
+        .map(|(_, rest)| rest.trim_end_matches("</browse_session>").trim().to_string())
+        .unwrap_or_default();
+    let body = if existing.contains("\"media_id\"") {
+        existing
     } else {
-        json!({ "image": image }).to_string()
+        let image = LAST_FRAME.lock().ok().and_then(|guard| guard.clone()).unwrap_or_default();
+        let conversation = OWNER.lock().ok().and_then(|guard| guard.clone());
+        let media_id = if image.is_empty() {
+            None
+        } else {
+            crate::agent::media_stash::stash_data_url(
+                &image,
+                "image",
+                conversation.as_deref(),
+                Some("browse"),
+                Some("browse-frame.jpg"),
+            )
+            .ok()
+            .map(|entry| entry.id)
+        };
+        match media_id {
+            Some(id) => json!({ "media_id": id }).to_string(),
+            None => existing,
+        }
     };
     let mut out = String::with_capacity(content.len() + body.len());
     out.push_str(&content[..start]);
@@ -728,12 +749,16 @@ async fn run_screencast(app: &tauri::AppHandle, gen: u64) -> Result<(), String> 
                     continue;
                 }
                 last_emit = Instant::now();
+                let image = format!("data:image/jpeg;base64,{data}");
+                if let Ok(mut guard) = LAST_FRAME.lock() {
+                    *guard = Some(image.clone());
+                }
                 emit_browse(
                     &app,
                     json!({
                         "id": "live",
                         "status": "controlling",
-                        "image": format!("data:image/jpeg;base64,{data}")
+                        "image": image
                     }),
                 );
             }

@@ -151,6 +151,9 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
     if !policy.browse_enabled && matches!(name, "browse" | "screenshot_page" | "inspect_runtime") {
         return blocked_outcome(name, "Browsing is turned off in settings.");
     }
+    if !policy.reverse_enabled && name.starts_with("re_") {
+        return blocked_outcome(name, "Binary inspection is turned off in settings.");
+    }
 
     let talk_store = ctx.project_path.is_empty() || ctx.project_path == "__shape_talk__";
     let chat_scratch = crate::agent::commands::history::is_chat_work_dir(ctx.project_path);
@@ -332,7 +335,14 @@ fn tool_load_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             }
             "web" => packs.web = true,
             "media" => packs.media = true,
-            "reverse" => packs.reverse = true,
+            "reverse" => {
+                if policy.reverse_enabled {
+                    packs.reverse = true;
+                } else {
+                    refused.push("reverse (turned off in settings)".into());
+                    continue;
+                }
+            }
             "plugins" => packs.plugins = true,
             _ => {
                 refused.push(name);
@@ -343,7 +353,7 @@ fn tool_load_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
             added.push(name);
         }
     }
-    packs = packs.clamp(policy.browse_enabled, true);
+    packs = packs.clamp(policy.browse_enabled, true, policy.reverse_enabled);
     ctx.agent_state.set_session_packs(&id, packs);
     let mut msg = if added.is_empty() {
         "No new packs were loaded.".to_string()

@@ -51,13 +51,13 @@ describe("usage-display", () => {
     it("formats credit usage lines without tokens", () => {
         expect(
             formatMessageUsageLine({ creditsCharged: 1.25 }, "anthropic/claude-sonnet-4"),
-        ).toBe("1.25");
+        ).toBe("1.25%");
         expect(
             formatMessageUsageLine(
                 { creditsCharged: 1.25, tokens: 3400 },
                 "anthropic/claude-sonnet-4",
             ),
-        ).toBe("1.25");
+        ).toBe("1.25%");
     });
 
     it("splits usage into separate rows and omits empty fields", async () => {

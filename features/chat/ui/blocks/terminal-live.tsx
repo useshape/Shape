@@ -1,6 +1,8 @@
 "use client";
 
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
+import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
+import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Info20Regular } from "@fluentui/react-icons/headless/svg/info";
 import { MoreHorizontal20Regular } from "@fluentui/react-icons/headless/svg/more-horizontal";
@@ -30,6 +32,12 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
+} from "@/components/ui/context";
 import { commands } from "@/lib/backend/commands";
 import { useSettings, updateSettingSection, type AutoRunModeSetting } from "@/lib/settings";
 import type { Chunk } from "../md/renderer";
@@ -312,6 +320,9 @@ function TerminalCommandRow({
     const parts = splitActionLabel(lead);
 
     return (
+        <ContextMenu>
+        <ContextMenuTrigger asChild>
+        <div className="min-w-0">
         <ActionLine
             action={parts.action}
             detail={parts.detail}
@@ -334,6 +345,21 @@ function TerminalCommandRow({
                 </div>
             ) : null}
         </ActionLine>
+        </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="min-w-44">
+            <ContextMenuItem onClick={() => void navigator.clipboard.writeText(command)}>
+                <Icon icon={Copy20Regular} />
+                Copy command
+            </ContextMenuItem>
+            {output.trim() ? (
+                <ContextMenuItem onClick={() => void navigator.clipboard.writeText(output)}>
+                    <Icon icon={Clipboard20Regular} />
+                    Copy output
+                </ContextMenuItem>
+            ) : null}
+        </ContextMenuContent>
+        </ContextMenu>
     );
 }
 

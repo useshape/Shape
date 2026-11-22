@@ -699,7 +699,7 @@ function StepRow({ block, conversationId }: { block: Chunk; conversationId?: str
 const HEAVY_WORK = new Set<Chunk["type"]>([
     "edit", "edit_pending", "terminal_command", "git_operation", "run",
     "ls", "cat", "create_file", "mkdir", "delete_file", "rename_file", "rename_chat",
-    "tool_result", "plugin_call", "subagent", "subagent_ref", "inspect_runtime",
+    "tool_result", "plugin_call", "subagent", "subagent_ref", "inspect_runtime", "re_view",
 ]);
 
 /** A thought, or one or two short lookups, is not enough to open a worked list. */

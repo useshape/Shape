@@ -90,6 +90,10 @@ export interface ShapeSettings {
         blame: {
             enabled: boolean;
         };
+        /** Add a Shape co-author line to commits. On by default. */
+        commitAttribution: boolean;
+        /** Add a Shape line to pull request descriptions. On by default. */
+        prAttribution: boolean;
     };
     ai: {
         maxContextLines: number;
@@ -107,6 +111,8 @@ export interface ShapeSettings {
         reviewAdversarialEnabled: boolean;
         /** Fresh design check for new systems. On by default. */
         goldfishEnabled: boolean;
+        /** Tighten long messages for the selected model before they are sent. On by default. */
+        promptOptimizeEnabled: boolean;
         /** Trigger phrase → prompt (+ optional plugin tool) injected on send. */
         workflows: AgentWorkflow[];
         /** Ask before the first Multiwork send. */
@@ -134,6 +140,8 @@ export interface ShapeSettings {
         chatMemoryEnabled: boolean;
         /** When false, browse tools stay unloaded and blocked. */
         browseEnabled: boolean;
+        /** When false, binary inspection stays unloaded and blocked. */
+        reverseEnabled: boolean;
         /** Shell programs that open the network. There is no unrestricted allow. */
         networkCommands: "off" | "ask";
         /** Kill a one-shot command that is still running after this many seconds. */
@@ -215,6 +223,8 @@ export interface ShapeSettings {
         desktopEnabled: boolean;
         onGenerationComplete: boolean;
         onApprovalRequired: boolean;
+        /** Play a short sound when a reply finishes. Off by default. */
+        completionSound: boolean;
     };
     workspace: {
         /** @deprecated Kept for settings merge compat; package suggestions were removed. */
@@ -286,6 +296,8 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         blame: {
             enabled: false,
         },
+        commitAttribution: true,
+        prAttribution: true,
     },
     ai: {
         maxContextLines: 200,
@@ -299,6 +311,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         mcpServers: [],
         reviewAdversarialEnabled: true,
         goldfishEnabled: true,
+        promptOptimizeEnabled: true,
         workflows: [],
         multiworkConfirm: true,
         multiworkShowChips: true,
@@ -312,6 +325,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         chatMemoryEnabled: false,
         autonomy: "balanced",
         browseEnabled: true,
+        reverseEnabled: false,
         networkCommands: "ask",
         commandTimeoutSec: 600,
         allowCapabilityUpgrade: true,
@@ -379,6 +393,7 @@ export const DEFAULT_SETTINGS: ShapeSettings = {
         desktopEnabled: true,
         onGenerationComplete: true,
         onApprovalRequired: true,
+        completionSound: false,
     },
     workspace: {
         toolingInstall: "off",
@@ -598,6 +613,9 @@ function emit() {
     if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
         void import("@tauri-apps/api/event").then(({ emit: tauriEmit }) => {
             void tauriEmit("shape-settings-changed", currentSettings).catch(() => { /* ignore */ });
+        }).catch(() => { /* ignore */ });
+        void import("@/lib/backend/commands").then(({ commands }) => {
+            void commands.setGitCommitAttribution(currentSettings.git.commitAttribution !== false).catch(() => { /* ignore */ });
         }).catch(() => { /* ignore */ });
     }
 }

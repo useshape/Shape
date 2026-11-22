@@ -1,9 +1,11 @@
-## Reverse engineering
+## Binary inspection
 
-Use the `re_*` tools on a project file. Do not run the binary.
+Use the `re_*` tools on a file the user pointed at. Do not run the binary.
 
-Order: `re_catalog` if you are unsure what is installed, then `re_identify`, `re_inspect`, `re_strings`. For native code, `re_functions` then `re_disassemble` at an export or entry RVA. `re_callgraph` is a short static sample, not a full graph.
+Order: `re_identify`, then `re_inspect`. `re_strings` for text. `re_functions` for exports and, on x64 PE, the exception directory. `re_disassemble` at an export or the entry RVA. `re_callgraph` for direct calls in that scanned set.
 
-These tools are static. They will not decompile like Ghidra. If the user installed REA (or another reverse MCP), `mcp_search` then `mcp_call` for decompile. Do not invent Ghidra output.
+`re_disassemble` returns a gas listing and a lift. The lift covers moves, arithmetic, comparisons, branches, calls, jumps, returns, pushes, and pops. Any other instruction is left as its mnemonic. Do not invent C around that. If the arch is not x86 or x64, say so and stop at the structure.
 
-`re_extract` only copies bytes or an uncompressed zip member into `dest`. Never execute extracted blobs.
+`re_callgraph` is capped. If it says the scan stopped, the graph is incomplete.
+
+`re_extract` only copies a byte range or a zip member into `dest`. Never execute extracted bytes.

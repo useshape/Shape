@@ -67,7 +67,7 @@ export function formatMessageUsageRows(
     const rows: Array<{ label: string; value: string }> = [];
     const usedAuto = stats.usedAuto ?? isAutoModelId(model);
     const tokens = stats.tokens ?? 0;
-    const credits = stats.creditsCharged ?? 0;
+    const credits = messageUsagePercent(stats, model);
     const input = stats.inputTokens;
     const output = stats.outputTokens;
 
@@ -77,7 +77,7 @@ export function formatMessageUsageRows(
             value: tokens.toLocaleString(),
         });
     } else if (!usedAuto && credits > 0) {
-        rows.push({ label: "Usage", value: credits.toFixed(2) });
+        rows.push({ label: "Usage", value: `${credits < 0.01 ? "<0.01" : credits.toFixed(2)}%` });
     }
 
     if (input != null && input > 0) {
@@ -88,6 +88,20 @@ export function formatMessageUsageRows(
     }
 
     return rows;
+}
+
+/** What this reply cost. The server charge wins; otherwise price the tokens the turn reported. */
+function messageUsagePercent(stats: MessageUsageStats, model?: string | null): number {
+    const charged = stats.creditsCharged ?? 0;
+    if (charged > 0) return charged;
+    if (stats.usedAuto || isAutoModelId(model)) return 0;
+    const catalog = getShapeCatalog();
+    const priced = catalog?.models.find((item) => item.id === model);
+    if (!priced || (priced.inputCost <= 0 && priced.outputCost <= 0)) return 0;
+    const input = stats.inputTokens ?? 0;
+    const output = stats.outputTokens ?? 0;
+    const usd = (input / 1_000_000) * priced.inputCost + (output / 1_000_000) * priced.outputCost;
+    return (usd * 1.4) / 0.02;
 }
 
 export type ChatUsageDisplay = {

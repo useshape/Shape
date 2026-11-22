@@ -447,6 +447,15 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
+                <SettingRow title="Binary inspection" description="Read a binary's structure, strings, and x86 listing. Off until you turn it on.">
+                    <SettingSwitch
+                        checked={a.reverseEnabled}
+                        onChange={(on) => {
+                            updateSettingSection("ai", { reverseEnabled: on });
+                            void commands.updateTurnPolicy({ reverseEnabled: on });
+                        }}
+                    />
+                </SettingRow>
                 <SettingRow title="Network commands" description="The agent can use curl and similar tools to interact with the internet.">
                     <SettingSelect
                         value={a.networkCommands}
@@ -461,7 +470,7 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Command limit" description="Cancel a one-shot command that is running.">
+                <SettingRow title="Command limit" description="Stop a command that runs too long.">
                     <SettingNumberSelect
                         value={a.commandTimeoutSec}
                         options={[120, 600, 1800]}
@@ -518,7 +527,7 @@ export function AiSettingsPanel({
                         }}
                     />
                 </SettingRow>
-                <SettingRow title="Protect destructive git" description="Ability to protect destructive git operations.">
+                <SettingRow title="Protect destructive git" description="Ask before destructive git commands.">
                     <SettingSwitch
                         checked={a.protectDestructiveGit}
                         onChange={(on) => {
@@ -562,6 +571,17 @@ export function AiSettingsPanel({
                         checked={a.goldfishEnabled}
                         onChange={(goldfishEnabled) =>
                             updateSettingSection("ai", { goldfishEnabled })
+                        }
+                    />
+                </SettingRow>
+                <SettingRow
+                    title="Tighten long messages"
+                    description="Shorten messages over 40 words before they are sent."
+                >
+                    <SettingSwitch
+                        checked={a.promptOptimizeEnabled}
+                        onChange={(promptOptimizeEnabled) =>
+                            updateSettingSection("ai", { promptOptimizeEnabled })
                         }
                     />
                 </SettingRow>

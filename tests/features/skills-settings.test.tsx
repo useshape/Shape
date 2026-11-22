@@ -133,7 +133,7 @@ describe("skills settings", () => {
         serve({});
         await mount();
 
-        expect(host.textContent).toContain("Discovered");
+        expect(host.textContent).toContain("Auto");
         expect(host.textContent).toContain("No new skill files found.");
         expect(buttonWithLabel(host, "Scan for new skills")).toBeDefined();
     });

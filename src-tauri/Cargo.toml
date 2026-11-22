@@ -80,6 +80,8 @@ zip = "2"
 tar = "0.4"
 flate2 = "1"
 png = "0.17"
+goblin = "0.9"
+iced-x86 = { version = "1.22.0", default-features = false, features = ["std", "decoder", "gas", "instr_info"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

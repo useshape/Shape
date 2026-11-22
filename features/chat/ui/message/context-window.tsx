@@ -22,7 +22,6 @@ const SEGMENTS: { key: keyof ContextBreakdown; label: string; color: string }[] 
     { key: "rules", label: "Skills", color: "bg-amber-400" },
     { key: "system", label: "System prompt", color: "bg-emerald-500" },
     { key: "projectContext", label: "Memory files", color: "bg-teal-400" },
-    { key: "mode", label: "Mode", color: "bg-lime-500" },
     { key: "summarized", label: "Summarized", color: "bg-zinc-400" },
 ];
 
@@ -102,8 +101,7 @@ export function ContextWindowMenu({
             </div>
             <div className="flex flex-col gap-1">
                 {rows.map((seg) => (
-                    <div key={String(seg.key)} className="flex items-center gap-2 text-sm">
-                        <span className={cn("size-3 shrink-0 squircle-2xl", seg.color)} />
+                    <div key={String(seg.key)} className="flex items-baseline justify-between gap-3 text-sm">
                         <span className="min-w-0 text-md! text-text-primary">{seg.label}</span>
                         <span className="text-md font-medium text-text-muted">
                             {formatTokens(seg.tokens)}

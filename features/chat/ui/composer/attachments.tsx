@@ -3,7 +3,6 @@
 import { Camera20Filled } from "@fluentui/react-icons/headless/svg/camera";
 import { Code20Regular } from "@fluentui/react-icons/headless/svg/code";
 import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
-import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { Options20Regular } from "@fluentui/react-icons/headless/svg/options";
 import { WindowConsole20Regular } from "@fluentui/react-icons/headless/svg/window-console";
 
@@ -206,8 +205,18 @@ const KIND_ICON: Record<Exclude<AttachmentKind, "file">, IconGlyph> = {
     code: Code20Regular,
 };
 
+function FileSkeletonIcon() {
+    return (
+        <span className="flex w-5 shrink-0 flex-col justify-center gap-[3px]" aria-hidden>
+            <span className="h-px w-full rounded-full bg-text-muted/70" />
+            <span className="h-px w-4/5 rounded-full bg-text-muted/45" />
+            <span className="h-px w-3/5 rounded-full bg-text-muted/30" />
+        </span>
+    );
+}
+
 function KindIcon({ kind }: { kind: AttachmentKind; name: string }) {
-    if (kind === "file" || kind === "image") return <Icon icon={Document20Regular} className="text-text-muted" />;
+    if (kind === "file") return <FileSkeletonIcon />;
     const Glyph = KIND_ICON[kind];
     return <Icon icon={Glyph} className="text-text-muted" />;
 }
@@ -233,6 +242,7 @@ export function ComposerFileTile({
     name,
     src,
     size,
+    peaks,
     busy,
     failed,
 }: {
@@ -240,25 +250,35 @@ export function ComposerFileTile({
     name: string;
     src?: string | null;
     size?: number;
+    peaks?: number[];
     busy?: boolean;
     failed?: boolean;
 }) {
+    if (!busy && !failed && kind === "image" && src) {
+        return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={src} alt="" className="size-16 rounded-xl object-cover" />
+        );
+    }
+    if (!busy && !failed && kind === "audio") {
+        return (
+            <div className="flex h-14 w-28 items-center justify-center rounded-xl bg-surface-3 px-3">
+                <Waveform peaks={peaks ?? []} />
+            </div>
+        );
+    }
     return (
         <div
             className={cn(
-                "inline-flex h-14 max-w-56 items-center gap-2 rounded-xl bg-surface-3 pr-3 text-sm text-text-primary",
-                kind === "image" && src ? "pl-1" : "px-3",
+                "inline-flex h-14 max-w-56 items-center gap-2 rounded-xl bg-surface-3 px-3 text-sm text-text-primary",
                 failed && "text-error",
             )}
             title={name}
         >
             {busy ? (
                 <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            ) : kind === "image" && src ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt="" className="size-12 shrink-0 rounded-lg object-cover" />
             ) : (
-                <KindIcon kind="file" name={name} />
+                <KindIcon kind={kind === "image" ? "file" : kind} name={name} />
             )}
             <span className="min-w-0">
                 <span className="block truncate">{failed ? "Failed" : name}</span>
@@ -302,6 +322,7 @@ function AttachmentPill({
                 name={attachment.name}
                 src={preview}
                 size={attachment.size}
+                peaks={attachment.peaks}
                 busy={busy}
                 failed={failed}
             />

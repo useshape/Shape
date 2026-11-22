@@ -122,7 +122,7 @@ export function dedupeTerminalChunks(chunks: Chunk[]): Chunk[] {
 }
 
 export type Chunk = {
-    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'plugin_connect' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
+    type: 'text' | 'edit' | 'edit_pending' | 'search' | 'grep' | 'status' | 'web_search' | 'think' | 'thought' | 'search_result' | 'web_result' | 'web_visit' | 'inspect_runtime' | 're_view' | 'terminal_command' | 'git_operation' | 'run' | 'ls' | 'cat' | 'create_file' | 'mkdir' | 'delete_file' | 'rename_file' | 'rename_chat' | 'tool_result' | 'plan' | 'plan_saved' | 'todos' | 'attached_image' | 'sent_file' | 'subagent' | 'subagent_ref' | 'design_previews' | 'review_debate' | 'persona_review' | 'question' | 'questions' | 'plugin_call' | 'plugin_connect' | 'generated_svg' | 'generated_image' | 'generated_audio' | 'browse_session' | 'chart' | 'insight_card' | 'place_map' | 'shown_images';
     content?: string;
     file?: string;
     query?: string;
@@ -523,6 +523,17 @@ function unescapeXml(s: string): string {
         };
     };
 
+    const parseReViewBlock = (tagFull: string, content: string): Chunk => {
+        const attr = (name: string) => tagFull.match(new RegExp(`\\b${name}="([^"]*)"`))?.[1] ?? "";
+        return {
+            type: "re_view",
+            command: attr("tool"),
+            file: attr("path"),
+            query: attr("summary"),
+            content,
+        };
+    };
+
     while (currentIndex < text.length) {
         const searchTags = [
             { type: 'edit', start: '<edit', end: '</edit>' },
@@ -534,6 +545,7 @@ function unescapeXml(s: string): string {
             { type: 'questions', start: '<questions', end: '</questions>' },
             { type: 'question', start: '<question', end: '</question>' },
             { type: 'inspect_runtime', start: '<inspect_runtime', end: '</inspect_runtime>' },
+            { type: 're_view', start: '<re_view', end: '</re_view>' },
             { type: 'search_result', start: '<search_result', end: '</search_result>' },
             { type: 'search', start: '<search', end: '</search>' },
             { type: 'grep', start: '<grep', end: '</grep>' },
@@ -706,6 +718,8 @@ function unescapeXml(s: string): string {
                 chunks.push(parseWebVisitBlock(tagFull, false));
             } else if (firstMatch.type === 'inspect_runtime') {
                 chunks.push(parseInspectRuntimeBlock(tagFull, content, false));
+            } else if (firstMatch.type === 're_view') {
+                chunks.push(parseReViewBlock(tagFull, content));
             } else if (firstMatch.type === 'plugin_call') {
                 chunks.push(parsePluginCallBlock(tagFull, content, false));
             } else if (firstMatch.type === 'plugin_connect') {
@@ -800,6 +814,9 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'inspect_runtime') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseInspectRuntimeBlock(tagFull, content, true));
+            } else if (firstMatch.type === 're_view') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseReViewBlock(tagFull, content));
             } else if (firstMatch.type === 'browse_session') {
                 const tagFull = text.slice(firstMatch.index, gtIndex === -1 ? text.length : gtIndex + 1);
                 chunks.push(parseRichCard(firstMatch.type, tagFull, content, true));
@@ -899,6 +916,9 @@ function unescapeXml(s: string): string {
             } else if (firstMatch.type === 'inspect_runtime') {
                 const tagFull = text.slice(firstMatch.index, contentStartIndex);
                 chunks.push(parseInspectRuntimeBlock(tagFull, content, false));
+            } else if (firstMatch.type === 're_view') {
+                const tagFull = text.slice(firstMatch.index, contentStartIndex);
+                chunks.push(parseReViewBlock(tagFull, content));
             } else if (firstMatch.type === 'browse_session') {
                 const tagFull = text.slice(firstMatch.index, gtIndex === -1 ? text.length : gtIndex + 1);
                 chunks.push(parseRichCard(firstMatch.type, tagFull, content, false));
@@ -1313,7 +1333,7 @@ export function MessageRenderer({
             let x: number | undefined;
             let y: number | undefined;
             let consoleLines: string[] | undefined;
-            const parsed = parseCardJson<{ image?: string; x?: number; y?: number; console?: string[] }>(chunk.content);
+            const parsed = parseCardJson<{ image?: string; media_id?: string; x?: number; y?: number; console?: string[] }>(chunk.content);
             if (parsed) {
                 image = parsed.image || "";
                 x = parsed.x;
@@ -1327,6 +1347,7 @@ export function MessageRenderer({
                     title={chunk.visitTitle}
                     status={chunk.commandStatus}
                     image={image}
+                    mediaId={parsed?.media_id}
                     x={x}
                     y={y}
                     consoleLines={consoleLines}

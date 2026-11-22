@@ -7,7 +7,11 @@ import { Chat20Filled } from "@fluentui/react-icons/headless/svg/chat";
 import { Checkmark20Regular } from "@fluentui/react-icons/headless/svg/checkmark";
 import { ChevronDown20Regular } from "@fluentui/react-icons/headless/svg/chevron-down";
 import { Color20Regular } from "@fluentui/react-icons/headless/svg/color";
+import { ClipboardPaste20Regular } from "@fluentui/react-icons/headless/svg/clipboard-paste";
 import { Copy20Regular } from "@fluentui/react-icons/headless/svg/copy";
+import { Cut20Regular } from "@fluentui/react-icons/headless/svg/cut";
+import { SelectAllOn20Regular } from "@fluentui/react-icons/headless/svg/select-all-on";
+import { Dismiss20Regular } from "@fluentui/react-icons/headless/svg/dismiss";
 import { Document20Regular } from "@fluentui/react-icons/headless/svg/document";
 import { DocumentText20Regular } from "@fluentui/react-icons/headless/svg/document-text";
 import { Eye20Regular } from "@fluentui/react-icons/headless/svg/eye";
@@ -84,6 +88,8 @@ import { updateSettingSection, useSettings, type AutoRunModeSetting } from "@/li
 import { ChatUsageButton } from "./usage";
 import { useShapeAuth } from "@/lib/cloud/store";
 import { SearchInput } from "@/components/ui/search";
+import { SplitSpinner } from "@/components/ui/split-spinner";
+import { estimateSendCredits } from "@/lib/chat/estimate-tokens";
 import { effortDisplayLabel, effortsForModel, modelSupportsSuperThinking, type ReasoningEffort } from "./reasoning-effort";
 import { ShapeAutoIcon } from "@/lib/ui/provider-icon";
 import { WorkerMark } from "@/features/agent/sidebar/worker-mark";
@@ -113,6 +119,8 @@ type ChatInputProps = {
     hideModeSelect?: boolean;
     reasoningEffort: ReasoningEffort;
     setReasoningEffort: (e: ReasoningEffort) => void;
+    /** Earlier messages in this chat. Their text is part of the next request. */
+    historyMessages?: { content: string }[];
     pendingEdits?: { id: string; file: string; original: string; replacement: string; baseline?: string }[];
     onAcceptAllEdits?: () => void;
     onRejectAllEdits?: () => void;
@@ -168,18 +176,62 @@ function estimateCredits(model: ModelInfo): string | null {
     return String(Math.round(credits));
 }
 
-const ModelTooltip = ({
-    model,
-    effort,
-}: {
-    model: ModelInfo;
-    effort: ReasoningEffort;
-}) => {
+/**
+ * Artificial Analysis Intelligence Index, 0–100.
+ * Scores OpenRouter publishes on `benchmarks.artificial_analysis.intelligence_index`
+ * are copied from that field (checked 2026-11-21). Where that field is empty, the
+ * number is a published Artificial Analysis Intelligence Index for the same model.
+ * Models with no published index are omitted on purpose.
+ */
+const INTELLIGENCE_INDEX: Record<string, number> = {
+    "anthropic/claude-opus-5.5": 59.1,
+    "anthropic/claude-sonnet-5.5": 54.5,
+    "anthropic/claude-haiku-5.5": 36.5,
+    "x-ai/grok-4.7": 35.5,
+    "qwen/qwen3.8-max-0902": 33.7,
+    "deepseek/deepseek-v4.1-flash": 32.6,
+    "z-ai/glm-5.3": 31.7,
+    "google/gemini-3.8-flash": 30.8,
+    "qwen/qwen3.8-flash": 28.6,
+    "z-ai/glm-5.3-flash": 27.8,
+    "mistralai/mistral-large-4-0": 26.1,
+    "openai/gpt-5.6-luna": 23.8,
+    "deepseek/deepseek-v4-pro": 20.8,
+    "qwen/qwen3.8-27b": 20.1,
+    "minimax/minimax-m3": 18.9,
+    "meta-llama/llama-4-maverick": 10,
+    "mistralai/devstral-2512": 9,
+    "mistralai/mistral-small-2603": 4.3,
+};
+
+const QUALITY_STOPS = 10;
+/** Left stops stay grey, the middle goes green, the far end is purple. */
+const QUALITY_STOP_COLORS = [
+    "#8a8a8a",
+    "#8e8e88",
+    "#7d9478",
+    "#5ea874",
+    "#3fbe78",
+    "#2fbf86",
+    "#2aaa84",
+    "#4a8fd4",
+    "#6d6eef",
+    "#8b5cf6",
+];
+
+function intelligenceFor(id: string): number | undefined {
+    const key = id.trim().toLowerCase().replace(/:free$/, "");
+    if (INTELLIGENCE_INDEX[key] != null) return INTELLIGENCE_INDEX[key];
+    const slug = key.split("/").pop() ?? key;
+    const hit = Object.entries(INTELLIGENCE_INDEX).find(([name]) => name === slug || name.endsWith(`/${slug}`));
+    return hit?.[1];
+}
+
+const ModelTooltip = ({ model }: { model: ModelInfo }) => {
     const ctx = formatContextWindow(model.contextWindow);
-    const stops = effortsForModel(model.id);
-    const index = Math.max(0, stops.findIndex((stop) => stop.value === effort));
     const cost = estimateCredits(model);
-    const level = effortDisplayLabel(effort);
+    const quality = intelligenceFor(model.id);
+    const filled = quality == null ? 0 : Math.min(QUALITY_STOPS, Math.ceil((quality / 100) * QUALITY_STOPS));
 
     return (
         <div className="flex min-w-[220px] max-w-[280px] select-none flex-col gap-1.5 p-3">
@@ -190,17 +242,25 @@ const ModelTooltip = ({
             {model.description ? (
                 <p className="text-xs leading-snug text-text-secondary">{model.description}</p>
             ) : null}
-            <div className="mt-0.5 flex items-center gap-2" aria-label={`${level} reasoning`}>
-                <div className="flex min-w-0 flex-1 gap-0.5">
-                    {stops.map((stop, i) => (
-                        <span
-                            key={stop.value}
-                            className={cn("h-1.5 flex-1 rounded-[2px]", i <= index ? "bg-text-primary" : "bg-white/12")}
-                        />
-                    ))}
+            {quality != null ? (
+                <div
+                    className="mt-0.5 flex items-center gap-2"
+                    aria-label={`Intelligence ${Math.round(quality)}`}
+                >
+                    <div className="flex min-w-[9rem] flex-1 gap-0.5">
+                        {QUALITY_STOP_COLORS.map((color, i) => (
+                            <span
+                                key={color}
+                                className="h-1.5 flex-1 rounded-[2px]"
+                                style={{ backgroundColor: i < filled ? color : "rgba(255,255,255,0.12)" }}
+                            />
+                        ))}
+                    </div>
+                    <span className="shrink-0 text-xs tabular-nums text-text-muted">
+                        {Math.round(quality)}
+                    </span>
                 </div>
-                <span className="shrink-0 text-xs text-text-muted">{level}</span>
-            </div>
+            ) : null}
             {ctx ? (
                 <p className="text-xs text-text-muted">{ctx} context</p>
             ) : null}
@@ -220,14 +280,12 @@ const ModelItem = ({
     model,
     isSelected,
     onSelect,
-    effort,
     disabled = false,
     disabledReason,
 }: {
     model: ModelInfo,
     isSelected: boolean,
     onSelect: (id: string) => void,
-    effort: ReasoningEffort,
     disabled?: boolean,
     disabledReason?: string,
 }) => {
@@ -246,7 +304,7 @@ const ModelItem = ({
                 disabled ? (
                     <span className="text-xs leading-snug text-text-secondary">{unavailableTooltip}</span>
                 ) : (
-                    <ModelTooltip model={model} effort={effort} />
+                    <ModelTooltip model={model} />
                 )
             }
         >
@@ -400,6 +458,60 @@ function RotatingComposerHint({ paused }: { paused: boolean }) {
     );
 }
 
+function EdgeFadeRow({ children, className }: { children: React.ReactNode; className?: string }) {
+    const ref = React.useRef<HTMLDivElement>(null);
+    const [edges, setEdges] = React.useState({ left: false, right: false });
+    React.useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const measure = () => {
+            const max = el.scrollWidth - el.clientWidth;
+            setEdges({ left: el.scrollLeft > 2, right: max - el.scrollLeft > 2 });
+        };
+        const onWheel = (event: WheelEvent) => {
+            const max = el.scrollWidth - el.clientWidth;
+            if (max <= 1) return;
+            const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+                ? 48
+                : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+                  ? el.clientWidth
+                  : 1;
+            const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+            const delta = raw * unit;
+            if (delta === 0) return;
+            const next = Math.max(0, Math.min(max, el.scrollLeft + delta));
+            if (next === el.scrollLeft) return;
+            event.preventDefault();
+            el.scrollLeft = next;
+        };
+        measure();
+        el.addEventListener("scroll", measure, { passive: true });
+        el.addEventListener("wheel", onWheel, { capture: true, passive: false });
+        const observer = new ResizeObserver(measure);
+        observer.observe(el);
+        return () => {
+            el.removeEventListener("scroll", measure);
+            el.removeEventListener("wheel", onWheel, true);
+            observer.disconnect();
+        };
+    }, []);
+    const mask = edges.left || edges.right
+        ? `linear-gradient(to right, ${edges.left ? "transparent" : "#000"} 0, #000 24px, #000 calc(100% - 24px), ${edges.right ? "transparent" : "#000"} 100%)`
+        : undefined;
+    return (
+        <div
+            ref={ref}
+            className={cn(
+                "no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto px-1 [&>*]:shrink-0",
+                className,
+            )}
+            style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
+        >
+            {children}
+        </div>
+    );
+}
+
 export function ChatInput({
     inputValue,
     isLoading,
@@ -418,6 +530,7 @@ export function ChatInput({
     hideModeSelect: _hideModeSelect = false,
     reasoningEffort,
     setReasoningEffort,
+    historyMessages = [],
     pendingEdits = [],
     onAcceptAllEdits,
     onRejectAllEdits,
@@ -435,7 +548,12 @@ export function ChatInput({
     talkName = "Shape",
     talkMark = null,
     folderLocked = false,
-}: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload">) {
+    activityLabel = null,
+    optimizingPrompt = false,
+}: Omit<ChatInputProps, "webSearch" | "setWebSearch" | "handleFileUpload"> & {
+    activityLabel?: string | null;
+    optimizingPrompt?: boolean;
+}) {
 
     const settings = useSettings();
     const shapeAuth = useShapeAuth();
@@ -763,6 +881,31 @@ export function ChatInput({
     const workerExtra = multiSelectModels
         ? selectedWorkerModels.filter((id) => id && id !== selectedModel)
         : [];
+    const tightening = optimizingPrompt || activityLabel === "Tightening the prompt";
+    const sendEstimate = React.useMemo(() => {
+        if (!inputValue.trim() && uploadedFiles.length === 0) return null;
+        const images = uploadedFiles.filter((file) => file.kind === "image").length;
+        const fileBytes = uploadedFiles
+            .filter((file) => file.kind !== "image")
+            .reduce((sum, file) => sum + (file.size || 0), 0);
+        const included =
+            modelInfo.minTier === "free"
+            || modelInfo.provider === "Free Models"
+            || selectedModel === "auto"
+            || selectedModel === "openrouter/auto";
+        if (included) return "Included";
+        return estimateSendCredits({
+            text: inputValue,
+            history: historyMessages.map((message) => message.content).join("\n"),
+            modelId: modelInfo.id,
+            inputCost: modelInfo.inputCost,
+            outputCost: modelInfo.outputCost,
+            imageCount: images,
+            fileBytes,
+            reasoningEffort,
+            talk: talkSurface,
+        }).label;
+    }, [inputValue, historyMessages, uploadedFiles, selectedModel, modelInfo.id, modelInfo.minTier, modelInfo.provider, modelInfo.inputCost, modelInfo.outputCost, reasoningEffort, talkSurface]);
     const modelNameBase = modelInfo.name;
     const modelName =
         multiSelectModels && workerExtra.length > 0
@@ -839,10 +982,8 @@ export function ChatInput({
         };
     }, []);
 
-    const hasContextStrip =
-        queuedMessages.length > 0 ||
-        projectRuleFiles.length > 0 ||
-        taskItems.length > 0;
+    const hasQueue = queuedMessages.length > 0 && Boolean(onEditQueuedMessage && onRemoveQueuedMessage);
+    const hasTasks = taskItems.length > 0;
 
     const sendDisabled =
         needsSignIn ||
@@ -879,32 +1020,6 @@ export function ChatInput({
             )}
         >
             <div className="relative z-10 flex w-full flex-col gap-1.5">
-                {hasContextStrip ? (
-                    <div className="flex min-w-0 items-center gap-1 px-1">
-                        {queuedMessages.length > 0 && onEditQueuedMessage && onRemoveQueuedMessage ? (
-                            <QueuedMessagesPanel
-                                items={queuedMessages}
-                                onEdit={onEditQueuedMessage}
-                                onRemove={onRemoveQueuedMessage}
-                                onSendNow={onSendQueuedNow}
-                            />
-                        ) : null}
-                        {projectRuleFiles.length > 0 ? (
-                            <Tooltip content={projectRuleFiles.join("\n")}>
-                                <span className="flex h-6 min-w-0 max-w-56 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary">
-                                    <Icon icon={Document20Regular} />
-                                    <span className="truncate">
-                                        {projectRuleFiles
-                                            .map((name) => name.split(/[\\/]/).pop() || name)
-                                            .join(", ")}
-                                    </span>
-                                </span>
-                            </Tooltip>
-                        ) : null}
-                        {taskItems.length > 0 ? <ComposerTasksStrip items={taskItems} /> : null}
-                    </div>
-                ) : null}
-
                 <div
                     ref={composerBoxRef}
                     className={cn(
@@ -993,9 +1108,9 @@ export function ChatInput({
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent className="w-52">
                                         {([
-                                            ["ask", "Read only"],
-                                            ["auto", "Guard"],
-                                            ["always", "Full access"],
+                                            ["ask", "Ask every time"],
+                                            ["auto", "Auto"],
+                                            ["always", "Run everything"],
                                         ] as const).map(([id, label]) => (
                                             <DropdownMenuItem key={id} onClick={() => setRunMode(id)}>
                                                 <span className="min-w-0 flex-1">{label}</span>
@@ -1081,7 +1196,10 @@ export function ChatInput({
                         <div
                             ref={mentionOverlayRef}
                             aria-hidden
-                            className="pointer-events-none absolute inset-0 z-0 overflow-hidden pl-3 text-sm font-normal leading-6 text-text-primary whitespace-pre-wrap break-words"
+                            className={cn(
+                                "pointer-events-none absolute inset-0 z-0 overflow-hidden pl-3 text-sm font-normal leading-6 whitespace-pre-wrap break-words",
+                                tightening ? "agent-progress-loading-text" : "text-text-primary",
+                            )}
                         >
                             {(() => {
                                 const mentionRs = mentionRanges(inputValue);
@@ -1168,7 +1286,7 @@ export function ChatInput({
                                         syncComposerOverlayScroll(e.currentTarget, mentionOverlayRef.current);
                                     }}
                                     placeholder=""
-                                    readOnly={folderLocked}
+                                    readOnly={folderLocked || tightening}
                                     aria-label={
                                         folderLocked
                                             ? "Open a folder to start coding"
@@ -1177,16 +1295,18 @@ export function ChatInput({
                                             : COMPOSER_HINTS[0]
                                     }
                                     rows={1}
-                                    className="relative z-[1] box-border block w-full resize-none overflow-x-hidden border-0 bg-transparent p-0 pl-3 text-sm font-normal leading-6 text-transparent outline-none selection:bg-accent/30 whitespace-pre-wrap break-words"
-                                    style={{ caretColor: "var(--text-primary)" }}
+                                    className="no-scrollbar relative z-[1] box-border block w-full resize-none overflow-x-hidden border-0 bg-transparent p-0 pl-3 text-sm font-normal leading-6 text-transparent outline-none selection:bg-accent/30 whitespace-pre-wrap break-words"
+                                    style={{ caretColor: tightening ? "transparent" : "var(--text-primary)" }}
                                 />
                             </ContextMenuTrigger>
                             <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
                                 <ContextMenuItem onClick={() => document.execCommand("cut")}>
+                                    <Icon icon={Cut20Regular} />
                                     Cut
                                     <ContextMenuShortcut>Ctrl+X</ContextMenuShortcut>
                                 </ContextMenuItem>
                                 <ContextMenuItem onClick={() => document.execCommand("copy")}>
+                                    <Icon icon={Copy20Regular} />
                                     Copy
                                     <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
                                 </ContextMenuItem>
@@ -1210,6 +1330,7 @@ export function ChatInput({
                                         });
                                     }}
                                 >
+                                    <Icon icon={ClipboardPaste20Regular} />
                                     Paste
                                     <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
                                 </ContextMenuItem>
@@ -1222,13 +1343,35 @@ export function ChatInput({
                                         el.select();
                                     }}
                                 >
+                                    <Icon icon={SelectAllOn20Regular} />
                                     Select All
                                     <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
                                 </ContextMenuItem>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem
+                                    onClick={() => document.getElementById("chat-media-upload")?.click()}
+                                >
+                                    <Icon icon={MoviesAndTv24Regular} />
+                                    Upload photos & files
+                                </ContextMenuItem>
+                                {inputValue ? (
+                                    <ContextMenuItem
+                                        onClick={() =>
+                                            onInputChange({
+                                                target: { value: "" },
+                                            } as React.ChangeEvent<HTMLTextAreaElement>)
+                                        }
+                                    >
+                                        <Icon icon={Dismiss20Regular} />
+                                        Clear
+                                    </ContextMenuItem>
+                                ) : null}
                             </ContextMenuContent>
                         </ContextMenu>
                         </div>
                         </div>
+                        {(() => {
+                            const sendButton = (
                         <button
                             type="button"
                             onClick={() => {
@@ -1241,20 +1384,24 @@ export function ChatInput({
                                     onSendMessage();
                                 }
                             }}
-                            disabled={sendDisabled}
+                            disabled={sendDisabled || tightening}
                             className={cn(
                                 "flex size-8 shrink-0 items-center justify-center rounded-full text-white transition-all disabled:opacity-40",
                                 sendActive ? "bg-accent hover:opacity-90" : "bg-panel-hover text-text-muted",
                             )}
                             aria-label={
-                                isLoading && inputValue.trim()
+                                tightening
+                                    ? "Tightening the prompt"
+                                    : isLoading && inputValue.trim()
                                     ? "Queue message"
                                     : isLoading
                                       ? "Stop"
                                       : "Send"
                             }
                         >
-                            {isLoading && !inputValue.trim() ? (
+                            {tightening ? (
+                                <SplitSpinner size={16} />
+                            ) : isLoading && !inputValue.trim() ? (
                                 <span role="status" aria-label="Generating" className="imsg-typing imsg-typing-sm text-text-primary">
                                     <span />
                                     <span />
@@ -1264,11 +1411,19 @@ export function ChatInput({
                                 <Icon icon={ArrowUp20Regular} />
                             )}
                         </button>
+                            );
+                            if (!sendEstimate || isLoading) return sendButton;
+                            return (
+                                <Tooltip content={sendEstimate} side="top">
+                                    {sendButton}
+                                </Tooltip>
+                            );
+                        })()}
                         </div>
                     </div>
                 </div>
                 {talkSurface ? null : (
-                        <div className="flex min-w-0 items-center justify-between gap-2 px-1">
+                        <EdgeFadeRow className="order-first justify-between">
                         <div className="flex min-w-0 items-center gap-1.5">
                             {project_path ? (
                                 <CommitMenu
@@ -1287,6 +1442,27 @@ export function ChatInput({
                                     onAccept={onAcceptEdit}
                                     onReject={onRejectEdit}
                                 />
+                            ) : null}
+                            {hasQueue && onEditQueuedMessage && onRemoveQueuedMessage ? (
+                                <QueuedMessagesPanel
+                                    items={queuedMessages}
+                                    onEdit={onEditQueuedMessage}
+                                    onRemove={onRemoveQueuedMessage}
+                                    onSendNow={onSendQueuedNow}
+                                />
+                            ) : null}
+                            {hasTasks ? <ComposerTasksStrip items={taskItems} /> : null}
+                            {projectRuleFiles.length > 0 ? (
+                                <Tooltip content={projectRuleFiles.join("\n")}>
+                                    <span className="flex h-6 min-w-0 max-w-56 items-center gap-1.5 rounded-md px-1.5 text-sm text-text-secondary">
+                                        <Icon icon={Document20Regular} />
+                                        <span className="truncate">
+                                            {projectRuleFiles
+                                                .map((name) => name.split(/[\\/]/).pop() || name)
+                                                .join(", ")}
+                                        </span>
+                                    </span>
+                                </Tooltip>
                             ) : null}
                         </div>
                         <div className="flex shrink-0 items-center">
@@ -1389,7 +1565,6 @@ export function ChatInput({
                                                                     model={m}
                                                                     isSelected={selectedModel === m.id}
                                                                     onSelect={setSelectedModel}
-                                                                    effort={reasoningEffort}
                                                                     disabled={!allowed}
                                                                     disabledReason="This model is not available on your plan. Upgrade on the website or keep a free model selected."
                                                                 />
@@ -1434,10 +1609,10 @@ export function ChatInput({
                         </DropdownMenu>
                         <ChatUsageButton compact />
                         </div>
-                        </div>
+                        </EdgeFadeRow>
                         )}
                 {talkSurface ? (
-                    <div className="flex items-center justify-center gap-2 px-2 pb-1 pt-3 text-center text-xs text-text-muted">
+                    <div className="order-last flex items-center justify-center gap-2 px-2 pb-1 pt-3 text-center text-xs text-text-muted">
                         {talkMark ? (
                             <WorkerMark
                                 shape={talkMark.shape}
