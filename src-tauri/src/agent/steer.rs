@@ -75,7 +75,7 @@ pub fn apply_unconfident(
         packs.workspace = false;
         packs.terminal = false;
     }
-    packs.clamp(locks.browse_enabled, locks.shell_enabled)
+    packs.clamp(locks.browse_enabled, locks.shell_enabled, locks.reverse_enabled)
 }
 
 pub async fn fetch(

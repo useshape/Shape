@@ -97,7 +97,7 @@ export function AgentSidebar({
     const [sideTabNear, setSideTabNear] = useState(false);
     const sideWidthRef = useRef(320);
     const sideDragging = useRef(false);
-    const sideRef = useRef<HTMLElement>(null);
+    const sideRef = useRef<HTMLDivElement>(null);
     const sideInnerRef = useRef<HTMLDivElement>(null);
     const sideTabRef = useRef<HTMLButtonElement>(null);
 
@@ -122,7 +122,7 @@ export function AgentSidebar({
             const tab = sideTabRef.current;
             if (tab) {
                 const lean = Math.max(-5, Math.min(5, (e.clientX - tab.getBoundingClientRect().left) * 0.12));
-                tab.style.transform = `translate(calc(-50% + ${lean}px), -50%)`;
+                tab.style.transform = `translate(calc(100% + ${lean}px), -50%)`;
             }
             sideWidthRef.current = next;
             paintSidebar(next);
@@ -132,7 +132,7 @@ export function AgentSidebar({
             sideDragging.current = false;
             setSideResizing(false);
             setSideWidth(sideWidthRef.current);
-            if (sideTabRef.current) sideTabRef.current.style.transform = "translate(-50%, -50%)";
+            if (sideTabRef.current) sideTabRef.current.style.transform = "translate(100%, -50%)";
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
         };
@@ -164,29 +164,32 @@ export function AgentSidebar({
     return (
         <>
         {reveal.filter}
-        <aside
+        <div
             ref={sideRef}
-            aria-hidden={!open}
+            className="relative z-20 h-full shrink-0"
             style={{
                 width: !open ? 0 : !expanded ? 48 : sideWidth,
                 minWidth: 0,
                 flexBasis: !open ? 0 : !expanded ? 48 : sideWidth,
                 transition: sideResizing ? "none" : "width 420ms cubic-bezier(0.16, 1, 0.3, 1), flex-basis 420ms cubic-bezier(0.16, 1, 0.3, 1)",
             }}
-            className={cn(
-                "relative z-20 flex h-full shrink-0 flex-col overflow-hidden bg-sidebar text-text-primary",
-                !expanded && open && "w-12",
-            )}
             onMouseMove={(e) => {
                 if (!expanded || !open || sideDragging.current) return;
                 const bounds = e.currentTarget.getBoundingClientRect();
                 const dist = Math.hypot(e.clientX - bounds.right, e.clientY - (bounds.top + bounds.height / 2));
-                const near = dist < 72;
+                const near = dist < 128;
                 setSideTabNear((prev) => (prev === near ? prev : near));
             }}
             onMouseLeave={() => {
                 if (!sideDragging.current) setSideTabNear(false);
             }}
+        >
+        <aside
+            aria-hidden={!open}
+            className={cn(
+                "flex h-full w-full flex-col overflow-hidden bg-sidebar text-text-primary",
+                !expanded && open && "w-12",
+            )}
         >
             <div
                 ref={(node) => {
@@ -194,10 +197,10 @@ export function AgentSidebar({
                     reveal.bendRef.current = node;
                 }}
                 className={cn(
-                    "relative flex h-full min-h-0 flex-col",
+                    "relative flex h-full min-h-0 flex-col overflow-hidden",
                     !open && "pointer-events-none",
                 )}
-                style={{ width: !open ? 0 : !expanded ? 48 : sideWidth }}
+                style={{ width: !expanded ? 48 : sideWidth }}
             >
                 {showHostedNav ? (
                     <>
@@ -309,17 +312,20 @@ export function AgentSidebar({
                         <NavItem label="Settings" icon={SlideSettings24Regular} onClick={() => void openSettingsWindow()} collapsed />
                     )}
                 </div>
-                {expanded && open ? (
+            </div>
+            {reveal.blur}
+        </aside>
+            {expanded && open ? (
                 <button
                     ref={sideTabRef}
                     type="button"
                     aria-label="Resize sidebar"
                     className={cn(
-                        "absolute top-1/2 right-0 z-40 flex h-11 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center",
+                        "absolute top-1/2 right-0 z-40 flex h-11 w-4 cursor-col-resize items-center justify-center",
                         "transition-opacity duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
                         sideTabNear || sideResizing ? "opacity-100" : "opacity-0",
                     )}
-                    style={{ transform: "translate(50%, -50%)" }}
+                    style={{ transform: "translate(100%, -50%)" }}
                     onMouseDown={(e) => {
                         e.preventDefault();
                         sideDragging.current = true;
@@ -338,9 +344,7 @@ export function AgentSidebar({
                     />
                 </button>
             ) : null}
-            </div>
-            {reveal.blur}
-        </aside>
+        </div>
         </>
     );
 }

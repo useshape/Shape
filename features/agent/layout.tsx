@@ -414,7 +414,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             const handle = tabRef.current;
             if (handle) {
                 const lean = Math.max(-5, Math.min(5, (handle.getBoundingClientRect().left - e.clientX) * 0.12));
-                handle.style.transform = `translate(calc(-50% + ${lean}px), -50%)`;
+                handle.style.transform = `translate(calc(-100% + ${lean}px), -50%)`;
             }
             if (!floatRef.current) {
                 if (pointer <= comfort) {
@@ -460,7 +460,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
             setIsResizing(false);
             setTabShift(0);
             setWorkspaceWidth(widthRef.current);
-            if (tabRef.current) tabRef.current.style.transform = "translate(-50%, -50%)";
+            if (tabRef.current) tabRef.current.style.transform = "translate(-100%, -50%)";
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
             if (!floatRef.current) {
@@ -733,7 +733,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                     onMouseMove={(e) => {
                                         const bounds = e.currentTarget.getBoundingClientRect();
                                         const dist = Math.hypot(e.clientX - bounds.left, e.clientY - (bounds.top + bounds.height / 2));
-                                        setTabNear(dist < 72);
+                                        setTabNear(dist < 128);
                                     }}
                                     onMouseLeave={() => {
                                         if (!dragging.current) setTabNear(false);
@@ -745,11 +745,11 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                             type="button"
                                             aria-label="Resize workspace"
                                             className={cn(
-                                                "absolute top-1/2 left-0 z-40 flex h-11 w-4 -translate-y-1/2 cursor-col-resize items-center justify-center",
+                                                "absolute top-1/2 left-0 z-40 flex h-11 w-4 cursor-col-resize items-center justify-center",
                                                 "transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
                                                 tabNear || isResizing ? "opacity-100" : "opacity-0",
                                             )}
-                                            style={{ transform: `translate(calc(-50% + ${tabShift}px), -50%)` }}
+                                            style={{ transform: `translate(calc(-100% + ${tabShift}px), -50%)` }}
                                             onMouseDown={(e) => {
                                                 e.preventDefault();
                                                 dragging.current = true;
@@ -763,7 +763,7 @@ export function AgentLayout({ children }: { children: React.ReactNode }) {
                                                 className={cn(
                                                     "block w-[3px] rounded-full bg-text-muted/55 shadow-[0_1px_1px_rgba(0,0,0,0.45)]",
                                                     "transition-[height,background-color] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                                                    isResizing ? "h-9 bg-text-primary/80" : "h-7",
+                                                    isResizing ? "h-10 bg-text-primary/80" : "h-15",
                                                 )}
                                             />
                                         </button>

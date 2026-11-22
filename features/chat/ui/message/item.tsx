@@ -36,6 +36,7 @@ import {
 import { Tooltip } from "@/components/ui/tooltip";
 import {
     formatMessageModelLabel,
+    formatMessageUsageRows,
     type MessageUsageStats,
 } from "@/lib/chat/usage-display";
 import { parseShapeContinueAction } from "@/lib/chat/continue-action";
@@ -503,6 +504,18 @@ function ChatMessageItemInner({
                     Copy
                     <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
                 </ContextMenuItem>
+                {typeof index === "number" && index >= 0 && onRestore ? (
+                    <ContextMenuItem onClick={() => onRestore(index)}>
+                        <Icon icon={ArrowShuffle24Regular} />
+                        Restore checkpoint
+                    </ContextMenuItem>
+                ) : null}
+                {typeof index === "number" && index >= 0 && onFork ? (
+                    <ContextMenuItem onClick={() => onFork(index)}>
+                        <Icon icon={BranchFork20Regular} />
+                        Branch chat from here
+                    </ContextMenuItem>
+                ) : null}
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={handleSelectAll}>
                     <Icon icon={SelectAllOn20Regular} />
@@ -716,6 +729,9 @@ function ChatMessageItemInner({
                                 {formatMessageModelLabel(shownModel, shownStats) ? (
                                     <DetailRow label="Model" value={formatMessageModelLabel(shownModel, shownStats)} />
                                 ) : null}
+                                {formatMessageUsageRows(shownStats, shownModel).map((row) => (
+                                    <DetailRow key={row.label} label={row.label} value={row.value} />
+                                ))}
                                 {shownStats || shownModel ? (
                                     <DetailRow
                                         label="Routing"
@@ -726,7 +742,6 @@ function ChatMessageItemInner({
                                         }
                                     />
                                 ) : null}
-                                {shownStats?.mode ? <DetailRow label="Mode" value={shownStats.mode} /> : null}
                                 {shownStats?.reasoningEffort ? (
                                     <DetailRow
                                         label="Reasoning"
@@ -800,6 +815,30 @@ function ChatMessageItemInner({
                 Copy
                 <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
             </ContextMenuItem>
+            {role === "assistant" && typeof index === "number" && index >= 0 && onRedo ? (
+                <ContextMenuItem onClick={() => onRedo(index)}>
+                    <Icon icon={ArrowClockwise20Regular} />
+                    Regenerate
+                </ContextMenuItem>
+            ) : null}
+            {role === "assistant" ? (
+                <ContextMenuItem onClick={() => speakMessage(content)}>
+                    <Icon icon={Speaker220Regular} />
+                    Read aloud
+                </ContextMenuItem>
+            ) : null}
+            {role === "assistant" && timestamp ? (
+                <ContextMenuItem onClick={() => void navigator.clipboard.writeText(String(timestamp))}>
+                    <Icon icon={Clipboard20Regular} />
+                    Copy message ID
+                </ContextMenuItem>
+            ) : null}
+            {role === "assistant" ? (
+                <ContextMenuItem onClick={() => setReportOpen(true)}>
+                    <Icon icon={Flag20Regular} />
+                    Report message
+                </ContextMenuItem>
+            ) : null}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={handleSelectAll}>
                 <Icon icon={SelectAllOn20Regular} />

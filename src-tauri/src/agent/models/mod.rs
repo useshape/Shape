@@ -93,6 +93,8 @@ pub struct TurnPolicy {
     pub shell_automation: bool,
     /// When false, browse tools are omitted and `load_tools` cannot add them.
     pub browse_enabled: bool,
+    /// When false, binary inspection stays unloaded and blocked.
+    pub reverse_enabled: bool,
     /// Shell programs that open network connections.
     pub network_commands: NetworkPolicy,
     /// Hard kill for a one-shot command that is still running, in seconds.
@@ -116,6 +118,7 @@ impl Default for TurnPolicy {
             computer_use: true,
             shell_automation: true,
             browse_enabled: true,
+            reverse_enabled: false,
             network_commands: NetworkPolicy::Ask,
             command_timeout_sec: 600,
             allow_capability_upgrade: true,

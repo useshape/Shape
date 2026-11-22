@@ -1198,7 +1198,7 @@ pub async fn complete_chat_messages(
     });
     if matches!(
         proxy_ctx.feature.as_str(),
-        "commit" | "title" | "file-edit" | "caption" | "review" | "goldfish"
+        "commit" | "title" | "file-edit" | "caption" | "review" | "goldfish" | "prompt"
     ) {
         body["reasoning"] = json!({ "enabled": false, "exclude": true });
         body["tool_choice"] = json!("none");
@@ -1282,7 +1282,7 @@ pub async fn complete_chat_with_max_tokens(
     });
     if matches!(
         proxy_ctx.feature.as_str(),
-        "commit" | "title" | "file-edit" | "caption" | "review" | "goldfish"
+        "commit" | "title" | "file-edit" | "caption" | "review" | "goldfish" | "prompt"
     ) {
         body["reasoning"] = json!({ "enabled": false, "exclude": true });
         body["tool_choice"] = json!("none");

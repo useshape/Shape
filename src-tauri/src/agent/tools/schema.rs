@@ -332,6 +332,11 @@ pub fn apply_steer_packs(tools: Vec<Value>, packs: &SteerPacks) -> Vec<Value> {
             Some("reverse") => packs.reverse,
             _ => true,
         })
+        .filter(|tool| {
+            // Search and run stay. The catalog schemas are loaded later.
+            let name = tool_fn_name(tool);
+            name != "plugin_list" && name != "plugin_tools"
+        })
         .collect()
 }
 
@@ -1377,7 +1382,7 @@ fn send_file() -> Value {
 fn re_catalog() -> Value {
     tool(
         "re_catalog",
-        "List reverse-engineering tools that are actually available (built-in static analyzers plus optional PATH engines). Call this before a binary task. Native tools never execute the file. For Ghidra-quality decompile, mcp_search for REA if the user installed it.",
+        "List the built-in static analyzer: PE/ELF/Mach-O/WASM parsing, strings, x86/x64 disassembly, a partial lift, and a capped direct call graph. Nothing is executed.",
         json!({ "type": "object", "properties": {}, "additionalProperties": false }),
     )
 }
@@ -1403,7 +1408,7 @@ fn re_identify() -> Value {
 fn re_inspect() -> Value {
     re_path_tool(
         "re_inspect",
-        "Inspect PE/ELF/Mach-O/WASM structure: sections, imports, exports, CLR/cert markers. Static. Does not decompile.",
+        "Parse PE, ELF, Mach-O, or WASM: sections, imports, exports, entry, CLR and certificate markers. Static. Does not run the file.",
         json!({ "type": "object", "properties": {}, "required": ["path"], "additionalProperties": false }),
     )
 }
@@ -1426,7 +1431,7 @@ fn re_strings() -> Value {
 fn re_disassemble() -> Value {
     re_path_tool(
         "re_disassemble",
-        "Disassemble x86/x64 at entry or rva. Returns a short gas listing. Not a decompiler. Does not run the file.",
+        "Disassemble x86/x64 at an RVA (default: entry) and lift that window. Unmodeled instructions stay as their mnemonic. Default 256 bytes, max 4096. Does not run the file.",
         json!({
             "type": "object",
             "properties": {
@@ -1442,7 +1447,7 @@ fn re_disassemble() -> Value {
 fn re_functions() -> Value {
     re_path_tool(
         "re_functions",
-        "List exported / dynamic symbols. Static.",
+        "List exports and, on x64 PE, functions from the exception directory. Static.",
         json!({ "type": "object", "properties": {}, "required": ["path"], "additionalProperties": false }),
     )
 }
@@ -1450,7 +1455,7 @@ fn re_functions() -> Value {
 fn re_callgraph() -> Value {
     re_path_tool(
         "re_callgraph",
-        "Static near-call graph from a sample of functions. Incomplete by design.",
+        "Direct call edges decoded from entry, exports, and discovered functions. The scan is capped and says when it stopped. x86/x64 only.",
         json!({ "type": "object", "properties": {}, "required": ["path"], "additionalProperties": false }),
     )
 }

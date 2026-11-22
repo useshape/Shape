@@ -6,6 +6,25 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+const SHAPE_ATTRIBUTION: &str = "Co-authored-by: Shape <shape@useshape.org>";
+static COMMIT_ATTRIBUTION: AtomicBool = AtomicBool::new(true);
+
+pub fn set_commit_attribution(enabled: bool) {
+    COMMIT_ATTRIBUTION.store(enabled, Ordering::Relaxed);
+}
+
+fn with_commit_attribution(message: String) -> String {
+    if !COMMIT_ATTRIBUTION.load(Ordering::Relaxed) {
+        return message;
+    }
+    if message.contains("Co-authored-by: Shape") {
+        return message;
+    }
+    let trimmed = message.trim_end();
+    format!("{trimmed}\n\n{SHAPE_ATTRIBUTION}\n")
+}
 
 mod hunks;
 pub use hunks::{
@@ -662,7 +681,7 @@ pub fn git_commit(repo_path: String, message: String) -> Result<(), AppError> {
             vec![]
         };
 
-        repo.commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)
+        repo.commit(Some("HEAD"), &sig, &sig, &with_commit_attribution(message.clone()), &tree, &parents)
             .map_err(|e| AppError::Git(e))?;
 
         Ok(())
@@ -684,6 +703,7 @@ pub fn git_commit(repo_path: String, message: String) -> Result<(), AppError> {
 
 /// Amend HEAD with the current index and a new message (Git Desktop / GitKraken-style).
 pub fn git_commit_amend(repo_path: String, message: String) -> Result<(), AppError> {
+    let message = with_commit_attribution(message);
     let try_op = || -> Result<(), AppError> {
         let repo = Repository::open(&repo_path).map_err(|e| AppError::Git(e))?;
         let mut index = repo.index().map_err(|e| AppError::Git(e))?;

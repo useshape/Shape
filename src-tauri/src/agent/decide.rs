@@ -67,10 +67,11 @@ impl Packs {
     }
 
     /// Settings can only remove packs. They cannot grant a pack the kernel withheld.
-    pub fn clamp(self, browse_enabled: bool, shell_enabled: bool) -> Self {
+    pub fn clamp(self, browse_enabled: bool, shell_enabled: bool, reverse_enabled: bool) -> Self {
         Self {
             browse: self.browse && browse_enabled,
             terminal: self.terminal && shell_enabled,
+            reverse: self.reverse && reverse_enabled,
             ..self
         }
     }
@@ -104,6 +105,8 @@ pub struct Locks {
     /// When false, a Plan conversation does not become Code because the message
     /// contains an edit verb. An explicit "go ahead" still upgrades.
     pub allow_upgrade: bool,
+    /// Binary inspection stays off until the user turns it on.
+    pub reverse_enabled: bool,
 }
 
 impl Default for Locks {
@@ -112,6 +115,7 @@ impl Default for Locks {
             browse_enabled: true,
             shell_enabled: true,
             allow_upgrade: true,
+            reverse_enabled: false,
         }
     }
 }
@@ -200,7 +204,7 @@ pub fn decide(
             packs.terminal = terminal || media;
         }
     }
-    packs = packs.clamp(locks.browse_enabled, locks.shell_enabled);
+    packs = packs.clamp(locks.browse_enabled, locks.shell_enabled, locks.reverse_enabled);
 
     let context = match capability {
         Capability::Code if confident => ContextNeed {
@@ -438,7 +442,7 @@ mod tests {
     use std::time::Instant;
 
     fn locks() -> Locks {
-        Locks::default()
+        Locks { reverse_enabled: true, ..Locks::default() }
     }
 
     #[test]
@@ -563,6 +567,12 @@ mod tests {
     fn reverse_request_loads_reverse_pack() {
         let d = decide("Disassemble this PE binary and list imports", None, locks(), None);
         assert!(d.packs.reverse);
+    }
+
+    #[test]
+    fn reverse_stays_off_until_the_setting_is_on() {
+        let d = decide("Disassemble this PE binary and list imports", None, Locks::default(), None);
+        assert!(!d.packs.reverse);
     }
 
     #[test]

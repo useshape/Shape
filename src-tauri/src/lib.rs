@@ -268,6 +268,7 @@ pub fn run() {
             commands::ipc::git::git_delete_branch,
             commands::ipc::git::git_switch_branch,
             commands::ipc::git::git_commit,
+            commands::ipc::git::set_git_commit_attribution,
             commands::ipc::git::git_commit_amend,
             commands::ipc::git::git_diff,
             commands::ipc::git::git_branches,

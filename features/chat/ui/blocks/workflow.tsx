@@ -12,8 +12,16 @@ import React, { useState } from "react";
 import { type IconGlyph, Icon } from "@/components/ui/icon";
 
 
+import { Clipboard20Regular } from "@fluentui/react-icons/headless/svg/clipboard";
+import { Open20Regular } from "@fluentui/react-icons/headless/svg/open";
 import { FileIcon } from "@/components/ui/file-icon";
 import { DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown";
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
+} from "@/components/ui/context";
 import { cn } from "@/lib/utils";
 import { commands, getProjectPath } from "@/lib/backend";
 import { countChangedLines } from "@/lib/ui/diff-count";
@@ -317,6 +325,37 @@ export function condenseSearchQueries(queries: string[]): { label: string; items
     return out;
 }
 
+function ToolContextMenu({
+    children,
+    copy,
+    path,
+}: {
+    children: React.ReactNode;
+    copy: string;
+    path?: string;
+}) {
+    if (!copy && !path) return <>{children}</>;
+    return (
+        <ContextMenu>
+            <ContextMenuTrigger asChild>
+                <div className="min-w-0">{children}</div>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="min-w-44">
+                {path ? (
+                    <ContextMenuItem onClick={() => void openProjectFile(path)}>
+                        <Icon icon={Open20Regular} />
+                        Open
+                    </ContextMenuItem>
+                ) : null}
+                <ContextMenuItem onClick={() => void navigator.clipboard.writeText(path || copy)}>
+                    <Icon icon={Clipboard20Regular} />
+                    {path ? "Copy path" : "Copy"}
+                </ContextMenuItem>
+            </ContextMenuContent>
+        </ContextMenu>
+    );
+}
+
 /** Menu body for a grouped tool call. The whole row is the trigger. */
 export function MoreMenu({ items, paths }: { items: string[]; paths?: string[] }) {
     return (
@@ -338,6 +377,32 @@ export function MoreMenu({ items, paths }: { items: string[]; paths?: string[] }
                             <Icon icon={Search20Regular} className="icon-sm shrink-0" />
                         )}
                         <span className="min-w-0 truncate">{label}</span>
+                    </DropdownMenuItem>
+                );
+            })}
+        </DropdownMenuContent>
+    );
+}
+
+/** Facts from a binary inspection. The row is the trigger, same as a file group. */
+export function ReFactMenu({ lines, path }: { lines: string[]; path?: string }) {
+    const fileName = path ? path.split(/[\\/]/).pop() || path : "";
+    return (
+        <DropdownMenuContent align="start" sideOffset={6} className="max-h-80 min-w-64 max-w-[28rem] overflow-y-auto">
+            {path ? (
+                <DropdownMenuItem title={path} onSelect={() => void openProjectFile(path)}>
+                    <FileIcon name={fileName} className="size-4 shrink-0" />
+                    <span className="min-w-0 truncate">{fileName}</span>
+                </DropdownMenuItem>
+            ) : null}
+            {lines.slice(0, 40).map((line, index) => {
+                const tab = line.indexOf("\t");
+                const label = tab === -1 ? line : line.slice(0, tab);
+                const value = tab === -1 ? "" : line.slice(tab + 1);
+                return (
+                    <DropdownMenuItem key={`${label}-${index}`} title={value || label}>
+                        <span className="shrink-0 text-text-muted">{label}</span>
+                        {value ? <span className="min-w-0 truncate font-mono">{value}</span> : null}
                     </DropdownMenuItem>
                 );
             })}
@@ -799,13 +864,14 @@ export function ReadGroup({
     return (
         <div className="flex flex-col gap-0.5 py-0.5">
             {unique.map((file, i) => (
-                <ActionLine
-                    key={`${file.path}-${i}`}
-                    action="Read"
-                    detail={formatReadTarget(file)}
-                    title={file.path}
-                    onClick={() => void openProjectFile(file.path)}
-                />
+                <ToolContextMenu key={`${file.path}-${i}`} copy={file.path} path={file.path}>
+                    <ActionLine
+                        action="Read"
+                        detail={formatReadTarget(file)}
+                        title={file.path}
+                        onClick={() => void openProjectFile(file.path)}
+                    />
+                </ToolContextMenu>
             ))}
             {unique.length > 0 ? (
                 <div className="py-0.5 chat-text text-text-muted">
@@ -1093,6 +1159,14 @@ export function getWorkflowActionConfig(block: Chunk, isActive?: boolean) {
                 gitDiffMeta: diffMeta?.body || diffMeta?.file ? diffMeta : undefined,
             };
         }
+        case "re_view":
+            return {
+                label: "Inspected",
+                query: block.query,
+                file: block.file,
+                expandable: false,
+                content: block.content,
+            };
         default:
             return null;
     }
@@ -1301,6 +1375,27 @@ function FilePill({ path, onClick }: { path: string; onClick?: () => void }) {
     );
 }
 
+function reViewVerb(tool?: string): string {
+    switch (tool) {
+        case "catalog":
+            return "Checked";
+        case "identify":
+            return "Identified";
+        case "strings":
+            return "Read";
+        case "disassemble":
+            return "Disassembled";
+        case "functions":
+            return "Listed";
+        case "callgraph":
+            return "Mapped";
+        case "extract":
+            return "Extracted";
+        default:
+            return "Inspected";
+    }
+}
+
 export function ActionItem({
     block,
     isFileEditResolved,
@@ -1319,6 +1414,19 @@ export function ActionItem({
     }, [isEdit, block.original, block.replacement, block.isGenerating]);
 
     if (!config) return null;
+
+    if (block.type === "re_view") {
+        const file = block.file || "";
+        const lines = (block.content || "").split("\n").map((line) => line.trim()).filter(Boolean);
+        const verb = reViewVerb(block.command);
+        return (
+            <ActionLine
+                action={verb}
+                detail={block.query || file.split(/[\\/]/).pop() || "binary"}
+                menu={lines.length > 0 ? <ReFactMenu lines={lines} path={file || undefined} /> : undefined}
+            />
+        );
+    }
 
     if (block.type === "terminal_command") {
         return <TerminalCommandStep block={block} />;
@@ -1433,7 +1541,9 @@ export function ActionItem({
         ...("resultUrls" in config && Array.isArray(config.resultUrls) ? config.resultUrls : []),
     ];
 
+    const copyText = config.file || (config.query ? String(config.query) : config.content || "");
     return (
+        <ToolContextMenu copy={copyText} path={config.file}>
         <ActionLine
             action={lead.action}
             detail={detail || undefined}
@@ -1473,5 +1583,6 @@ export function ActionItem({
                 </div>
             ) : null}
         </ActionLine>
+        </ToolContextMenu>
     );
 }

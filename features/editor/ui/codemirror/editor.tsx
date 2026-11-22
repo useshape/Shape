@@ -35,7 +35,7 @@ import {
     indentOnInput,
     indentUnit,
 } from "@codemirror/language";
-import { highlightSelectionMatches, search, searchKeymap, SearchQuery, setSearchQuery, findNext, findPrevious } from "@codemirror/search";
+import { highlightSelectionMatches, search, searchKeymap, SearchQuery, setSearchQuery, findNext, findPrevious, openSearchPanel } from "@codemirror/search";
 import {
     autocompletion,
     closeBrackets,
@@ -76,6 +76,8 @@ export function CodeMirrorEditor({
 }) {
     const hostRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
+    const wrapCompartmentRef = useRef<Compartment | null>(null);
+    const wrapOnRef = useRef(false);
     const pathRef = useRef(path);
     const setContentRef = useRef(setContent);
     setContentRef.current = setContent;
@@ -86,6 +88,8 @@ export function CodeMirrorEditor({
 
         const lang = languageForPath(path);
         const langCompartment = new Compartment();
+        const wrapCompartment = new Compartment();
+        wrapCompartmentRef.current = wrapCompartment;
         const state = EditorState.create({
             doc: content,
             extensions: [
@@ -141,6 +145,7 @@ export function CodeMirrorEditor({
                     { key: "Mod-[", run: indentLess },
                 ]),
                 langCompartment.of(lang ? [lang, shapeSyntaxLinter(path), lintGutter()] : []),
+                wrapCompartment.of(wrapOnRef.current ? EditorView.lineWrapping : []),
                 EditorView.updateListener.of((update) => {
                     if (!update.docChanged) return;
                     const next = update.state.doc.toString();
@@ -241,6 +246,46 @@ export function CodeMirrorEditor({
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- content synced separately
     }, [path]);
+
+    useEffect(() => {
+        const onAction = (event: Event) => {
+            const view = viewRef.current;
+            if (!view) return;
+            const action = (event as CustomEvent<{ action?: string }>).detail?.action;
+            if (!action) return;
+            if (action === "undo") undo(view);
+            else if (action === "redo") redo(view);
+            else if (action === "selectAll") selectAll(view);
+            else if (action === "find") openSearchPanel(view);
+            else if (action === "cut") {
+                const sel = view.state.selection.main;
+                const text = view.state.sliceDoc(sel.from, sel.to);
+                if (!text) return;
+                void navigator.clipboard.writeText(text).then(() => {
+                    view.dispatch({ changes: { from: sel.from, to: sel.to, insert: "" } });
+                });
+            } else if (action === "copy") {
+                const sel = view.state.selection.main;
+                const text = view.state.sliceDoc(sel.from, sel.to);
+                if (text) void navigator.clipboard.writeText(text);
+            } else if (action === "paste") {
+                void navigator.clipboard.readText().then((text) => {
+                    view.dispatch(view.state.replaceSelection(text));
+                });
+            } else if (action === "toggleWordWrap") {
+                wrapOnRef.current = !wrapOnRef.current;
+                const compartment = wrapCompartmentRef.current;
+                if (!compartment) return;
+                view.dispatch({
+                    effects: compartment.reconfigure(wrapOnRef.current ? EditorView.lineWrapping : []),
+                });
+            } else if (action === "format" || action === "formatSelection") {
+                if (action === "formatSelection") indentMore(view);
+            }
+        };
+        window.addEventListener("shape-editor-action", onAction as EventListener);
+        return () => window.removeEventListener("shape-editor-action", onAction as EventListener);
+    }, []);
 
     useEffect(() => {
         const view = viewRef.current;

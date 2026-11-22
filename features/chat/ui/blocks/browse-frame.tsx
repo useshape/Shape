@@ -191,11 +191,22 @@ export function BrowseStage({
     );
 }
 
+function usableImage(src?: string): boolean {
+    const value = src?.trim() || "";
+    return value.startsWith("data:") || value.startsWith("http") || value.startsWith("blob:") || value.startsWith("asset:");
+}
+
+function bytesToUrl(bytes: number[], mime: string): string {
+    const blob = new Blob([Uint8Array.from(bytes)], { type: mime || "image/jpeg" });
+    return URL.createObjectURL(blob);
+}
+
 export function BrowseChatCard({
     url,
     title,
     status,
     image,
+    mediaId,
     x,
     y,
     consoleLines,
@@ -206,6 +217,7 @@ export function BrowseChatCard({
     title?: string;
     status?: string;
     image?: string;
+    mediaId?: string;
     x?: number;
     y?: number;
     consoleLines?: string[];
@@ -213,14 +225,30 @@ export function BrowseChatCard({
     conversationId?: string | null;
 }) {
     const live = useBrowseFrame(conversationId);
-    const savedImage = image?.trim() || "";
+    const given = usableImage(image) ? image!.trim() : "";
+    const [stored, setStored] = useState("");
+    useEffect(() => {
+        if (!mediaId || given) return;
+        let cancelled = false;
+        let url = "";
+        void commands.readMedia(mediaId).then((payload) => {
+            if (cancelled) return;
+            url = bytesToUrl(payload.bytes, payload.mime || "image/jpeg");
+            setStored(url);
+        }).catch(() => undefined);
+        return () => {
+            cancelled = true;
+            if (url) URL.revokeObjectURL(url);
+        };
+    }, [mediaId, given]);
+    const savedImage = given || stored;
     const driving = Boolean(conversationId) && followLive && !!live && (
         live.status === "controlling" || live.status === "loading" || !savedImage
     );
     const mirror = driving ? live : null;
     const savedStatus = (status as BrowseFrame["status"]) || "stopped";
     const frame = {
-        image: mirror?.image || image || "",
+        image: mirror?.image || savedImage || "",
         x: mirror?.x ?? x ?? 50,
         y: mirror?.y ?? y ?? 50,
         title: mirror?.title || title || "Browser",
@@ -233,7 +261,7 @@ export function BrowseChatCard({
     const [consoleOpen, setConsoleOpen] = useState(false);
     const pageUrl = frame.url.trim();
 
-    const visible = Boolean(frame.image.trim()) || controlling;
+    const visible = Boolean(frame.image.trim()) || controlling || Boolean(mediaId);
     if (!visible || frame.status === "error") return null;
     const copyLink = () => {
         if (!pageUrl) return;

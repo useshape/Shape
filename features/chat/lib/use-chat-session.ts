@@ -37,6 +37,7 @@ import {
     setIncognitoChat,
 } from "@/lib/chat/incognito";
 import { messageLengthBucket } from "@/lib/telemetry/sanitize";
+import { shouldOptimizePrompt } from "@/lib/chat/estimate-tokens";
 import { chatMark, clearNextChat, ensureDraftForCurrentMode, laneFor, lastLaneChat, sealNextChat } from "@/lib/sidebar/chat-lanes";
 import { isPlaceholderView } from "./live-turn-key";
 import { applySubagentEvent } from "@/features/agent/subagents/store";
@@ -171,6 +172,7 @@ export function useChatSession() {
     }, []);
     const uploadedFilesRef = React.useRef(uploadedFiles);
     uploadedFilesRef.current = uploadedFiles;
+    const [optimizingPrompt, setOptimizingPrompt] = React.useState(false);
     const [inputValue, setInputValue] = React.useState(() => {
         try {
             return localStorage.getItem("shape-chat-input") || "";
@@ -962,7 +964,8 @@ export function useChatSession() {
         const systemResume =
             fromQueue
             && (messageContent.includes("<subagent_update>") || messageContent.includes("<scheduled_followup>"));
-        if (!systemResume) {
+        const clearDraft = () => {
+            if (fromQueue || systemResume) return;
             setInputValue("");
             editingQueueIdRef.current = null;
             try {
@@ -970,7 +973,7 @@ export function useChatSession() {
             } catch {
                 /* ignore */
             }
-        }
+        };
 
         const waitForAttachments = async () => {
             const deadline = Date.now() + 8000;
@@ -1143,6 +1146,27 @@ export function useChatSession() {
             const talkName =
                 loop?.name
                 || (isTalkWorkspace(workspace) ? chatTitle : undefined);
+            const tighten = !fromQueue && !systemResume && shouldOptimizePrompt(userMsg, settings.ai.promptOptimizeEnabled);
+            let unlistenStatus: (() => void) | undefined;
+            let sawTighten = false;
+            if (tighten) {
+                setOptimizingPrompt(true);
+                unlistenStatus = await listen<{ phase?: string; label?: string }>("chat_status", (event) => {
+                    if (event.payload?.label === "Tightening the prompt") {
+                        sawTighten = true;
+                        return;
+                    }
+                    if (sawTighten && event.payload?.phase === "model") {
+                        sawTighten = false;
+                        setOptimizingPrompt(false);
+                        clearDraft();
+                    }
+                });
+            } else if (!systemResume) {
+                clearDraft();
+            }
+            let sent = false;
+            try {
             await commands.sendChatMessage(
                 messageWithWorkflows,
                 modelToSend,
@@ -1162,6 +1186,7 @@ export function useChatSession() {
                     computerUse: settings.ai.computerUse,
                     shellAutomation: settings.ai.shellAutomation,
                     browseEnabled: settings.ai.browseEnabled,
+                    reverseEnabled: settings.ai.reverseEnabled,
                     networkCommands: settings.ai.networkCommands,
                     commandTimeoutSec: settings.ai.commandTimeoutSec,
                     allowCapabilityUpgrade: settings.ai.allowCapabilityUpgrade,
@@ -1184,9 +1209,26 @@ export function useChatSession() {
                     shapeAuth.freeAutoPercent,
                     shapeAuth.creditsRemaining,
                 ),
+                settings.ai.promptOptimizeEnabled,
             );
+            sent = true;
             await refreshMetadata();
             return true;
+            } finally {
+                unlistenStatus?.();
+                setOptimizingPrompt(false);
+                if (sent && tighten) {
+                    setInputValue((current) => {
+                        if (current !== messageContent) return current;
+                        try {
+                            localStorage.removeItem("shape-chat-input");
+                        } catch {
+                            /* ignore */
+                        }
+                        return "";
+                    });
+                }
+            }
         } catch (err) {
             console.error("Failed to send message:", err);
             if (!isIncognitoChat()) void captureTelemetryError(err, {
@@ -1966,6 +2008,7 @@ export function useChatSession() {
         historyLoading,
         isLoading,
         activityLabel,
+        optimizingPrompt,
         sendError,
         setSendError,
         contextSummarized,

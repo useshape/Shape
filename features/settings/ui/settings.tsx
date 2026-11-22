@@ -274,7 +274,7 @@ function TerminalSettings({ settings }: { settings: ShapeSettings }) {
     const native = nativeChromeKind();
     return (
         <SettingSection id="settings-terminal" title="Integrated Terminal">
-            <SettingRow title="Window chrome" description="Preview Windows or macOS titlebar controls without changing OS. Local only — not written into project files. You can also set NEXT_PUBLIC_SHAPE_CHROME or ?shape-chrome=macos.">
+            <SettingRow title="Window chrome" description="Preview Windows or macOS titlebar controls.">
                 <SettingSelect
                     value={chromePreview}
                     options={[
@@ -362,6 +362,12 @@ function GitSettings({ settings }: { settings: ShapeSettings }) {
             </SettingRow>
             <SettingRow title="Inline Git Blame">
                 <SettingSwitch checked={g.blame.enabled} onChange={(v) => updateSettingSection("git", { blame: { enabled: v } })} />
+            </SettingRow>
+            <SettingRow title="Commit attribution" description="Add Shape as a co-author.">
+                <SettingSwitch checked={g.commitAttribution !== false} onChange={(v) => updateSettingSection("git", { commitAttribution: v })} />
+            </SettingRow>
+            <SettingRow title="Pull request attribution" description="Add a Shape line to new pull requests.">
+                <SettingSwitch checked={g.prAttribution !== false} onChange={(v) => updateSettingSection("git", { prAttribution: v })} />
             </SettingRow>
         </SettingSection>
         </>
@@ -678,6 +684,7 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
                         <Button
                             variant="secondary"
                             size="sm"
+                            className="border border-border h-9! bg-transparent text-text-primary"
                             disabled={busy || downloading}
                             onClick={() => void runAction("check")}
                         >
@@ -685,19 +692,8 @@ function UpdatesSettings({ settings }: { settings: ShapeSettings }) {
                         </Button>
                     </div>
                 </div>
-                <div className="flex items-center gap-3 px-3.5 py-3">
-                    <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-text-primary">Updater</div>
-                        <div className="text-xs text-text-muted">
-                            {u.autoUpdate
-                                ? "Downloads in the background. Restart to finish."
-                                : "Manual checks only."}{" "}
-                            Channel: {u.channel === "nightly" ? "Nightly" : "Stable"}.
-                        </div>
-                    </div>
-                </div>
             </SettingCard>
-            <SettingRow title="Automatic updates" description="Download new versions when they ship. Restart to apply them.">
+            <SettingRow title="Automatic updates" description="Automatically download and install updates when they become available.">
                 <SettingSwitch
                     checked={u.autoUpdate}
                     onChange={(v) => {
@@ -767,6 +763,12 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
                         onChange={(v) => updateSettingSection("notifications", { onApprovalRequired: v })}
                     />
                 </SettingRow>
+                <SettingRow title="Completion sound" description="Play a short tone when a reply finishes.">
+                    <SettingSwitch
+                        checked={n.completionSound === true}
+                        onChange={(v) => updateSettingSection("notifications", { completionSound: v })}
+                    />
+                </SettingRow>
                 </SettingCard>
             </SettingSection>
         );
@@ -774,7 +776,7 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
     return (
         <>
             <SettingSection title="Startup">
-                <SettingRow title="Open Shape at login" description="Start Shape when you sign in to this computer. Routines only run while Shape is open.">
+                <SettingRow title="Open Shape at login" description="Start Shape when you sign in.">
                     <SettingSwitch
                         checked={p.openAtLogin}
                         onChange={(v) => {
@@ -827,7 +829,7 @@ function PrivacySettings({ settings, part }: { settings: ShapeSettings; part: "n
                 </SettingRow>
                 <SettingRow
                     title="Clear cache"
-                    description="Deletes agent scratch scripts, generated media, chat work files, and the codebase index. Chats stay."
+                    description="Clear local scratch files and the search index."
                 >
                     <Button
                         variant="outline"
@@ -936,7 +938,7 @@ function FeedbackSection() {
     return (
         <>
             <SettingSection title="Feedback">
-                <SettingRow title="Report a problem" description="Sends to our team. Does not count toward usage. Optionally link one chat from this project.">
+                <SettingRow title="Report a problem" description="Send a report to the team.">
                     <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
                         Report
                     </Button>

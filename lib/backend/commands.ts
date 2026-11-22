@@ -256,6 +256,8 @@ export const commands = {
         invalidateGitCacheForPath(repoPath);
         return result;
     },
+    setGitCommitAttribution: (enabled: boolean) =>
+        invokeCommand<void>("set_git_commit_attribution", { enabled }),
     gitCommit: async (repoPath: string, message: string) => {
         const result = await invokeCommand("git_commit", { repoPath, message });
         invalidateGitCacheForPath(repoPath);
@@ -524,6 +526,7 @@ export const commands = {
             computerUse?: boolean;
             shellAutomation?: boolean;
             browseEnabled?: boolean;
+            reverseEnabled?: boolean;
             networkCommands?: string;
             commandTimeoutSec?: number;
             allowCapabilityUpgrade?: boolean;
@@ -543,6 +546,7 @@ export const commands = {
         selectedMediaId?: string | null,
         goldfishEnabled?: boolean,
         goldfishModel?: string | null,
+        promptOptimize?: boolean,
     ) =>
         invokeCommand<string>("send_chat_message", {
             message,
@@ -562,6 +566,7 @@ export const commands = {
             computerUse: executionPolicy?.computerUse ?? null,
             shellAutomation: executionPolicy?.shellAutomation ?? null,
             browseEnabled: executionPolicy?.browseEnabled ?? null,
+            reverseEnabled: executionPolicy?.reverseEnabled ?? null,
             networkCommands: executionPolicy?.networkCommands ?? null,
             commandTimeoutSec: executionPolicy?.commandTimeoutSec ?? null,
             allowCapabilityUpgrade: executionPolicy?.allowCapabilityUpgrade ?? null,
@@ -579,6 +584,7 @@ export const commands = {
             selectedMediaId: selectedMediaId ?? null,
             goldfishEnabled: goldfishEnabled ?? null,
             goldfishModel: goldfishModel ?? null,
+            promptOptimize: promptOptimize ?? null,
         }),
     captureHtmlPreview: (options: {
         html: string;
@@ -619,6 +625,7 @@ export const commands = {
         computerUse?: boolean;
         shellAutomation?: boolean;
         browseEnabled?: boolean;
+        reverseEnabled?: boolean;
         networkCommands?: string;
         commandTimeoutSec?: number;
         allowCapabilityUpgrade?: boolean;
@@ -631,6 +638,7 @@ export const commands = {
             computerUse: policy.computerUse ?? null,
             shellAutomation: policy.shellAutomation ?? null,
             browseEnabled: policy.browseEnabled ?? null,
+            reverseEnabled: policy.reverseEnabled ?? null,
             networkCommands: policy.networkCommands ?? null,
             commandTimeoutSec: policy.commandTimeoutSec ?? null,
             allowCapabilityUpgrade: policy.allowCapabilityUpgrade ?? null,

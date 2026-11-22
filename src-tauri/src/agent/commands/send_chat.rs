@@ -63,6 +63,7 @@ pub async fn send_chat_message(
     review_adversarial_enabled: Option<bool>,
     goldfish_enabled: Option<bool>,
     goldfish_model: Option<String>,
+    prompt_optimize: Option<bool>,
     auto_run_mode: Option<String>,
     require_edit_approval: Option<bool>,
     protect_destructive_git: Option<bool>,
@@ -84,6 +85,7 @@ pub async fn send_chat_message(
     computer_use: Option<bool>,
     shell_automation: Option<bool>,
     browse_enabled: Option<bool>,
+    reverse_enabled: Option<bool>,
     network_commands: Option<String>,
     command_timeout_sec: Option<u64>,
     allow_capability_upgrade: Option<bool>,
@@ -98,6 +100,7 @@ pub async fn send_chat_message(
     tokio::task::yield_now().await;
     let review_adversarial_on = review_adversarial_enabled.unwrap_or(false);
     let goldfish_on = goldfish_enabled.unwrap_or(true);
+    let prompt_optimize_on = prompt_optimize.unwrap_or(true);
     state.set_review_adversarial_enabled(review_adversarial_on);
     let workspace = workspace_mode
         .clone()
@@ -147,7 +150,7 @@ pub async fn send_chat_message(
         })
         .unwrap_or(false);
     let has_images = model_router::content_has_images(&message) || history_has_images;
-    let mut mode_to_use = if talk {
+    let mode_to_use = if talk {
         "Agent".to_string()
     } else {
         "Code".to_string()
@@ -324,6 +327,7 @@ pub async fn send_chat_message(
         computer_use: computer_use.unwrap_or(true),
         shell_automation: shell_automation.unwrap_or(true),
         browse_enabled: browse_enabled.unwrap_or(true),
+        reverse_enabled: reverse_enabled.unwrap_or(false),
         network_commands: crate::agent::models::NetworkPolicy::from_setting(network_commands.as_deref()),
         command_timeout_sec: command_timeout_sec.unwrap_or(600).clamp(30, 1800),
         allow_capability_upgrade: allow_capability_upgrade.unwrap_or(true),
@@ -446,7 +450,6 @@ pub async fn send_chat_message(
 
     let review_hint = mode.as_deref().is_some_and(|m| m.eq_ignore_ascii_case("review"));
     let policy_now = state.turn_policy_for(Some(&owned_conversation_id));
-    let composer_read_only = !talk && policy_now.auto_run_mode == AutoRunMode::Ask;
     let (steer, skill_notes) = if talk {
         (schema::SteerPacks::talk(), String::new())
     } else {
@@ -457,30 +460,19 @@ pub async fn send_chat_message(
             browse_enabled: policy_now.browse_enabled,
             shell_enabled: true,
             allow_upgrade: policy_now.allow_capability_upgrade,
+            reverse_enabled: policy_now.reverse_enabled,
         };
         let mut decision = decide::decide(&message, sticky, locks, None);
         if review_hint && !decision.skills.contains(&"review") {
             decision.skills.insert(0, "review");
             decision.skills.truncate(2);
         }
-        // Composer Read only is the only lock. Packs pick extra tools.
-        // Do not give the model an Ask/Plan/Code identity.
-        decision.capability = if composer_read_only {
-            Capability::Ask
-        } else {
-            Capability::Code
-        };
+        // Packs decide which tools are on the turn. Approval settings do not
+        // turn the chat into a mode or hide the write tools.
         let mut packs = state
             .session_packs(&owned_conversation_id)
             .union(decision.packs)
-            .clamp(policy_now.browse_enabled, true);
-        if composer_read_only {
-            packs.workspace = false;
-            packs.terminal = false;
-        } else {
-            packs.workspace = true;
-            packs.terminal = true;
-        }
+            .clamp(policy_now.browse_enabled, true, policy_now.reverse_enabled);
         let mut steer_hint = String::new();
         if !decision.confident {
             let reply = if matches!(&llm_provider, streaming::LlmProvider::Shape) {
@@ -504,15 +496,6 @@ pub async fn send_chat_message(
                 locks,
                 reply.as_ref(),
             );
-        }
-        if composer_read_only {
-            packs.workspace = false;
-            packs.terminal = false;
-            mode_to_use = "Ask".to_string();
-        } else {
-            packs.workspace = true;
-            packs.terminal = true;
-            mode_to_use = "Code".to_string();
         }
         state.set_capability(&owned_conversation_id, decision.capability);
         state.set_session_packs(&owned_conversation_id, packs);
@@ -643,6 +626,24 @@ pub async fn send_chat_message(
         snapshot
     };
     let mut api_history = messages::build_api_history(&history_snapshot);
+    if prompt_optimize_on && super::prompt_optimize::should_optimize(&stored_user_message, true) {
+        if let Some(rewrite) = super::prompt_optimize::tighten_message(
+            &client,
+            &auth_token,
+            &stored_user_message,
+            &model_to_use,
+            &proxy_base,
+            &app_handle,
+            &owned_conversation_id,
+            &cancel,
+        )
+        .await
+        {
+            if let Some(last) = api_history.iter_mut().rev().find(|msg| msg.role == "user") {
+                last.content = rewrite;
+            }
+        }
+    }
     if super::caption::should_caption(&model_to_use, has_images) {
         streaming::emit_chat_status(
             &app_handle,
@@ -754,11 +755,18 @@ pub async fn send_chat_message(
     let summarized = state.history_summary.lock().ok().and_then(|g| g.clone());
     let conversation_json =
         serde_json::to_string(&messages::build_api_history(&history_snapshot)).unwrap_or_default();
+    let rules_for_breakdown = if skill_notes.trim().is_empty() {
+        merged_rules.clone()
+    } else if merged_rules.is_empty() {
+        skill_notes.clone()
+    } else {
+        format!("{merged_rules}\n{skill_notes}")
+    };
     let mut breakdown = build_context_breakdown(
         system_md,
         family_prompt,
-        &merged_rules,
-        &skill_notes,
+        &rules_for_breakdown,
+        "",
         &context_string,
         &tools,
         &conversation_json,
@@ -1138,6 +1146,7 @@ pub fn update_turn_policy(
     computer_use: Option<bool>,
     shell_automation: Option<bool>,
     browse_enabled: Option<bool>,
+    reverse_enabled: Option<bool>,
     network_commands: Option<String>,
     command_timeout_sec: Option<u64>,
     allow_capability_upgrade: Option<bool>,
@@ -1161,6 +1170,9 @@ pub fn update_turn_policy(
     }
     if let Some(v) = browse_enabled {
         policy.browse_enabled = v;
+    }
+    if let Some(v) = reverse_enabled {
+        policy.reverse_enabled = v;
     }
     if let Some(v) = network_commands.as_deref() {
         policy.network_commands = crate::agent::models::NetworkPolicy::from_setting(Some(v));
