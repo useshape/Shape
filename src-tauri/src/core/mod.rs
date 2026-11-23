@@ -1,4 +1,5 @@
 pub mod build_attestation;
+pub mod diagnostics;
 pub mod error;
 pub mod git_bin;
 pub mod mic;

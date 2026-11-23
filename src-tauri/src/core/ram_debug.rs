@@ -17,6 +17,30 @@ static STARTED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 static LOG_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 static FILE: Mutex<Option<File>> = Mutex::new(None);
 static SEQ: AtomicU64 = AtomicU64::new(0);
+static LAST_WS_MB: AtomicU64 = AtomicU64::new(0);
+static LAST_PRIVATE_MB: AtomicU64 = AtomicU64::new(0);
+static LAST_GDI: AtomicU64 = AtomicU64::new(0);
+static LAST_CHILDREN_WS_MB: AtomicU64 = AtomicU64::new(0);
+static LAST_CHILDREN_GDI: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Usage {
+    pub ws_mb: u64,
+    pub private_mb: u64,
+    pub gdi: u32,
+    pub children_ws_mb: u64,
+    pub children_gdi: u32,
+}
+
+pub fn latest_usage() -> Usage {
+    Usage {
+        ws_mb: LAST_WS_MB.load(Ordering::Relaxed),
+        private_mb: LAST_PRIVATE_MB.load(Ordering::Relaxed),
+        gdi: LAST_GDI.load(Ordering::Relaxed) as u32,
+        children_ws_mb: LAST_CHILDREN_WS_MB.load(Ordering::Relaxed),
+        children_gdi: LAST_CHILDREN_GDI.load(Ordering::Relaxed) as u32,
+    }
+}
 pub static WATCH_EVENTS: AtomicU64 = AtomicU64::new(0);
 pub static WATCH_DIRS: AtomicU64 = AtomicU64::new(0);
 pub static WATCH_PENDING: AtomicU64 = AtomicU64::new(0);
@@ -108,6 +132,8 @@ mod win {
             if ok == 0 {
                 return "ws=? private=?".into();
             }
+            super::LAST_WS_MB.store(mb(counters.working_set_size as u64) as u64, std::sync::atomic::Ordering::Relaxed);
+            super::LAST_PRIVATE_MB.store(mb(counters.private_usage as u64) as u64, std::sync::atomic::Ordering::Relaxed);
             let mut line = format!(
                 "ws_mb={:.1} peak_ws_mb={:.1} private_mb={:.1} pagefile_mb={:.1} peak_pagefile_mb={:.1} faults={}",
                 mb(counters.working_set_size as u64),
@@ -175,6 +201,7 @@ mod win {
             GetProcessHandleCount(me, &mut handles);
             let gdi = GetGuiResources(me, 0);
             let user = GetGuiResources(me, 1);
+            super::LAST_GDI.store(gdi as u64, std::sync::atomic::Ordering::Relaxed);
             format!("handles={handles} gdi={gdi} user={user}")
         }
     }
@@ -272,6 +299,8 @@ mod win {
                 })
                 .collect::<Vec<_>>()
                 .join(";");
+            super::LAST_CHILDREN_WS_MB.store(mb(total_ws) as u64, std::sync::atomic::Ordering::Relaxed);
+            super::LAST_CHILDREN_GDI.store(total_gdi as u64, std::sync::atomic::Ordering::Relaxed);
             format!(
                 "children={} children_ws_mb={:.0} children_private_mb={:.0} children_handles={total_handles} children_gdi={total_gdi} children_user={total_user} [{detail}]",
                 owned.len() - 1,
@@ -517,6 +546,7 @@ pub fn install_panic_hook() {
         );
         write_panic_file(&line);
         append_raw(&line);
+        crate::core::diagnostics::on_panic(&line);
         previous(info);
     }));
 }

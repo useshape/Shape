@@ -68,6 +68,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 initTelemetry();
                 void captureTelemetry("agent_launched");
             });
+            void import("@/lib/diagnostics/watchdog").then(({ startDiagnosticsWatchdog }) => {
+                startDiagnosticsWatchdog();
+            });
         };
 
         void bootstrap();

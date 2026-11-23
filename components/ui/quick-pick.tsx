@@ -36,6 +36,8 @@ type Props = {
     /** Optional: submit query on Enter when no item selected / empty list */
     onSubmitQuery?: (query: string) => void;
     emptyText?: string;
+    /** Escape, Backspace on an empty query, or the Back control returns one level. */
+    onBack?: () => void;
 };
 
 /**
@@ -52,6 +54,7 @@ export function QuickPick({
     onSelect,
     onSubmitQuery,
     emptyText = "No results",
+    onBack,
 }: Props) {
     const overlayRoot = useOverlayRoot();
     const [selected, setSelected] = React.useState(0);
@@ -65,9 +68,11 @@ export function QuickPick({
         }
     }, [open, items.length]);
 
+    const listKey = items.map((item) => item.id).join("\n");
+
     React.useEffect(() => {
         setSelected(0);
-    }, [query]);
+    }, [query, listKey]);
 
     const move = (delta: number) => {
         if (items.length === 0) return;
@@ -95,6 +100,11 @@ export function QuickPick({
                         "absolute left-1/2 top-[14%] z-[201] w-[min(520px,calc(100%-2rem))] -translate-x-1/2 outline-none",
                     )}
                     aria-describedby={undefined}
+                    onEscapeKeyDown={(event) => {
+                        if (!onBack) return;
+                        event.preventDefault();
+                        onBack();
+                    }}
                     onKeyDown={(e) => {
                         if (e.key === "ArrowDown") {
                             e.preventDefault();
@@ -117,9 +127,22 @@ export function QuickPick({
                         {placeholder || "Select an option"}
                     </Dialog.Description>
                     <div className={cn(SHAPE_MODAL_PANEL_CLASS, "overflow-hidden p-1.5")}>
-                        {title ? (
-                            <div className="px-2.5 py-1.5 text-center text-sm text-text-primary">
-                                {title}
+                        {title || onBack ? (
+                            <div className="flex items-center gap-2 px-2.5 py-1.5">
+                                {onBack ? (
+                                    <button
+                                        type="button"
+                                        onClick={onBack}
+                                        className="shrink-0 text-xs text-text-muted hover:text-text-primary"
+                                    >
+                                        Back
+                                    </button>
+                                ) : null}
+                                {title ? (
+                                    <div className="min-w-0 flex-1 truncate text-sm text-text-primary">
+                                        {title}
+                                    </div>
+                                ) : null}
                             </div>
                         ) : null}
                         {showInput ? (
@@ -128,6 +151,12 @@ export function QuickPick({
                                     ref={inputRef}
                                     value={query}
                                     onChange={(e) => onQueryChange(e.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Backspace" && !query && onBack) {
+                                            event.preventDefault();
+                                            onBack();
+                                        }
+                                    }}
                                     placeholder={placeholder}
                                     className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
                                     aria-label={placeholder}

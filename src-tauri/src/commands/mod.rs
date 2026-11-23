@@ -1,3 +1,4 @@
+pub mod diagnostics;
 pub mod ipc;
 pub mod device_id;
 pub mod desktop_notification;
