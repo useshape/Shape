@@ -1005,7 +1005,7 @@ export const commands = {
         invokeCommand<boolean>("is_workspace_trusted", { path }),
     gitClone: (url: string, parentDir: string) =>
         invokeCommand<string>("git_clone", { url, parentDir }),
-    scaffoldWebProject: (kind: "next" | "vite" | "astro" | "remix", directory: string) =>
+    scaffoldWebProject: (kind: string, directory: string) =>
         invokeCommand<string>("scaffold_web_project", { kind, directory }),
     // Project statistics (local)
     getProjectStats: (projectPath?: string) =>
@@ -1029,6 +1029,10 @@ export const commands = {
             delta,
             projectPath: projectPath ?? null,
         }),
+    diagnosticsHeartbeat: (telemetryEnabled: boolean, sentryDsn: string) =>
+        invokeCommand<void>("diagnostics_heartbeat", { telemetryEnabled, sentryDsn }),
+    diagnosticsNote: (source: string, message: string) =>
+        invokeCommand<void>("diagnostics_note", { source, message }),
     dictationStart: () => invokeCommand<void>("dictation_start"),
     dictationStop: () => invokeCommand<void>("dictation_stop"),
     dictationPush: (wav: number[]) => invokeCommand<void>("dictation_push", { wav }),

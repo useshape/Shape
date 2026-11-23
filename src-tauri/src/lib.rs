@@ -53,6 +53,7 @@ pub fn run() {
     let _ = dotenvy::from_filename("../.env.local");
     dotenvy::dotenv().ok();
     let _ = dotenvy::from_filename("../.env");
+    crate::core::ram_debug::install_panic_hook();
 
     let mut builder = tauri::Builder::default();
 
@@ -114,6 +115,7 @@ pub fn run() {
             crate::core::windows_notifications::init();
             crate::core::mic::allow_microphone(app.handle());
             crate::core::webview_recovery::install(app.handle());
+            crate::core::diagnostics::install(app.handle().clone());
             crate::browser::surface::install(app.handle());
 
             // Initialize menu
@@ -439,6 +441,8 @@ pub fn run() {
             // history
             commands::ipc::history::get_file_history_command,
             commands::ipc::history::restore_history_version_command,
+            commands::diagnostics::diagnostics_heartbeat,
+            commands::diagnostics::diagnostics_note,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

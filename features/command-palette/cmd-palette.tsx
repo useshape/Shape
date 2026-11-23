@@ -10,6 +10,7 @@ import { Icon } from "@/components/ui/icon";
 
 import { FileIcon } from "@/components/ui/file-icon";
 import { FrameworkMark } from "@/features/chat/ui/shell/brand-marks";
+import { PROJECT_PRESETS } from "@/features/chat/ui/shell/project-catalog";
 import { SearchInput } from "@/components/ui/search";
 
 import { getShortcutForLabel } from "@/lib/ui/shortcuts";
@@ -1363,43 +1364,12 @@ function getAppCommands(): EditorAction[] {
             run: () => window.dispatchEvent(new Event("shape-open-project-pick")),
         },
         {
-            id: "app.file.newNext",
-            label: "File: Create Next.js Project",
+            id: "app.file.newProject",
+            label: "File: New Project…",
             shortcut: "",
-            iconNode: <FrameworkMark slug="nextdotjs" color="000000" invert size={16} />,
             run: () =>
                 window.dispatchEvent(
-                    new CustomEvent("shape-scaffold-project", { detail: { kind: "next" } }),
-                ),
-        },
-        {
-            id: "app.file.newVite",
-            label: "File: Create Vite Project",
-            shortcut: "",
-            iconNode: <FrameworkMark slug="vite" color="646CFF" size={16} />,
-            run: () =>
-                window.dispatchEvent(
-                    new CustomEvent("shape-scaffold-project", { detail: { kind: "vite" } }),
-                ),
-        },
-        {
-            id: "app.file.newAstro",
-            label: "File: Create Astro Project",
-            shortcut: "",
-            iconNode: <FrameworkMark slug="astro" color="FF5D01" size={16} />,
-            run: () =>
-                window.dispatchEvent(
-                    new CustomEvent("shape-scaffold-project", { detail: { kind: "astro" } }),
-                ),
-        },
-        {
-            id: "app.file.newRemix",
-            label: "File: Create Remix Project",
-            shortcut: "",
-            iconNode: <FrameworkMark slug="remix" color="FFFFFF" size={16} />,
-            run: () =>
-                window.dispatchEvent(
-                    new CustomEvent("shape-scaffold-project", { detail: { kind: "remix" } }),
+                    new CustomEvent("shape-new-project", { detail: { step: "sources" } }),
                 ),
         },
         {
@@ -1423,6 +1393,24 @@ function getAppCommands(): EditorAction[] {
                 void import("@/lib/backend").then(({ commands }) => commands.setProjectPath(null));
             },
         },
+        ...PROJECT_PRESETS.map((preset) => ({
+            id: `app.file.scaffold.${preset.id}`,
+            label: `File: Create ${preset.label} Project`,
+            shortcut: "",
+            section: "New Project",
+            iconNode: (
+                <FrameworkMark
+                    slug={preset.icon.slug}
+                    color={preset.icon.color}
+                    invert={preset.icon.invert}
+                    size={16}
+                />
+            ),
+            run: () =>
+                window.dispatchEvent(
+                    new CustomEvent("shape-scaffold-project", { detail: { kind: preset.id } }),
+                ),
+        })),
     ];
 
     // Focused popout has no sidebars/status — zen mode is not applicable.

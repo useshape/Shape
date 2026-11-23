@@ -28,6 +28,9 @@ impl fmt::Display for LogLevel {
 pub fn agent_log(level: LogLevel, component: &str, message: &str) {
     let timestamp = chrono_timestamp();
     eprintln!("[{timestamp}] [{level}] [agent::{component}] {message}");
+    if matches!(level, LogLevel::Warn | LogLevel::Error) {
+        crate::core::diagnostics::note_log("rust", &format!("{component}: {message}"));
+    }
 }
 
 /// Convenience macros as functions

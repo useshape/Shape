@@ -18,35 +18,31 @@ import {
     GitLabMark,
     GitUrlMark,
 } from "./brand-marks";
+import {
+    findProjectCategory,
+    findProjectPreset,
+    PROJECT_CATEGORIES,
+    type ProjectBrandIcon,
+    type ProjectPreset,
+    type ScaffoldKind,
+} from "./project-catalog";
 
-export type ScaffoldKind = "next" | "vite" | "astro" | "remix";
+export type { ScaffoldKind };
 
-export const DESIGN_SCAFFOLDS: Array<{
-    id: ScaffoldKind;
-    label: string;
-    description: string;
-}> = [
-    { id: "next", label: "Create Next.js project", description: "App Router, TypeScript, Tailwind" },
-    { id: "vite", label: "Create Vite project", description: "React + TypeScript" },
-    { id: "astro", label: "Create Astro project", description: "Minimal TypeScript starter" },
-    { id: "remix", label: "Create Remix project", description: "Remix + TypeScript" },
-];
+function brandMark(icon: ProjectBrandIcon): ReactNode {
+    return <FrameworkMark slug={icon.slug} color={icon.color} invert={icon.invert} />;
+}
 
-const SCAFFOLD_MARK: Record<ScaffoldKind, ReactNode> = {
-    next: <FrameworkMark slug="nextdotjs" color="000000" invert />,
-    vite: <FrameworkMark slug="vite" color="646CFF" />,
-    astro: <FrameworkMark slug="astro" color="FF5D01" />,
-    remix: <FrameworkMark slug="remix" color="FFFFFF" />,
-};
-
-const SCAFFOLD_ITEMS: QuickPickItem[] = DESIGN_SCAFFOLDS.map((item) => ({
-    id: `scaffold:${item.id}`,
-    label: item.label,
-    description: item.description,
-    iconNode: (
-        <span className="flex size-4 items-center justify-center">{SCAFFOLD_MARK[item.id]}</span>
-    ),
-}));
+function presetItem(preset: ProjectPreset): QuickPickItem {
+    return {
+        id: `scaffold:${preset.id}`,
+        label: preset.label,
+        description: preset.description,
+        iconNode: (
+            <span className="flex size-4 items-center justify-center">{brandMark(preset.icon)}</span>
+        ),
+    };
+}
 
 export type CloneKind = "git" | "github" | "gitlab" | "bitbucket" | "azure";
 
@@ -106,14 +102,7 @@ export const CLONE_PLACEHOLDER: Record<CloneKind, string> = {
     azure: "org/project/repo",
 };
 
-const SCAFFOLD_NOTIFY: Record<ScaffoldKind, string> = {
-    next: "Creating Next.js project…",
-    vite: "Creating Vite project…",
-    astro: "Creating Astro project…",
-    remix: "Creating Remix project…",
-};
-
-type PickStep = "projects" | "sources" | "clone";
+type PickStep = "projects" | "sources" | "presets" | "hosts" | "clone";
 
 function matchesQuery(item: QuickPickItem, q: string): boolean {
     if (!q) return true;
@@ -126,7 +115,8 @@ function matchesQuery(item: QuickPickItem, q: string): boolean {
 export async function scaffoldDesignProject(kind: ScaffoldKind): Promise<void> {
     const directory = await pickDirectory("Choose a folder for the new project");
     if (!directory) return;
-    notify.info("Project", SCAFFOLD_NOTIFY[kind]);
+    const preset = findProjectPreset(kind);
+    notify.info("Project", preset ? `Creating ${preset.label}…` : "Creating project…");
     try {
         const path = await commands.scaffoldWebProject(kind, directory);
         notify.success("Project", "Project created.");
@@ -146,6 +136,7 @@ export function ProjectQuickPick({
     initialStep?: Exclude<PickStep, "clone">;
 }) {
     const [step, setStep] = useState<PickStep>(initialStep);
+    const [categoryId, setCategoryId] = useState<string | null>(null);
     const [cloneKind, setCloneKind] = useState<CloneKind>("github");
     const [query, setQuery] = useState("");
     const recents = useMemo(() => loadRepoHistory().slice(0, 12), [open]);
@@ -153,12 +144,14 @@ export function ProjectQuickPick({
     useEffect(() => {
         if (!open) return;
         setStep(initialStep);
+        setCategoryId(null);
         setQuery("");
         setCloneKind("github");
     }, [open, initialStep]);
 
     const close = () => {
         setStep("projects");
+        setCategoryId(null);
         setQuery("");
         setCloneKind("github");
         onOpenChange(false);
@@ -214,8 +207,24 @@ export function ProjectQuickPick({
         return [...rows, ...extras.filter((item) => matchesQuery(item, q))];
     }, [query, recents]);
 
+    const category = categoryId ? findProjectCategory(categoryId) : undefined;
+
+    const categoryItems: QuickPickItem[] = [
+        ...PROJECT_CATEGORIES.map((item) => ({
+            id: `category:${item.id}`,
+            label: item.label,
+            description: item.description,
+            iconNode: mark(brandMark(item.icon)),
+        })),
+        {
+            id: "category:clone",
+            label: "Clone",
+            description: "Git URL, GitHub, GitLab, and more",
+            iconNode: mark(<FrameworkMark slug="git" color="F05032" />),
+        },
+    ];
+
     const sourceItems: QuickPickItem[] = [
-        ...SCAFFOLD_ITEMS,
         {
             id: "git",
             label: "Git URL",
@@ -266,8 +275,15 @@ export function ProjectQuickPick({
 
     const reset = () => {
         setStep("projects");
+        setCategoryId(null);
         setQuery("");
         setCloneKind("github");
+    };
+
+    const backToCategories = () => {
+        setQuery("");
+        setCategoryId(null);
+        setStep("sources");
     };
 
     const handleScaffoldOrLocal = (id: string): boolean => {
@@ -292,11 +308,16 @@ export function ProjectQuickPick({
                     if (!next) reset();
                     onOpenChange(next);
                 }}
+                title="Clone"
                 placeholder={CLONE_PLACEHOLDER[cloneKind]}
                 query={query}
                 onQueryChange={setQuery}
                 items={[]}
                 emptyText="Press Enter to clone."
+                onBack={() => {
+                    setQuery("");
+                    setStep("hosts");
+                }}
                 onSelect={() => undefined}
                 onSubmitQuery={(value) => {
                     const url = toCloneUrl(cloneKind, value);
@@ -310,7 +331,7 @@ export function ProjectQuickPick({
         );
     }
 
-    if (step === "sources") {
+    if (step === "hosts") {
         const q = query.trim().toLowerCase();
         return (
             <QuickPick
@@ -319,15 +340,92 @@ export function ProjectQuickPick({
                     if (!next) reset();
                     onOpenChange(next);
                 }}
-                placeholder="Create a project or clone…"
+                title="Clone"
+                placeholder="Clone a repository…"
                 query={query}
                 onQueryChange={setQuery}
                 items={sourceItems.filter((item) => matchesQuery(item, q))}
+                onBack={backToCategories}
                 onSelect={(item) => {
-                    if (handleScaffoldOrLocal(item.id)) return;
                     setQuery("");
                     setCloneKind(item.id as CloneKind);
                     setStep("clone");
+                }}
+            />
+        );
+    }
+
+    if (step === "presets" && category) {
+        const q = query.trim().toLowerCase();
+        return (
+            <QuickPick
+                open={open}
+                onOpenChange={(next) => {
+                    if (!next) reset();
+                    onOpenChange(next);
+                }}
+                title={category.label}
+                placeholder={`Create a ${category.label.toLowerCase()} project…`}
+                query={query}
+                onQueryChange={setQuery}
+                items={category.presets.map(presetItem).filter((item) => matchesQuery(item, q))}
+                onBack={backToCategories}
+                onSelect={(item) => {
+                    if (handleScaffoldOrLocal(item.id)) return;
+                }}
+            />
+        );
+    }
+
+    if (step === "sources") {
+        const q = query.trim().toLowerCase();
+        const categories = categoryItems.filter((item) => matchesQuery(item, q));
+        const presetHits = q
+            ? PROJECT_CATEGORIES.flatMap((group) =>
+                  group.presets
+                      .filter(
+                          (preset) =>
+                              preset.label.toLowerCase().includes(q) ||
+                              preset.description.toLowerCase().includes(q) ||
+                              preset.id.toLowerCase().includes(q),
+                      )
+                      .map((preset) => ({
+                          ...presetItem(preset),
+                          description: `${group.label} · ${preset.description}`,
+                      })),
+              )
+            : [];
+        return (
+            <QuickPick
+                open={open}
+                onOpenChange={(next) => {
+                    if (!next) reset();
+                    onOpenChange(next);
+                }}
+                placeholder="Create a project…"
+                query={query}
+                onQueryChange={setQuery}
+                items={[...categories, ...presetHits]}
+                onBack={
+                    initialStep === "sources"
+                        ? undefined
+                        : () => {
+                              setQuery("");
+                              setStep("projects");
+                          }
+                }
+                onSelect={(item) => {
+                    if (handleScaffoldOrLocal(item.id)) return;
+                    if (item.id === "category:clone") {
+                        setQuery("");
+                        setStep("hosts");
+                        return;
+                    }
+                    if (item.id.startsWith("category:")) {
+                        setCategoryId(item.id.slice("category:".length));
+                        setQuery("");
+                        setStep("presets");
+                    }
                 }}
             />
         );
@@ -363,8 +461,9 @@ export function ProjectQuickPickHost() {
     const [initialStep, setInitialStep] = useState<Exclude<PickStep, "clone">>("projects");
 
     useEffect(() => {
-        const onNew = () => {
-            setInitialStep("projects");
+        const onNew = (event: Event) => {
+            const step = (event as CustomEvent<{ step?: "projects" | "sources" }>).detail?.step;
+            setInitialStep(step === "sources" ? "sources" : "projects");
             setOpen(true);
         };
         const onPick = () => {
