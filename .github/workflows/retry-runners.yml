@@ -1,0 +1,60 @@
+name: Retry dropped runners
+
+on:
+  workflow_run:
+    workflows: [CI, Release]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  retry:
+    if: github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Re-run jobs that never got a runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "Skipping a fork run from ${HEAD_REPO}"
+            exit 0
+          fi
+          if [ "$ATTEMPT" -ge 3 ]; then
+            echo "Run ${RUN_ID} is already attempt ${ATTEMPT}; stopping"
+            exit 0
+          fi
+          dropped=0
+          real=0
+          while IFS="$(printf '\t')" read -r id name conclusion steps; do
+            [ -z "${id:-}" ] && continue
+            case "$conclusion" in
+              success|skipped|neutral) continue ;;
+            esac
+            notes="$(gh api "repos/${REPO}/check-runs/${id}/annotations" --jq '.[].message' || true)"
+            if printf '%s\n' "$notes" | grep -q "not acquired by Runner"; then
+              echo "Never assigned a runner: ${name} (${id})"
+              dropped=$((dropped + 1))
+            elif [ "${steps:-0}" != "0" ]; then
+              echo "Real ${conclusion}: ${name}"
+              real=1
+            fi
+          done < <(gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/jobs" --jq '.jobs[] | [.id, .name, .conclusion, (.steps | length)] | @tsv')
+          if [ "$dropped" -eq 0 ]; then
+            echo "No capacity cancellation. Not retrying."
+            exit 0
+          fi
+          if [ "$real" -eq 1 ]; then
+            echo "A job failed after it started. Not retrying."
+            exit 0
+          fi
+          echo "Re-running ${dropped} dropped job(s) on run ${RUN_ID}"
+          gh run rerun "$RUN_ID" --failed --repo "$REPO"

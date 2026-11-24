@@ -43,9 +43,12 @@ jobs:
       - name: Test
         run: npm run test:all
 
-  macos:
-    name: macOS compile
+  # macos-latest is the arm64 pool. GitHub cancels those jobs after about
+  # 15 minutes when that pool is full. Intel is a different pool.
+  macos-arm64:
+    name: macOS arm64
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -56,11 +59,12 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: aarch64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          key: aarch64
 
       - run: npm ci
 
@@ -69,6 +73,32 @@ jobs:
 
       - name: Check aarch64-apple-darwin
         run: cargo check --manifest-path src-tauri/Cargo.toml --target aarch64-apple-darwin
+
+  macos-x86_64:
+    name: macOS x64
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: x86_64
+
+      - run: npm ci
+
+      - name: Build runtime
+        run: npm run build:runtime
 
       - name: Check x86_64-apple-darwin
         run: cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-apple-darwin
