@@ -13,7 +13,7 @@ function devOnly(): boolean {
     return process.env.NODE_ENV !== "production";
 }
 
-export function isMockChatId(id: string | null | undefined): boolean {
+export function isMockChatId(id: string | null | undefined): id is string {
     return devOnly() && !!id && id.startsWith(MOCK_PREFIX);
 }
 
