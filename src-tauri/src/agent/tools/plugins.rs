@@ -188,14 +188,12 @@ pub async fn execute_plugin_search(
                 "Allowed slugs below. After a list result, plugin_run the FETCH/HISTORY/GET slug with the id from the list. Do not argue. Do not list twice.".to_string(),
             ];
             if let Some(arr) = data.get("tools").and_then(|v| v.as_array()) {
-                for t in arr.iter().take(6) {
-                    let slug = t.get("slug").and_then(|v| v.as_str()).unwrap_or("");
-                    if slug.is_empty() {
-                        continue;
-                    }
-                    let args = t.get("args").and_then(|v| v.as_str()).unwrap_or("");
-                    let p = t.get("p").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    lines.push(format!("- {slug} args={{{args}}} p={p:.2}"));
+                let (shown, omitted) = plugin_slug_lines(arr, 40);
+                lines.extend(shown);
+                if omitted > 0 {
+                    lines.push(format!(
+                        "{omitted} more slugs were not shown. plugin_search again with a narrower phrase."
+                    ));
                 }
             }
             lines.join("\n")
@@ -273,4 +271,39 @@ pub async fn fetch_gate(
 
 pub fn gate_action(body: &Value) -> &str {
     body.get("action").and_then(|v| v.as_str()).unwrap_or("")
+}
+
+pub(crate) fn plugin_slug_lines(tools: &[Value], limit: usize) -> (Vec<String>, usize) {
+    let rows: Vec<String> = tools
+        .iter()
+        .filter_map(|t| {
+            let slug = t.get("slug").and_then(|v| v.as_str()).filter(|s| !s.is_empty())?;
+            let args = t.get("args").and_then(|v| v.as_str()).unwrap_or("");
+            let p = t.get("p").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            Some(format!("- {slug} args={{{args}}} p={p:.2}"))
+        })
+        .collect();
+    let shown = rows.len().min(limit);
+    let omitted = rows.len().saturating_sub(shown);
+    (rows.into_iter().take(shown).collect(), omitted)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plugin_search_reports_slugs_past_the_page() {
+        let tools: Vec<Value> = (0..8)
+            .map(|i| json!({"slug": format!("ACTION_{i}"), "args": "", "p": 0.5}))
+            .collect();
+        let (lines, omitted) = plugin_slug_lines(&tools, 6);
+        assert_eq!(lines.len(), 6);
+        assert_eq!(omitted, 2);
+        assert!(lines.iter().any(|line| line.contains("ACTION_0")));
+        assert!(!lines.iter().any(|line| line.contains("ACTION_7")));
+        let (all, none) = plugin_slug_lines(&tools, 40);
+        assert_eq!(all.len(), 8);
+        assert_eq!(none, 0);
+    }
 }

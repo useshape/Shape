@@ -117,6 +117,8 @@ const DEDUPED_READONLY_TOOLS: &[&str] = &[
     "list_terminals",
     "read_lints",
     "screenshot_page",
+    "mod_scan",
+    "mod_verify",
 ];
 
 /// Tools that can change files on disk, so earlier reads may be stale afterwards.
@@ -132,6 +134,8 @@ const READ_INVALIDATING_TOOLS: &[&str] = &[
     "rename_file",
     "run_terminal",
     "write_to_terminal",
+    "mod_create",
+    "mod_mashup",
 ];
 
 fn tool_invalidates_reads(name: &str, tool_result: &str) -> bool {
@@ -689,6 +693,7 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     terminal: packs.terminal,
                     media: packs.media,
                     reverse: packs.reverse,
+                    mods: packs.mods,
                     hint: String::new(),
                 };
                 live_tools = crate::agent::tools::schema::assemble_tools(

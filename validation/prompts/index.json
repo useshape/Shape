@@ -54,5 +54,6 @@
   { "id": "53-csrf", "file": "53-csrf.txt", "expect": "files", "seed": "seeds/53-csrf" },
   { "id": "54-deadlock", "file": "54-deadlock.txt", "expect": "files", "seed": "seeds/54-deadlock" },
   { "id": "55-calendar-dst", "file": "55-calendar-dst.txt", "expect": "files" },
-  { "id": "56-log-redact", "file": "56-log-redact.txt", "expect": "files" }
+  { "id": "56-log-redact", "file": "56-log-redact.txt", "expect": "files" },
+  { "id": "57-unity-mod", "file": "57-unity-mod.txt", "expect": "files", "seed": "seeds/57-unity-mod" }
 ]

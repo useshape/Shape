@@ -5,15 +5,13 @@ use tauri::Emitter;
 use base64::Engine;
 
 use crate::agent::commands::streaming;
-use crate::agent::models::{DesignPickConcept, PendingAsk, PendingDesignPick};
+use crate::agent::models::{DesignPickConcept, PendingDesignPick};
 use crate::agent::tools::page_shot;
 use crate::commands::preview_render;
 
 use super::common::{
-    blocked_outcome, cleanup_pending_ask, cleanup_pending_design_pick, clip, error_outcome,
-    escape_todo_content, escape_xml_attr, escape_xml_preview_source, escape_xml_text, get_str,
-    is_read_only_mode,
-    wait_for_ask_answer, wait_for_design_pick,
+    blocked_outcome, cleanup_pending_design_pick, clip, error_outcome, escape_todo_content,
+    escape_xml_attr, escape_xml_preview_source, escape_xml_text, get_str, wait_for_design_pick,
 };
 use super::{SideEffect, ToolCtx, ToolOutcome};
 
@@ -94,8 +92,9 @@ pub(super) async fn tool_mcp_search(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutc
         return error_outcome("mcp_search", "MCP is not configured.");
     };
     let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
-    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(6) as usize;
-    match mcp_state.search_catalog(query, limit) {
+    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
+    let offset = args.get("offset").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+    match mcp_state.search_catalog(query, offset, limit) {
         Ok(text) => ToolOutcome {
             tool_result: text.clone(),
             ui_chunk: format!(
@@ -808,146 +807,6 @@ pub(super) async fn tool_inspect_runtime(args: &Value, ctx: &ToolCtx<'_>) -> Too
         tool_result: clip(&format!("Runtime kind: {}\n{report}", kind.label()), 8000),
         ui_chunk: ui,
         side_effect: None,
-    }
-}
-
-fn questions_ui(id: &str, status: &str, questions: &Value, answers: Option<&Value>) -> String {
-    let payload = json!({
-        "questions": questions,
-        "answers": answers,
-    });
-    let body = payload.to_string().replace("</questions>", "</questions\u{200B}>");
-    format!(
-        "\n<questions id=\"{}\" status=\"{}\">\n{}\n</questions>\n",
-        escape_xml_attr(id),
-        escape_xml_attr(status),
-        body
-    )
-}
-
-fn normalize_questions(raw: &Value) -> Result<Value, String> {
-    let arr = raw.as_array().ok_or_else(|| "questions must be an array".to_string())?;
-    if arr.is_empty() || arr.len() > 6 {
-        return Err("Ask 1–6 questions at a time.".to_string());
-    }
-    let mut out = Vec::new();
-    for (i, q) in arr.iter().enumerate() {
-        let prompt = q
-            .get("prompt")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| format!("Question {} needs a prompt.", i + 1))?;
-        let options = q
-            .get("options")
-            .and_then(|v| v.as_array())
-            .ok_or_else(|| format!("Question {} needs options.", i + 1))?;
-        if options.len() < 2 || options.len() > 8 {
-            return Err(format!("Question {} must have 2–8 options.", i + 1));
-        }
-        let id = q
-            .get("id")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("q{}", i + 1));
-        let mut opts = Vec::new();
-        for (j, opt) in options.iter().enumerate() {
-            let label = opt
-                .get("label")
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .ok_or_else(|| format!("Question {} option {} needs a label.", i + 1, j + 1))?;
-            let oid = opt
-                .get("id")
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| format!("{}", j + 1));
-            opts.push(json!({
-                "id": oid,
-                "label": label,
-                "recommended": opt.get("recommended").and_then(|v| v.as_bool()).unwrap_or(false),
-            }));
-        }
-        out.push(json!({
-            "id": id,
-            "prompt": prompt,
-            "allowMultiple": q.get("allow_multiple").and_then(|v| v.as_bool()).unwrap_or(false),
-            "options": opts,
-        }));
-    }
-    Ok(Value::Array(out))
-}
-
-pub(super) async fn tool_ask_user(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
-    let questions = match args.get("questions") {
-        Some(v) => match normalize_questions(v) {
-            Ok(q) => q,
-            Err(e) => return error_outcome("ask_user", &e),
-        },
-        None => return error_outcome("ask_user", "questions is required."),
-    };
-
-    let ask_id = format!("ask-{}", uuid::Uuid::new_v4());
-    let pending = PendingAsk {
-        id: ask_id.clone(),
-        questions_json: questions.to_string(),
-        conversation_id: ctx.conversation_id.clone(),
-    };
-    if let Ok(mut pendings) = ctx.agent_state.pending_asks.lock() {
-        pendings.insert(ask_id.clone(), pending);
-    }
-
-    let pending_ui = questions_ui(&ask_id, "pending", &questions, None);
-    ctx.emit_ui_token(&pending_ui);
-    streaming::emit_chat_status(
-        ctx.app_handle,
-        json!({ "phase": "approval", "label": "Waiting for your answers" }),
-    );
-    let _ = ctx.app_handle.emit(
-        "agent-ask-pending",
-        json!({ "id": ask_id }),
-    );
-
-    let answer = wait_for_ask_answer(&ask_id, ctx).await;
-    cleanup_pending_ask(&ask_id, ctx);
-
-    match answer {
-        None => {
-            let ui = questions_ui(&ask_id, "cancelled", &questions, None);
-            ctx.emit_ui_token(&ui);
-            ToolOutcome {
-                tool_result: "The user skipped these questions or stopped the turn. Continue with a reasonable default and do not ask the same questions again.".to_string(),
-                ui_chunk: ui,
-                side_effect: None,
-            }
-        }
-        Some(payload) if payload == "__skipped__" => {
-            let ui = questions_ui(&ask_id, "skipped", &questions, None);
-            ctx.emit_ui_token(&ui);
-            ToolOutcome {
-                tool_result: "The user skipped these questions. Continue with a reasonable default and do not ask the same questions again.".to_string(),
-                ui_chunk: ui,
-                side_effect: None,
-            }
-        }
-        Some(payload) => {
-            let answers: Value = serde_json::from_str(&payload).unwrap_or(json!({}));
-            let ui = questions_ui(&ask_id, "answered", &questions, Some(&answers));
-            ctx.emit_ui_token(&ui);
-            ToolOutcome {
-                tool_result: format!(
-                    "The user answered:\n{}",
-                    serde_json::to_string_pretty(&answers).unwrap_or(payload)
-                ),
-                ui_chunk: ui,
-                side_effect: None,
-            }
-        }
     }
 }
 

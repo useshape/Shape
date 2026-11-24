@@ -633,6 +633,7 @@ async fn run_thread_inner(
             terminal: parent_packs.terminal,
             media: parent_packs.media,
             reverse: parent_packs.reverse,
+            mods: parent_packs.mods,
             hint: String::new(),
         }
     };

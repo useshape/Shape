@@ -59,43 +59,6 @@ pub(super) fn cleanup_pending_command(cmd_id: &str, ctx: &ToolCtx<'_>) {
     }
 }
 
-pub(super) async fn wait_for_ask_answer(ask_id: &str, ctx: &ToolCtx<'_>) -> Option<String> {
-    loop {
-        if let Ok(mut answers) = ctx.agent_state.ask_answers.lock() {
-            if let Some(payload) = answers.remove(ask_id) {
-                return Some(payload);
-            }
-        }
-        if ctx.cancel.is_cancelled() {
-            return None;
-        }
-        let still_pending = ctx
-            .agent_state
-            .pending_asks
-            .lock()
-            .map(|p| p.contains_key(ask_id))
-            .unwrap_or(false);
-        if !still_pending {
-            if let Ok(mut answers) = ctx.agent_state.ask_answers.lock() {
-                if let Some(payload) = answers.remove(ask_id) {
-                    return Some(payload);
-                }
-            }
-            return None;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-    }
-}
-
-pub(super) fn cleanup_pending_ask(ask_id: &str, ctx: &ToolCtx<'_>) {
-    if let Ok(mut pendings) = ctx.agent_state.pending_asks.lock() {
-        pendings.remove(ask_id);
-    }
-    if let Ok(mut answers) = ctx.agent_state.ask_answers.lock() {
-        answers.remove(ask_id);
-    }
-}
-
 pub(super) async fn wait_for_design_pick(pick_id: &str, ctx: &ToolCtx<'_>) -> Option<String> {
     loop {
         if let Ok(mut answers) = ctx.agent_state.design_pick_answers.lock() {
