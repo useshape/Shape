@@ -34,6 +34,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Typecheck
+        run: npx tsc --noEmit
+
       - name: Build runtime
         run: npm run build:runtime
 
