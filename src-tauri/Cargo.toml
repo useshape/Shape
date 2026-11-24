@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "1.0.3"
+version = "1.0.4"
 description = "Shape — agentic IDE"
 authors = ["Shape"]
 license = "BUSL-1.1"
