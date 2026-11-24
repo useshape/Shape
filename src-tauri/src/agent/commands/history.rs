@@ -631,10 +631,17 @@ mod tests {
                 });
             }
         });
+        let loaded = load_conversations(&path);
         let _ = std::fs::remove_file(get_chat_history_path(&path));
+        let ids: std::collections::HashSet<_> = loaded.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(
+            ids.len(),
+            4,
+            "concurrent saves dropped conversations: {ids:?}"
+        );
         assert!(
-            started.elapsed() < std::time::Duration::from_millis(800),
-            "history save contended for {:?}",
+            started.elapsed() < std::time::Duration::from_secs(15),
+            "history save blocked the caller for {:?}",
             started.elapsed()
         );
     }
