@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+
+# A second tag push waits. It must not cancel installers that are already building.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -51,6 +57,7 @@ jobs:
   build:
     name: Build (${{ matrix.os }} ${{ matrix.arch }})
     needs: test
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -65,12 +72,16 @@ jobs:
             arch: aarch64
             target: aarch64-pc-windows-msvc
             bundles: nsis
+          # Apple silicon. macos-15 is the same arm64 pool, so it does not
+          # avoid the capacity cancellation.
           - runner: macos-latest
             os: macos
             arch: aarch64
             target: aarch64-apple-darwin
             bundles: "app,dmg"
-          - runner: macos-latest
+          # Native Intel. Cross-compiling this on macos-latest waits in the
+          # arm64 queue and gets cancelled when that pool is full.
+          - runner: macos-15-intel
             os: macos
             arch: x86_64
             target: x86_64-apple-darwin
