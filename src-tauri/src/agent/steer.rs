@@ -46,6 +46,7 @@ pub fn parse_steer_body(value: &Value) -> Option<SteerReply> {
             terminal: flag(value, "terminal"),
             media: flag(value, "media"),
             reverse: flag(value, "reverse"),
+            mods: flag(value, "mods"),
         },
         source: source.to_string(),
         hint: value

@@ -508,6 +508,7 @@ pub async fn send_chat_message(
             terminal: packs.terminal,
             media: packs.media,
             reverse: packs.reverse,
+            mods: packs.mods,
             hint: steer_hint,
         };
         let mut notes = String::new();

@@ -275,25 +275,9 @@ impl McpState {
             .collect())
     }
 
-    /// Short catalog for `mcp_search`. Full schemas stay out of the cached tool prefix.
-    pub fn search_catalog(&self, query: &str, limit: usize) -> Result<String, String> {
-        let limit = limit.clamp(1, 8);
-        let q = query.trim().to_ascii_lowercase();
-        let mut tools = self.all_tools()?;
-        tools.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
-        let hits: Vec<_> = tools
-            .into_iter()
-            .filter(|t| {
-                q.is_empty()
-                    || t.qualified_name.to_ascii_lowercase().contains(&q)
-                    || t.description.to_ascii_lowercase().contains(&q)
-                    || t.server_name.to_ascii_lowercase().contains(&q)
-            })
-            .take(limit)
-            .collect();
-        if hits.is_empty() {
-            return Ok("No connected MCP tools matched. Connect a server in Settings, or broaden the query.".into());
-        }
+    /// Page of MCP tools for `mcp_search`. Schemas stay out of the cached prefix.
+    pub fn search_catalog(&self, query: &str, offset: usize, limit: usize) -> Result<String, String> {
+        let tools = self.all_tools()?;
         let hints: HashMap<String, String> = {
             let configs = self.configs.lock().map_err(|e| e.to_string())?;
             configs
@@ -308,33 +292,7 @@ impl McpState {
                 })
                 .collect()
         };
-        let mut hinted = std::collections::HashSet::new();
-        let mut out = String::new();
-        for tool in hits {
-            let schema = serde_json::to_string(&tool.input_schema).unwrap_or_else(|_| "{}".into());
-            let schema = if schema.chars().count() > 1_200 {
-                let head: String = schema.chars().take(1_200).collect();
-                format!("{head}…")
-            } else {
-                schema
-            };
-            let guidance = if hinted.insert(tool.server_id.clone()) {
-                hints
-                    .get(&tool.server_id)
-                    .map(|hint| format!("\nguidance: {hint}"))
-                    .unwrap_or_default()
-            } else {
-                String::new()
-            };
-            out.push_str(&format!(
-                "name: {}\nserver: {}\n{}{guidance}\nargs: {}\n---\n",
-                tool.qualified_name,
-                tool.server_name,
-                tool.description.trim(),
-                schema
-            ));
-        }
-        Ok(out)
+        Ok(page_tool_catalog(&tools, query, offset, limit, &hints))
     }
 
     pub fn call_tool(&self, qualified_name: &str, args_json: &str) -> Result<String, String> {
@@ -464,5 +422,175 @@ impl McpState {
             (server.id, url, client_id)
         };
         start_oauth(&server_id_owned, &url, client_id.as_deref()).await
+    }
+}
+
+/// One `tools/list` page. `nextCursor` means another page exists.
+pub(crate) fn tools_list_page(page: &Value) -> (Vec<Value>, Option<String>) {
+    let tools = page
+        .get("tools")
+        .and_then(|t| t.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let cursor = page
+        .get("nextCursor")
+        .and_then(|c| c.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    (tools, cursor)
+}
+
+pub(crate) fn parse_mcp_tool(
+    server_id: &str,
+    server_name: &str,
+    qualifier: &str,
+    tool: &Value,
+) -> Option<McpToolInfo> {
+    let name = tool.get("name")?.as_str()?.to_string();
+    let description = tool
+        .get("description")
+        .and_then(|d| d.as_str())
+        .unwrap_or("")
+        .to_string();
+    let input_schema = tool
+        .get("inputSchema")
+        .cloned()
+        .unwrap_or(json!({"type": "object"}));
+    Some(McpToolInfo {
+        server_id: server_id.to_string(),
+        server_name: server_name.to_string(),
+        name: name.clone(),
+        qualified_name: format!(
+            "mcp_{}_{}",
+            client::sanitize_name(qualifier),
+            client::sanitize_name(&name)
+        ),
+        description,
+        input_schema,
+    })
+}
+
+pub fn page_tool_catalog(
+    tools: &[McpToolInfo],
+    query: &str,
+    offset: usize,
+    limit: usize,
+    hints: &HashMap<String, String>,
+) -> String {
+    let limit = limit.clamp(1, 25);
+    let q = query.trim().to_ascii_lowercase();
+    let mut matched: Vec<&McpToolInfo> = tools
+        .iter()
+        .filter(|t| {
+            q.is_empty()
+                || t.qualified_name.to_ascii_lowercase().contains(&q)
+                || t.name.to_ascii_lowercase().contains(&q)
+                || t.description.to_ascii_lowercase().contains(&q)
+                || t.server_name.to_ascii_lowercase().contains(&q)
+        })
+        .collect();
+    matched.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
+    let total = matched.len();
+    if total == 0 {
+        return format!(
+            "No connected MCP tools matched. {} tools are connected. Broaden the query, or pass an empty query and page with offset.",
+            tools.len()
+        );
+    }
+    let offset = offset.min(total);
+    let end = (offset + limit).min(total);
+    let next = if end < total { end.to_string() } else { "none".into() };
+    let mut out = format!("matched: {total}\nshowing: {offset}-{end}\nnext_offset: {next}\n");
+    let mut hinted = std::collections::HashSet::new();
+    for tool in &matched[offset..end] {
+        let schema = serde_json::to_string(&tool.input_schema).unwrap_or_else(|_| "{}".into());
+        let schema = if schema.chars().count() > 1_200 {
+            let head: String = schema.chars().take(1_200).collect();
+            format!("{head}…")
+        } else {
+            schema
+        };
+        let guidance = if hinted.insert(tool.server_id.clone()) {
+            hints
+                .get(&tool.server_id)
+                .map(|hint| format!("\nguidance: {hint}"))
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+        out.push_str(&format!(
+            "name: {}\nserver: {}\n{}{guidance}\nargs: {}\n---\n",
+            tool.qualified_name,
+            tool.server_name,
+            tool.description.trim(),
+            schema
+        ));
+    }
+    if end < total {
+        out.push_str(&format!(
+            "{} tools matched and were not in this page. Call mcp_search again with offset {end}.\n",
+            total - end
+        ));
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(i: usize) -> McpToolInfo {
+        McpToolInfo {
+            server_id: "srv".into(),
+            server_name: "Server".into(),
+            name: format!("tool{i}"),
+            qualified_name: format!("mcp_server_tool{i}"),
+            description: format!("does thing {i}"),
+            input_schema: json!({"type": "object"}),
+        }
+    }
+
+    #[test]
+    fn tool_pages_keep_every_tool() {
+        let page1 = json!({"tools": [{"name": "alpha", "description": "one", "inputSchema": {}}], "nextCursor": "c2"});
+        let page2 = json!({"tools": [{"name": "beta", "description": "two", "inputSchema": {}}]});
+        let (first, cursor) = tools_list_page(&page1);
+        let (second, done) = tools_list_page(&page2);
+        assert_eq!(cursor.as_deref(), Some("c2"));
+        assert!(done.is_none());
+        let mut raw = first;
+        raw.extend(second);
+        let infos: Vec<_> = raw
+            .iter()
+            .filter_map(|tool| parse_mcp_tool("srv", "Server", "Server", tool))
+            .collect();
+        assert_eq!(infos.len(), 2);
+        assert!(infos.iter().any(|t| t.name == "alpha"));
+        assert!(infos.iter().any(|t| t.name == "beta"));
+    }
+
+    #[test]
+    fn catalog_pages_cover_every_match() {
+        let tools: Vec<_> = (0..10).map(sample).collect();
+        let hints = HashMap::new();
+        let mut seen = Vec::new();
+        let mut offset = 0usize;
+        for _ in 0..5 {
+            let page = page_tool_catalog(&tools, "", offset, 4, &hints);
+            seen.push(page.clone());
+            if page.contains("next_offset: none") {
+                break;
+            }
+            let line = page.lines().find(|l| l.starts_with("next_offset:")).unwrap();
+            offset = line.trim_start_matches("next_offset: ").trim().parse().unwrap();
+        }
+        let all = seen.join("\n");
+        for i in 0..10 {
+            assert!(all.contains(&format!("mcp_server_tool{i}")), "missing tool{i}\n{all}");
+        }
+        assert!(seen.last().unwrap().contains("next_offset: none"));
+        assert!(seen[0].contains("matched: 10"));
+        assert!(seen[0].contains("were not in this page"));
     }
 }

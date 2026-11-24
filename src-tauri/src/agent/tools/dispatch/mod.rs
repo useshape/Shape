@@ -50,6 +50,8 @@ const TRUST_GATED_TOOLS: &[&str] = &[
     "generate_audio",
     "edit_image",
     "re_extract",
+    "mod_create",
+    "mod_mashup",
 ];
 
 const WORKSPACE_UNTRUSTED_MSG: &str =
@@ -142,7 +144,9 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
             || name == "plugin_run"
             || name == "edit_image"
             || name == "save_media"
-            || name == "re_extract")
+            || name == "re_extract"
+            || name == "mod_create"
+            || name == "mod_mashup")
     {
         return blocked_outcome(name, "That tool is not on this turn.");
     }
@@ -257,6 +261,10 @@ pub async fn execute_tool(name: &str, args_json: &str, ctx: &ToolCtx<'_>) -> Too
         "re_functions" => crate::agent::tools::reverse::tool_re_functions(&args, ctx),
         "re_callgraph" => crate::agent::tools::reverse::tool_re_callgraph(&args, ctx),
         "re_extract" => crate::agent::tools::reverse::tool_re_extract(&args, ctx),
+        "mod_scan" => crate::agent::tools::mods::tool_mod_scan(&args, ctx),
+        "mod_create" => crate::agent::tools::mods::tool_mod_create(&args, ctx),
+        "mod_verify" => crate::agent::tools::mods::tool_mod_verify(&args, ctx),
+        "mod_mashup" => crate::agent::tools::mods::tool_mod_mashup(&args, ctx),
         "render_design_previews" => meta::tool_render_design_previews(&args, ctx).await,
         "finish" => meta::tool_finish(&args),
         "load_tools" => tool_load_tools(&args, ctx),
@@ -319,6 +327,7 @@ fn tool_load_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     let mut packs = ctx.agent_state.session_packs(&id);
     let mut added = Vec::new();
     let mut refused = Vec::new();
+    let mut show_catalog = false;
     for name in requested {
         let before = packs;
         match name.as_str() {
@@ -344,6 +353,26 @@ fn tool_load_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
                 }
             }
             "plugins" => packs.plugins = true,
+            "mods" => packs.mods = true,
+            "catalog" => {
+                show_catalog = true;
+                continue;
+            }
+            "all" | "*" => {
+                packs.workspace = true;
+                packs.plugins = true;
+                packs.web = true;
+                packs.git = true;
+                packs.media = true;
+                packs.mods = true;
+                if policy.browse_enabled {
+                    packs.browse = true;
+                }
+                if policy.reverse_enabled {
+                    packs.reverse = true;
+                }
+                packs.terminal = true;
+            }
             _ => {
                 refused.push(name);
                 continue;
@@ -355,13 +384,40 @@ fn tool_load_tools(args: &Value, ctx: &ToolCtx<'_>) -> ToolOutcome {
     }
     packs = packs.clamp(policy.browse_enabled, true, policy.reverse_enabled);
     ctx.agent_state.set_session_packs(&id, packs);
-    let mut msg = if added.is_empty() {
+    let mut msg = if added.is_empty() && !show_catalog {
         "No new packs were loaded.".to_string()
+    } else if added.is_empty() {
+        String::new()
     } else {
-        format!("Loaded packs: {}. They are available on your next step.", added.join(", "))
+        let mut names = Vec::new();
+        for pack in &added {
+            if pack == "all" || pack == "*" {
+                for pack_name in ["workspace", "terminal", "git", "browse", "web", "media", "reverse", "plugins", "mods"] {
+                    names.extend(crate::agent::tools::schema::tool_names_for_pack(pack_name));
+                }
+            } else {
+                names.extend(crate::agent::tools::schema::tool_names_for_pack(pack));
+            }
+        }
+        names.sort();
+        names.dedup();
+        format!(
+            "Loaded packs: {}. Tools on the next step: {}.",
+            added.join(", "),
+            names.join(", ")
+        )
     };
+    if show_catalog {
+        if !msg.is_empty() {
+            msg.push('\n');
+        }
+        msg.push_str(&crate::agent::tools::schema::tool_pack_catalog());
+    }
     if !refused.is_empty() {
-        msg.push_str(&format!(" Refused: {}.", refused.join(", ")));
+        msg.push_str(&format!(
+            " Refused: {}. Known packs: workspace, terminal, git, browse, web, media, reverse, plugins, mods, catalog, all.",
+            refused.join(", ")
+        ));
     }
     ToolOutcome {
         tool_result: msg,
@@ -409,7 +465,7 @@ fn tool_load_skill(args: &Value) -> ToolOutcome {
         },
         None => error_outcome(
             "load_skill",
-            "Unknown skill. Use terminal, git, edits, browse, plan, review, reverse, or models.",
+            "Unknown skill. Use terminal, git, edits, browse, plan, review, reverse, or mods.",
         ),
     }
 }

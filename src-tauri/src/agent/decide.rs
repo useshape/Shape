@@ -1,11 +1,4 @@
-//! Rust decision kernel for one chat turn.
-//!
-//! Obvious turns are classified here, with no model call. The main model only
-//! sees the tools, skills, and context this decision selects. Security checks
-//! never read it. Uncertain turns stay on a small tool list. Jev may add packs
-//! on those turns only (`agent::steer`); it cannot change capability or grant
-//! writes on Ask/Plan. If Jev is skipped or fails closed, `load_tools` still
-//! escalates.
+//! Picks the tool packs for one chat turn. Security checks do not read this.
 
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +43,7 @@ pub struct Packs {
     pub terminal: bool,
     pub media: bool,
     pub reverse: bool,
+    pub mods: bool,
 }
 
 impl Packs {
@@ -63,6 +57,7 @@ impl Packs {
             terminal: self.terminal || other.terminal,
             media: self.media || other.media,
             reverse: self.reverse || other.reverse,
+            mods: self.mods || other.mods,
         }
     }
 
@@ -78,7 +73,7 @@ impl Packs {
 
     pub fn signature(self) -> String {
         format!(
-            "{}{}{}{}{}{}{}{}",
+            "{}{}{}{}{}{}{}{}{}",
             self.workspace as u8,
             self.plugins as u8,
             self.browse as u8,
@@ -87,6 +82,7 @@ impl Packs {
             self.terminal as u8,
             self.media as u8,
             self.reverse as u8,
+            self.mods as u8,
         )
     }
 }
@@ -131,11 +127,7 @@ pub struct TurnDecision {
     pub confident: bool,
 }
 
-/// Classify one user message.
-///
-/// `sticky` is the capability this conversation already settled on.
-/// `hint` is a legacy Ask or Plan selection from an older client. "Code" is
-/// ignored so a default composer value cannot force every question into edits.
+/// `sticky` is the capability already chosen. `hint` is an older Ask selection.
 pub fn decide(
     message: &str,
     sticky: Option<Capability>,
@@ -167,6 +159,7 @@ pub fn decide(
     let git = has_git_signal(&text);
     let media = has_media_signal(&text);
     let reverse = has_reverse_signal(&text);
+    let mods = has_mod_signal(&text);
     let terminal = has_terminal_signal(&text);
     let plugins = has_plugin_signal(&text);
     let web = has_web_signal(&text);
@@ -188,6 +181,7 @@ pub fn decide(
     packs.git = git;
     packs.media = media;
     packs.reverse = reverse;
+    packs.mods = mods;
     packs.plugins = plugins;
     packs.web = web || browse;
     match capability {
@@ -250,6 +244,9 @@ pub fn decide(
             if packs.reverse {
                 push_skill(&mut skills, "reverse");
             }
+            if packs.mods {
+                push_skill(&mut skills, "mods");
+            }
             if skills.is_empty() {
                 push_skill(&mut skills, "edits");
             }
@@ -260,6 +257,9 @@ pub fn decide(
             }
             if packs.reverse {
                 push_skill(&mut skills, "reverse");
+            }
+            if packs.mods {
+                push_skill(&mut skills, "mods");
             }
         }
     }
@@ -394,6 +394,16 @@ fn has_terminal_signal(text: &str) -> bool {
     WORDS.iter().any(|w| text.contains(w))
 }
 
+fn has_mod_signal(text: &str) -> bool {
+    has_word(
+        text,
+        &[
+            "mod", "mods", "modding", "modder", "mashup", "datapack", "bepinex", "ue4ss",
+            "fivem", "tmodloader", "smapi",
+        ],
+    )
+}
+
 fn has_plugin_signal(text: &str) -> bool {
     const WORDS: &[&str] = &["slack", "linear", "notion", "discord", "plugin"];
     WORDS.iter().any(|w| text.contains(w))
@@ -429,11 +439,6 @@ pub fn wants_plan_document(message: &str) -> bool {
         || t.contains("and build")
         || t.contains("then code");
     plan_ask && !also_build
-}
-
-fn is_short_continuation(text: &str) -> bool {
-    const WORDS: &[&str] = &["ok", "okay", "yes", "thanks", "continue", "go on", "do that"];
-    text.chars().count() <= 24 && WORDS.iter().any(|w| text == *w || text.starts_with(&format!("{w} ")))
 }
 
 #[cfg(test)]
@@ -561,6 +566,24 @@ mod tests {
         assert!(d.confident);
         assert!(d.packs.workspace);
         assert!(d.packs.terminal);
+    }
+
+    #[test]
+    fn mod_request_loads_the_mods_pack() {
+        let d = decide(
+            "Mod the game in games/demo and add a horn",
+            None,
+            locks(),
+            None,
+        );
+        assert!(d.packs.mods);
+        assert_eq!(d.capability, Capability::Code);
+    }
+
+    #[test]
+    fn model_questions_do_not_load_mods() {
+        let d = decide("what model are you", None, locks(), None);
+        assert!(!d.packs.mods);
     }
 
     #[test]

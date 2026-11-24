@@ -1,0 +1,1 @@
+This folder is a fake Unity game. UnityPlayer.dll is already here. Install a BepInEx mod named Hint that logs a hint when the game starts. Use mod_scan, then mod_create, then mod_verify. Do not write a custom injector.

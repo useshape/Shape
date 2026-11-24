@@ -1,13 +1,4 @@
-/// JSON Schema definitions for the agent's tool surface.
-///
-/// These follow the OpenAI / OpenRouter function-calling spec:
-/// each tool is a `{type: "function", function: {name, description, parameters}}` object.
-/// The model emits structured `tool_calls` referencing these names, the backend dispatches
-/// them via `tools::dispatch::execute_tool`, and the JSON `tool_result` is returned to the
-/// next model turn.
-///
-/// This is the single source of truth for *what* the model can do; the human-readable
-/// system prompt only describes *when* to use which tool.
+/// Tool schemas sent to the model.
 
 use serde_json::{json, Value};
 
@@ -96,6 +87,10 @@ pub fn all_tools_for_family(family: ModelFamily) -> Vec<Value> {
         re_functions(),
         re_callgraph(),
         re_extract(),
+        mod_scan(),
+        mod_create(),
+        mod_verify(),
+        mod_mashup(),
         finish(),
     ]);
     tools
@@ -225,6 +220,7 @@ pub struct SteerPacks {
     pub terminal: bool,
     pub media: bool,
     pub reverse: bool,
+    pub mods: bool,
     pub hint: String,
 }
 
@@ -239,6 +235,7 @@ impl SteerPacks {
             terminal: true,
             media: true,
             reverse: true,
+            mods: true,
             hint: String::new(),
         }
     }
@@ -254,7 +251,8 @@ impl SteerPacks {
             terminal: true,
             media: false,
             reverse: false,
-            hint: "Text like a person. Split a longer answer with a line that is only ---. Never paste tool tags. No markdown. Files and shell stay in the chat folder. Do not touch the open code project. Call load_tools for media, browse, or reverse packs if you need them.".to_string(),
+            mods: false,
+            hint: "Text like a person. Split a longer answer with a line that is only ---. Never paste tool tags. No markdown. Files and shell stay in the chat folder. Do not touch the open code project. Call load_tools for media, browse, reverse, or mods packs if you need them.".to_string(),
         }
     }
 }
@@ -301,6 +299,7 @@ fn steer_pack_for(name: &str) -> Option<&'static str> {
         | "inspect_font" | "render_design_previews" => Some("media"),
         "re_catalog" | "re_identify" | "re_inspect" | "re_strings" | "re_disassemble"
         | "re_functions" | "re_callgraph" | "re_extract" => Some("reverse"),
+        "mod_scan" | "mod_create" | "mod_verify" | "mod_mashup" => Some("mods"),
         _ => None,
     }
 }
@@ -316,6 +315,7 @@ pub fn apply_steer_packs(tools: Vec<Value>, packs: &SteerPacks) -> Vec<Value> {
         && packs.terminal
         && packs.media
         && packs.reverse
+        && packs.mods
     {
         return tools;
     }
@@ -330,6 +330,7 @@ pub fn apply_steer_packs(tools: Vec<Value>, packs: &SteerPacks) -> Vec<Value> {
             Some("terminal") => packs.terminal,
             Some("media") => packs.media,
             Some("reverse") => packs.reverse,
+            Some("mods") => packs.mods,
             _ => true,
         })
         .filter(|tool| {
@@ -338,6 +339,56 @@ pub fn apply_steer_packs(tools: Vec<Value>, packs: &SteerPacks) -> Vec<Value> {
             name != "plugin_list" && name != "plugin_tools"
         })
         .collect()
+}
+
+/// Every tool name, grouped by pack.
+pub fn tool_pack_catalog() -> String {
+    use std::collections::BTreeMap;
+    let mut groups: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    for family in [ModelFamily::Other, ModelFamily::OpenAi] {
+        for tool in stable_tools(family) {
+            let name = tool_fn_name(&tool);
+            if name.is_empty() {
+                continue;
+            }
+            let pack = steer_pack_for(name).unwrap_or("core");
+            let list = groups.entry(pack).or_default();
+            if !list.iter().any(|existing| existing == name) {
+                list.push(name.to_string());
+            }
+        }
+    }
+    for name in ["load_tools", "load_skill"] {
+        let list = groups.entry("core").or_default();
+        if !list.iter().any(|existing| existing == name) {
+            list.push((*name).to_string());
+        }
+    }
+    let mut out = String::from(
+        "Packs you can pass to load_tools. catalog only lists them. all loads every pack this turn is allowed to use.\n",
+    );
+    for (pack, mut names) in groups {
+        names.sort();
+        out.push_str(&format!("{pack}: {}\n", names.join(", ")));
+    }
+    out.push_str(
+        "plugin_list and plugin_tools stay out of short prompts. plugin_search lists plugin actions and says when some slugs were not shown.\n",
+    );
+    out
+}
+
+pub fn tool_names_for_pack(pack: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for family in [ModelFamily::Other, ModelFamily::OpenAi] {
+        for tool in stable_tools(family) {
+            let name = tool_fn_name(&tool);
+            if steer_pack_for(name) == Some(pack) && !names.iter().any(|existing| existing == name) {
+                names.push(name.to_string());
+            }
+        }
+    }
+    names.sort();
+    names
 }
 
 pub fn apply_talk_tools(tools: Vec<Value>) -> Vec<Value> {
@@ -426,6 +477,8 @@ const MUTATING_TOOLS: &[&str] = &[
     "save_media",
     "re_extract",
     "mcp_call",
+    "mod_create",
+    "mod_mashup",
 ];
 
 fn is_mutating_tool(name: &str) -> bool {
@@ -476,14 +529,14 @@ pub fn include_adversarial_review(tools: &mut Vec<Value>) {
 fn load_tools() -> Value {
     tool(
         "load_tools",
-        "Load tool packs that are not on this turn yet. Packs: workspace (edit/search files, threads), terminal, git, browse, web, media, reverse, plugins. Already-loaded packs stay loaded. Settings can refuse a pack. Call this before using a tool that was not listed.",
+        "Load tool packs that are not on this turn yet. Packs: workspace, terminal, git, browse, web, media, reverse, plugins, mods. Pass catalog to list every tool, including ones left off this turn. Pass all to load every pack this turn is allowed to use. Already-loaded packs stay loaded. Settings can refuse a pack. Call this before using a tool that was not listed.",
         json!({
             "type": "object",
             "properties": {
                 "packs": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Pack names to add: workspace, terminal, git, browse, web, media, reverse, plugins."
+                    "description": "Pack names: workspace, terminal, git, browse, web, media, reverse, plugins, mods, catalog, all."
                 }
             },
             "required": ["packs"],
@@ -495,11 +548,11 @@ fn load_tools() -> Value {
 fn load_skill() -> Value {
     tool(
         "load_skill",
-        "Load one short procedure: terminal, git, edits, browse, plan, review, reverse, or models. Use when the turn did not already include it.",
+        "Load one short procedure: terminal, git, edits, browse, plan, review, reverse, or mods. Use when the turn did not already include it.",
         json!({
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "terminal, git, edits, browse, plan, review, reverse, or models."}
+                "name": {"type": "string", "description": "terminal, git, edits, browse, plan, review, reverse, or mods."}
             },
             "required": ["name"],
             "additionalProperties": false
@@ -1605,15 +1658,82 @@ Needs a running local preview or debug port. Pass `path` (e.g. /stats) or `url` 
     )
 }
 
-fn mcp_search() -> Value {
+fn mod_scan() -> Value {
     tool(
-        "mcp_search",
-        "Find tools on connected MCP servers. Returns names, descriptions, and argument schemas. Call this before mcp_call. Individual MCP tools are not listed up front, so this catalog can change without breaking the session.",
+        "mod_scan",
+        "Fingerprint a game folder and name the existing loader to use (BepInEx, UE4SS, tModLoader, SMAPI, FiveM, ScriptHookVDotNet, Minecraft datapacks, and the other layouts this tool knows). Read-only. Call this before mod_create.",
         json!({
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Words to match against tool name or description. Empty lists a short catalog."},
-                "limit": {"type": "integer", "description": "Max tools to return (default 6, max 8)."}
+                "path": {"type": "string", "description": "Project-relative game folder."}
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn mod_create() -> Value {
+    tool(
+        "mod_create",
+        "Write and install a mod in the loader mod_scan named. Uses that loader's files (Lua, datapack, fxmanifest, BepInEx plugin project, and so on). Does not inject a DLL or bypass anti-cheat. Refuses a folder that contains anti-cheat.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative game folder."},
+                "name": {"type": "string", "description": "Short mod name."},
+                "idea": {"type": "string", "description": "What the mod should do, in one sentence."}
+            },
+            "required": ["path", "name", "idea"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn mod_verify() -> Value {
+    tool(
+        "mod_verify",
+        "Check an installed mod against the loader's layout: required files exist and contain the fields that loader reads. Returns one line per file.",
+        json!({
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Project-relative game folder."},
+                "name": {"type": "string", "description": "Mod name passed to mod_create."}
+            },
+            "required": ["path", "name"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn mod_mashup() -> Value {
+    tool(
+        "mod_mashup",
+        "Install a passthrough mashup: a host mod and a guest mod that share one state file. This is the Universal Modder route for one game reacting to another. It does not embed a second game runtime. Both folders must scan to a known loader.",
+        json!({
+            "type": "object",
+            "properties": {
+                "host": {"type": "string", "description": "Project-relative host game folder."},
+                "guest": {"type": "string", "description": "Project-relative guest game folder."},
+                "name": {"type": "string", "description": "Short mashup name."},
+                "idea": {"type": "string", "description": "What the two mods should exchange."}
+            },
+            "required": ["host", "guest", "name", "idea"],
+            "additionalProperties": false
+        }),
+    )
+}
+
+fn mcp_search() -> Value {
+    tool(
+        "mcp_search",
+        "Find tools on connected MCP servers. Returns names, descriptions, and argument schemas. Call this before mcp_call. Individual MCP tools are not listed up front. The result includes matched, next_offset, and a line when more tools were not shown. Pass that offset to see the rest. An empty query pages every connected tool.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Words to match against tool name or description. Empty pages every connected tool."},
+                "limit": {"type": "integer", "description": "Max tools to return (default 8, max 25)."},
+                "offset": {"type": "integer", "description": "Skip this many matches. Use next_offset from the previous result."}
             },
             "required": ["query"],
             "additionalProperties": false
@@ -1959,6 +2079,7 @@ mod tests {
             terminal: false,
             media: false,
             reverse: false,
+            mods: false,
             hint: String::new(),
         };
         let names = tool_names(&apply_steer_packs(tools, &packs));
@@ -2027,6 +2148,7 @@ mod tests {
             terminal: decision.packs.terminal,
             media: decision.packs.media,
             reverse: decision.packs.reverse,
+            mods: decision.packs.mods,
             hint: String::new(),
         };
         let full = serde_json::to_string(&stable_tools(ModelFamily::OpenAi)).unwrap();
@@ -2075,6 +2197,7 @@ mod tests {
                 terminal: decision.packs.terminal,
                 media: decision.packs.media,
                 reverse: decision.packs.reverse,
+                mods: decision.packs.mods,
                 hint: String::new(),
             },
             decision.capability.as_str(),
@@ -2100,6 +2223,7 @@ mod tests {
             terminal: p.terminal,
             media: p.media,
             reverse: p.reverse,
+            mods: p.mods,
             hint: String::new(),
         }
     }
@@ -2341,6 +2465,69 @@ mod tests {
         assert!(!names.contains(&"plugin_list".to_string()));
         assert!(!names.contains(&"plugin_run".to_string()));
         assert!(!names.contains(&"generate_image".to_string()));
+    }
+
+    #[test]
+    fn catalog_lists_every_tool_a_short_turn_omits() {
+        let catalog = tool_pack_catalog();
+        for family in [ModelFamily::Other, ModelFamily::OpenAi] {
+            for tool in stable_tools(family) {
+                let name = tool_fn_name(&tool);
+                assert!(
+                    catalog.split(|c: char| c == ',' || c == ' ' || c == '\n' || c == ':').any(|part| part == name),
+                    "{name} missing from catalog"
+                );
+            }
+        }
+        assert!(catalog.contains("mod_scan"));
+        assert!(catalog.contains("mods"));
+    }
+
+    #[test]
+    fn mods_pack_is_omitted_until_loaded() {
+        let off = tool_names(&assemble_tools(
+            ModelFamily::OpenAi,
+            &SteerPacks {
+                workspace: true,
+                plugins: false,
+                browse: false,
+                web: false,
+                git: false,
+                terminal: true,
+                media: false,
+                reverse: false,
+                mods: false,
+                hint: String::new(),
+            },
+            "Code",
+            false,
+        ));
+        assert!(!off.contains(&"mod_create".to_string()));
+        assert!(off.contains(&"load_tools".to_string()));
+        let on = tool_names(&assemble_tools(
+            ModelFamily::OpenAi,
+            &SteerPacks {
+                mods: true,
+                ..SteerPacks {
+                    workspace: true,
+                    plugins: false,
+                    browse: false,
+                    web: false,
+                    git: false,
+                    terminal: true,
+                    media: false,
+                    reverse: false,
+                    mods: false,
+                    hint: String::new(),
+                }
+            },
+            "Code",
+            false,
+        ));
+        assert!(on.contains(&"mod_scan".to_string()));
+        assert!(on.contains(&"mod_create".to_string()));
+        assert!(on.contains(&"mod_verify".to_string()));
+        assert!(on.contains(&"mod_mashup".to_string()));
     }
 }
 

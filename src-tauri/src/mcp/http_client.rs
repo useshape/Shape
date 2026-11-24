@@ -173,39 +173,27 @@ impl HttpMcpClient {
     }
 
     async fn fetch_tools(&mut self, token: Option<&str>) -> Result<Vec<McpToolInfo>, String> {
-        let result = self.rpc(token, "tools/list", json!({})).await?;
-        let tools = result
-            .get("tools")
-            .and_then(|t| t.as_array())
-            .cloned()
-            .unwrap_or_default();
-
-        Ok(tools
-            .into_iter()
-            .filter_map(|t| {
-                let name = t.get("name")?.as_str()?.to_string();
-                let description = t
-                    .get("description")
-                    .and_then(|d| d.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let input_schema = t
-                    .get("inputSchema")
-                    .cloned()
-                    .unwrap_or(json!({"type": "object"}));
-                Some(McpToolInfo {
-                    server_id: self.server_id.clone(),
-                    server_name: self.server_name.clone(),
-                    name: name.clone(),
-                    qualified_name: format!(
-                        "mcp_{}_{}",
-                        crate::mcp::client::sanitize_name(&self.server_id),
-                        crate::mcp::client::sanitize_name(&name)
-                    ),
-                    description,
-                    input_schema,
-                })
-            })
+        let mut raw = Vec::new();
+        let mut cursor: Option<String> = None;
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..32 {
+            let params = match &cursor {
+                Some(c) => json!({"cursor": c}),
+                None => json!({}),
+            };
+            let result = self.rpc(token, "tools/list", params).await?;
+            let (tools, next) = crate::mcp::tools_list_page(&result);
+            raw.extend(tools);
+            match next {
+                Some(next) if seen.insert(next.clone()) => cursor = Some(next),
+                _ => break,
+            }
+        }
+        let server_id = self.server_id.clone();
+        let server_name = self.server_name.clone();
+        Ok(raw
+            .iter()
+            .filter_map(|tool| crate::mcp::parse_mcp_tool(&server_id, &server_name, &server_id, tool))
             .collect())
     }
 
