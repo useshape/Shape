@@ -14,7 +14,22 @@ use std::os::windows::process::CommandExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Emitter, Manager, State};
-use notify::{Watcher, RecursiveMode, Event};
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use notify::{Event, RecursiveMode as NotifyRecursiveMode, Watcher};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WatchMode {
+    NonRecursive,
+    Recursive,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn notify_mode(mode: WatchMode) -> NotifyRecursiveMode {
+    match mode {
+        WatchMode::NonRecursive => NotifyRecursiveMode::NonRecursive,
+        WatchMode::Recursive => NotifyRecursiveMode::Recursive,
+    }
+}
 
 #[derive(Clone, Serialize)]
 pub struct FileEntry {
@@ -238,8 +253,8 @@ enum WatchCmd {
     Stop,
 }
 
-pub(crate) fn collect_watch_roots(project_root: &Path) -> Vec<(PathBuf, RecursiveMode)> {
-    let mut out = vec![(project_root.to_path_buf(), RecursiveMode::NonRecursive)];
+pub(crate) fn collect_watch_roots(project_root: &Path) -> Vec<(PathBuf, WatchMode)> {
+    let mut out = vec![(project_root.to_path_buf(), WatchMode::NonRecursive)];
     let Ok(entries) = fs::read_dir(project_root) else {
         return out;
     };
@@ -253,7 +268,7 @@ pub(crate) fn collect_watch_roots(project_root: &Path) -> Vec<(PathBuf, Recursiv
             continue;
         };
         if file_type.is_dir() && !is_ignored_path(&path) {
-            out.push((path, RecursiveMode::Recursive));
+            out.push((path, WatchMode::Recursive));
             recursive += 1;
         }
     }
@@ -290,6 +305,14 @@ fn start_watcher(app: AppHandle, path: &str) {
     let mut watcher_guard = FILE_WATCHER.get_or_init(|| Mutex::new(None)).lock().unwrap();
     *watcher_guard = None;
 
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let _ = (app, path);
+        return;
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    {
     let app_clone = app.clone();
     let pending_paths: std::sync::Arc<std::sync::Mutex<HashSet<String>>> =
         std::sync::Arc::new(std::sync::Mutex::new(HashSet::new()));
@@ -357,7 +380,7 @@ fn start_watcher(app: AppHandle, path: &str) {
                             set.insert(p.to_string_lossy().into_owned());
                             any_interesting = true;
                             if event.kind.is_create() && p.is_dir() {
-                                let _ = cmd_for_events.send(WatchCmd::Add(p.clone()));
+                                let _ = cmd_for_events.send(WatchCmd::Add(p.to_path_buf()));
                             }
                         }
                         crate::core::ram_debug::note_watch_event(set.len());
@@ -378,11 +401,11 @@ fn start_watcher(app: AppHandle, path: &str) {
             let roots = collect_watch_roots(&root);
             let mut recursive_roots = roots
                 .iter()
-                .filter(|(_, mode)| *mode == RecursiveMode::Recursive)
+                .filter(|(_, mode)| *mode == WatchMode::Recursive)
                 .count();
             crate::core::ram_debug::note_watch_dirs(roots.len());
             for (dir, mode) in roots {
-                let _ = watcher.watch(&dir, mode);
+                let _ = watcher.watch(&dir, notify_mode(mode));
             }
 
             while let Ok(cmd) = cmd_rx.recv() {
@@ -392,7 +415,7 @@ fn start_watcher(app: AppHandle, path: &str) {
                         if !should_watch_created_dir(&root, &path, recursive_roots) {
                             continue;
                         }
-                        if watcher.watch(&path, RecursiveMode::Recursive).is_ok() {
+                        if watcher.watch(&path, NotifyRecursiveMode::Recursive).is_ok() {
                             recursive_roots += 1;
                             crate::core::ram_debug::note_watch_dirs(recursive_roots + 1);
                         }
@@ -403,6 +426,7 @@ fn start_watcher(app: AppHandle, path: &str) {
         .ok();
 
     *watcher_guard = Some(WatchSession { tx: cmd_tx });
+    }
 }
 
 pub async fn ls_dir(path: String) -> Result<Vec<FileEntry>, AppError> {
