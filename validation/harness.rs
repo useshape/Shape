@@ -1,5 +1,6 @@
 //! Sequential prompt runner. Same agent as the app. Logs are for us, not the model.
 
+use std::collections::{BTreeSet, HashMap};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -89,6 +90,33 @@ fn access_token() -> Result<String, String> {
         .ok_or_else(|| "SHAPE_ACCESS_TOKEN is missing.".to_string())
 }
 
+fn env_string(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn env_flag(key: &str, default: bool) -> bool {
+    match env_string(key).as_deref() {
+        Some(v) => matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"),
+        None => default,
+    }
+}
+
+/// Pinned model for a run. Unset keeps the normal validation default, `auto`.
+fn validation_model() -> String {
+    env_string("SHAPE_VALIDATION_MODEL").unwrap_or_else(|| "auto".to_string())
+}
+
+fn validation_timeout() -> Duration {
+    let secs = env_string("SHAPE_VALIDATION_TIMEOUT_SEC")
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(12 * 60);
+    Duration::from_secs(secs)
+}
+
 fn assert_inside_jail(project: &Path, jail: &Path) -> Result<(), String> {
     let jail = jail.canonicalize().unwrap_or_else(|_| jail.to_path_buf());
     let project = project.canonicalize().unwrap_or_else(|_| project.to_path_buf());
@@ -117,7 +145,7 @@ fn push_event(capture: &Arc<Mutex<Capture>>, start: Instant, kind: &str, extra: 
     }
 }
 
-fn write_logs(logs: &Path, capture: &Capture, history: &Value, summary: &Value) {
+fn write_logs(logs: &Path, capture: &Capture, history: &Value, summary: &Value, wall_ms: u64) {
     let _ = std::fs::create_dir_all(logs);
     let events = capture
         .events
@@ -135,7 +163,7 @@ fn write_logs(logs: &Path, capture: &Capture, history: &Value, summary: &Value) 
         logs.join("stats.json"),
         serde_json::to_string_pretty(&json!({
             "firstTokenMs": capture.first_token_ms,
-            "tools": capture.tools.iter().map(|t| json!({"name": t.name, "tMs": t.t_ms})).collect::<Vec<_>>(),
+            "tools": serialize_tools(&capture.tools, wall_ms),
             "files": capture.files,
             "chatComplete": capture.complete,
         }))
@@ -162,23 +190,118 @@ fn list_workspace_files(project: &Path) -> Vec<String> {
     out
 }
 
+fn skip_report_path(rel: &str) -> bool {
+    rel == "prompt.txt"
+        || rel.starts_with(".git/")
+        || rel.starts_with(".git\\")
+        || rel == ".git"
+}
+
+fn workspace_rel(project: &Path, path: &str) -> String {
+    let p = PathBuf::from(path.trim_matches('"'));
+    if let Ok(abs) = p.canonicalize() {
+        if let Ok(root) = project.canonicalize() {
+            if let Ok(rel) = abs.strip_prefix(&root) {
+                return rel.to_string_lossy().replace('\\', "/");
+            }
+        }
+    }
+    path.replace('\\', "/")
+}
+
+fn unique_paths(paths: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for p in paths {
+        if p.is_empty() || skip_report_path(&p) {
+            continue;
+        }
+        if seen.insert(p.clone()) {
+            out.push(p);
+        }
+    }
+    out
+}
+
+fn digest_map(project: &Path) -> HashMap<String, u64> {
+    let mut out = HashMap::new();
+    walk_digest(project, project, &mut out);
+    out
+}
+
+fn walk_digest(root: &Path, dir: &Path, out: &mut HashMap<String, u64>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let path = e.path();
+        let rel = path
+            .strip_prefix(root)
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+        if skip_report_path(&rel) {
+            continue;
+        }
+        if path.is_dir() {
+            walk_digest(root, &path, out);
+            continue;
+        }
+        if let Ok(bytes) = std::fs::read(&path) {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            bytes.hash(&mut h);
+            out.insert(rel, h.finish());
+        }
+    }
+}
+
+fn changed_since(before: &HashMap<String, u64>, after: &HashMap<String, u64>) -> Vec<String> {
+    let mut out = Vec::new();
+    for (path, digest) in after {
+        if before.get(path) != Some(digest) {
+            out.push(path.clone());
+        }
+    }
+    out.sort();
+    out
+}
+
+fn serialize_tools(tools: &[ToolHit], wall_ms: u64) -> Vec<Value> {
+    tools
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let next = tools.get(i + 1).map(|n| n.t_ms).unwrap_or(wall_ms);
+            json!({
+                "name": t.name,
+                "elapsedMs": t.t_ms,
+                "durationMs": next.saturating_sub(t.t_ms),
+            })
+        })
+        .collect()
+}
+
 async fn send_one(
     app: &AppHandle,
     token: &str,
     prompt: String,
+    model: &str,
 ) -> Result<(), String> {
+    let model_list = vec![model.to_string()];
+    let goldfish = env_string("SHAPE_VALIDATION_GOLDFISH")
+        .map(|_| env_flag("SHAPE_VALIDATION_GOLDFISH", true));
     send_chat_message(
         prompt,
-        Some("auto".into()),
+        Some(model.to_string()),
         None,
         None,
         None,
         Some(token.to_string()),
         None,
         None,
-        None,
-        Some("auto".into()),
-        Some(false),
+        goldfish,
+        Some(model.to_string()),
+        Some(env_flag("SHAPE_VALIDATION_OPTIMIZE", false)),
         Some("always".into()),
         Some(false),
         None,
@@ -187,12 +310,12 @@ async fn send_one(
         None,
         None,
         None,
+        env_string("SHAPE_VALIDATION_EFFORT"),
         None,
+        Some(model_list.clone()),
         None,
-        Some(vec!["auto".into()]),
-        None,
-        Some(vec!["auto".into()]),
-        Some("auto".into()),
+        Some(model_list),
+        Some(model.to_string()),
         Some("Code".into()),
         None,
         None,
@@ -368,10 +491,16 @@ pub async fn run(app: AppHandle) -> i32 {
         eprintln!("\n=== {} ({}/{}) ===", job.id, i + 1, total);
         eprintln!("{}", prompt.lines().next().unwrap_or(""));
         eprintln!("sandbox: {}", project.display());
-        eprintln!("model: auto (included / free)");
+        let model = validation_model();
+        eprintln!("model: {model}");
+        let seed_digest = digest_map(&project);
 
         let wall = Instant::now();
-        let timed = tokio::time::timeout(Duration::from_secs(12 * 60), send_one(&app, &token, prompt)).await;
+        let timed = tokio::time::timeout(
+            validation_timeout(),
+            send_one(&app, &token, prompt, &model),
+        )
+        .await;
         let wall_ms = elapsed_ms(wall);
 
         let snap = capture.lock().ok().map(|g| g.clone_lite()).unwrap_or_else(CaptureLite::empty);
@@ -383,7 +512,14 @@ pub async fn run(app: AppHandle) -> i32 {
             .and_then(|h| serde_json::to_value(&*h).ok())
             .unwrap_or(json!([]));
 
-        let wrote_files = !snap.files.is_empty() || !list_workspace_files(&project).is_empty();
+        let event_files = unique_paths(
+            snap.files
+                .iter()
+                .map(|p| workspace_rel(&project, p)),
+        );
+        let changed_files = changed_since(&seed_digest, &digest_map(&project));
+        let files = unique_paths(event_files.into_iter().chain(changed_files));
+        let wrote_files = !files.is_empty() || !list_workspace_files(&project).is_empty();
         let lower = snap.text.to_ascii_lowercase();
         let stalled_plan = lower.contains("patch plan prepared") && !wrote_files;
         let refused_readonly = lower.contains("read-only") && !wrote_files;
@@ -391,7 +527,7 @@ pub async fn run(app: AppHandle) -> i32 {
         let stats = snap.complete.get("stats").cloned().unwrap_or(json!({}));
         let err = snap.error.clone();
 
-        let ok = err.as_ref().map(|e| e.trim().is_empty()).unwrap_or(true)
+        let completed = err.as_ref().map(|e| e.trim().is_empty()).unwrap_or(true)
             && matches!(timed, Ok(Ok(())))
             && !stalled_plan
             && !refused_readonly
@@ -399,13 +535,13 @@ pub async fn run(app: AppHandle) -> i32 {
             && (job.expect != "files" || wrote_files)
             && (job.expect != "reply" || !snap.text.trim().is_empty());
 
-        if !ok {
+        if !completed {
             failed += 1;
         }
 
         let summary = json!({
             "id": job.id,
-            "ok": ok,
+            "completed": completed,
             "expect": job.expect,
             "wallMs": wall_ms,
             "firstTokenMs": snap.first_token_ms,
@@ -414,15 +550,15 @@ pub async fn run(app: AppHandle) -> i32 {
             "inputTokens": stats.get("inputTokens"),
             "outputTokens": stats.get("outputTokens"),
             "model": snap.complete.get("model"),
-            "tools": snap.tools,
+            "tools": serialize_tools(&capture.lock().ok().map(|g| g.tools.clone()).unwrap_or_default(), wall_ms),
             "wroteFiles": wrote_files,
-            "files": snap.files,
+            "files": files,
             "stalledPlan": stalled_plan,
             "readOnlyRefusal": refused_readonly,
             "savePlan": used_save_plan,
             "error": err,
         });
-        write_logs(&logs, &capture.lock().ok().map(|g| (*g).clone_for_write()).unwrap_or_else(Capture::new), &history, &summary);
+        write_logs(&logs, &capture.lock().ok().map(|g| (*g).clone_for_write()).unwrap_or_else(Capture::new), &history, &summary, wall_ms);
         eprintln!(
             "stats wallMs={wall_ms} ttfbMs={} timeMs={} in={} out={} tools={} {}",
             snap.first_token_ms.unwrap_or(0),
@@ -439,7 +575,7 @@ pub async fn run(app: AppHandle) -> i32 {
                 .and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|n| n as u64)))
                 .unwrap_or(0),
             snap.tools.len(),
-            if ok { "ok" } else { "fail" }
+            if completed { "completed" } else { "fail" }
         );
         suite.push(summary);
 

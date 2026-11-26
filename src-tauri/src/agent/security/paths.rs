@@ -102,6 +102,40 @@ fn under_editor_config_dir(path: &Path) -> bool {
     false
 }
 
+/// Map a model path onto the open project.
+/// `/app/regex.txt` and `/workspace/foo` become project-relative `regex.txt` / `foo`.
+/// A relative `app/page.tsx` stays `app/page.tsx`.
+fn is_host_absolute(user_path: &str) -> bool {
+    if !Path::new(user_path).is_absolute() {
+        return false;
+    }
+    let lower = user_path.to_ascii_lowercase();
+    !(lower == "/app"
+        || lower.starts_with("/app/")
+        || lower == "/workspace"
+        || lower.starts_with("/workspace/"))
+}
+
+fn project_relative_from_unix_root(user_path: &str) -> String {
+    let unix_rooted = user_path.starts_with('/') && !user_path.starts_with("//");
+    let cleaned = user_path
+        .trim_start_matches('/')
+        .trim_start_matches('\\');
+    if !unix_rooted {
+        return cleaned.to_string();
+    }
+    let lower = cleaned.to_ascii_lowercase();
+    for prefix in ["app/", "app\\", "workspace/", "workspace\\"] {
+        if lower.starts_with(prefix) {
+            return cleaned[prefix.len()..].to_string();
+        }
+    }
+    if lower == "app" || lower == "workspace" {
+        return String::new();
+    }
+    cleaned.to_string()
+}
+
 fn without_extended_prefix(path: PathBuf) -> PathBuf {
     PathBuf::from(crate::core::paths::strip_extended_path_prefix(
         &path.to_string_lossy(),
@@ -122,10 +156,11 @@ pub fn resolve_safe_path(user_path: &str, project_root: &str) -> Result<PathBuf,
         AppError::Message(format!("Cannot resolve project root: {}", e))
     })?;
 
-    // Strip leading separators to prevent absolute path injection
-    let cleaned = user_path
-        .trim_start_matches('/')
-        .trim_start_matches('\\');
+    // Strip leading separators to prevent absolute path injection.
+    // Harbor/Terminal-Bench cwd is `/app` (sometimes `/workspace`). On Windows
+    // `/app/foo` is not an absolute path, so joining it as-is created
+    // `{project}/app/foo` and the official verifier never saw the file.
+    let cleaned = project_relative_from_unix_root(user_path);
 
     // Block explicit traversal patterns before resolution
     if cleaned.contains("..") {
@@ -134,10 +169,12 @@ pub fn resolve_safe_path(user_path: &str, project_root: &str) -> Result<PathBuf,
         ));
     }
 
-    let target = if Path::new(user_path).is_absolute() {
+    let target = if is_host_absolute(user_path) {
         PathBuf::from(user_path)
+    } else if cleaned.is_empty() {
+        root.clone()
     } else {
-        root.join(cleaned)
+        root.join(&cleaned)
     };
 
     // For existing paths, canonicalize to resolve symlinks
@@ -402,6 +439,27 @@ pub fn validate_delete_path(user_path: &str, project_root: &str) -> Result<PathB
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unix_app_root_maps_into_the_project_not_a_nested_app_folder() {
+        let root = std::env::temp_dir().join(format!(
+            "shape-app-root-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let root_s = root.to_string_lossy().into_owned();
+        let resolved = resolve_safe_path("/app/regex.txt", &root_s).unwrap();
+        assert_eq!(resolved.file_name().unwrap(), "regex.txt");
+        assert_eq!(
+            resolved.parent().unwrap().canonicalize().unwrap(),
+            root.canonicalize().unwrap()
+        );
+        let nested = resolve_safe_path("app/page.tsx", &root_s).unwrap();
+        assert_eq!(nested.file_name().unwrap(), "page.tsx");
+        assert_eq!(nested.parent().unwrap().file_name().unwrap(), "app");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn test_traversal_blocked() {

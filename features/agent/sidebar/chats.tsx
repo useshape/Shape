@@ -61,6 +61,7 @@ import {
     closeSubagent,
     getSubagents,
     hydrateSubagentsFromConversations,
+    resetSubagentsForParent,
     subagentDisplayTitle,
     subscribeSubagents,
     type SubagentCard,
@@ -128,11 +129,11 @@ function HeaderIconBtn({
     );
 }
 
-function nestedDot(status: string, column?: string): string {
+function nestedDot(status: string, phase?: string): string {
     if (status === "error") return "bg-error";
     if (status === "cancelled") return "bg-text-muted";
-    if (status === "done" || column === "done") return "bg-success";
-    if (column === "review") return "bg-warning";
+    if (status === "done") return "bg-success";
+    if (phase === "reviewing") return "bg-warning";
     return "bg-accent";
 }
 
@@ -161,7 +162,7 @@ export function ThreadReplies({
                 >
                     <span
                         data-thread-dot=""
-                        className={cn("relative z-[2] size-2.5 shrink-0 squircle-md", nestedDot(card.status))}
+                        className={cn("relative z-[2] size-2.5 shrink-0 squircle-md", nestedDot(card.status, card.phase))}
                         aria-hidden
                     />
                     <span className="block min-w-0 flex-1 truncate text-sm">
@@ -556,6 +557,19 @@ export function ChatList({
             setChats([]);
         }
     }, [project_path]);
+
+    useEffect(() => {
+        if (!mockOn) {
+            const parents = new Set(
+                getSubagents()
+                    .map((card) => card.parentId)
+                    .filter((id): id is string => !!id && isMockChatId(id)),
+            );
+            for (const id of parents) resetSubagentsForParent(id);
+            return;
+        }
+        hydrateSubagentsFromConversations(mockConversations(project_path || ""));
+    }, [mockOn, project_path]);
 
     useEffect(() => {
         void loadChats();

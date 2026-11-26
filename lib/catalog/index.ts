@@ -52,13 +52,19 @@ export async function fetchCatalog(token?: string | null): Promise<ShapeCatalog>
       headers,
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return cached ?? FALLBACK_CATALOG;
+    if (!res.ok) {
+      throw new Error(`Catalog request failed (${res.status})`);
+    }
     const data = (await res.json()) as ShapeCatalog;
+    if (!Array.isArray(data.models) || data.models.length === 0) {
+      throw new Error("Catalog response did not include models");
+    }
     cached = data;
     cachedAt = now;
     return data;
-  } catch {
-    return cached ?? FALLBACK_CATALOG;
+  } catch (err) {
+    if (cached?.models?.length) return cached;
+    throw err instanceof Error ? err : new Error("Catalog request failed");
   }
 }
 

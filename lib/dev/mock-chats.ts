@@ -7,7 +7,7 @@ const STORAGE_KEY = "shape:mock-chats";
 const CHANGE_EVENT = "shape-mock-chats";
 const MOCK_PREFIX = "mock-chat-";
 
-const UNREAD_IDS = new Set(["mock-chat-reset"]);
+const UNREAD_IDS = new Set(["mock-chat-export"]);
 
 function devOnly(): boolean {
     return process.env.NODE_ENV !== "production";
@@ -89,103 +89,140 @@ export function mockConversations(projectPath: string): Conversation[] {
     if (!mockChatsEnabled()) return [];
     const path = projectPath || "";
     return [
-        chat("mock-chat-tax", "Checkout is taxing the plan twice", path, 0.4, [
-            msg("user", "The total on checkout is charging tax twice. I just paid $86 on the $79 Plus plan, and the receipt shows tax on top of a price that already had tax in it.", 0.6),
+        chat("mock-chat-tips", "Card tickets add the tip twice", path, 0.4, [
+            msg("user", "A $42 lunch with a 15% tip is ringing up as $54.60. Cash tickets are fine. This is only happening when the customer pays by card.", 0.7),
             msg(
                 "assistant",
                 [
-                    "<cat path=\"lib/billing/checkout.ts\" start=\"40\" end=\"88\"></cat>",
-                    "<edit file=\"lib/billing/checkout.ts\">",
-                    "<original>const total = priceWithTax(plan.amount) + taxFor(plan.amount);</original>",
-                    "<replacement>const total = priceWithTax(plan.amount);</replacement>",
+                    "<cat path=\"src/checkout/totals.ts\" start=\"30\" end=\"72\"></cat>",
+                    "<subagent id=\"mock-sub-tips-card\" agent=\"Card totals\" status=\"running\" task=\"Recalculate a $42 ticket with a 15% tip\">",
+                    "<cat path=\"src/checkout/card.ts\" start=\"18\" end=\"44\"></cat>",
+                    "The card path adds the tip onto a total that already includes it.",
+                    "</subagent>",
+                    "<edit file=\"src/checkout/card.ts\">",
+                    "<original>const charged = withTip(ticket.total) + ticket.tip;</original>",
+                    "<replacement>const charged = withTip(ticket.subtotal);</replacement>",
                     "</edit>",
-                    "<terminal_command status=\"completed\" id=\"mock-tax\">bun run test tests/billing/checkout.test.ts</terminal_command>",
                     "",
-                    "Tax was applied in `priceWithTax`, then added again when the line items were summed. Plus monthly now checks out at $86.06, which is the $79 plan plus tax once. Annual was already storing the taxed amount, so that path is unchanged.",
+                    "The card charge was tipping the already-tipped total. A $42 ticket with 15% now charges $48.30. Cash was already correct, so that path is unchanged.",
                 ].join("\n"),
                 0.4,
             ),
-            msg("user", "Good. Leave the annual price alone, I already emailed a customer about that one.", 0.35),
-            msg("assistant", "Left it. Only the monthly Plus total changed, and the checkout test for that plan is green.", 0.3),
+            msg("user", "Good. Don't touch the cash drawer, we counted it this morning.", 0.3),
+            msg("assistant", "Left the cash path as it is. Only the card charge changed.", 0.25),
         ]),
-        chat("mock-chat-hero", "Hero title wraps on a 13 inch", path, 2, [
-            msg("user", "On my 13 inch the hero reads \"Build software\" on one line and \"development with AI.\" on the next. It looks like the sentence gave up.", 2.2),
+        chat("mock-chat-pins", "Stops pile up on the city map", path, 2, [
+            msg("user", "Zoomed into downtown, the delivery stops draw on top of each other. I can't tell which pin is 4th Street and which is the alley behind it.", 2.3),
             msg(
                 "assistant",
                 [
-                    "<cat path=\"app/(marketing)/_components/hero/index.tsx\" start=\"14\" end=\"22\"></cat>",
-                    "<edit file=\"app/(marketing)/_components/hero/index.tsx\">",
-                    "<original>w-150 mx-auto text-[3.70rem]</original>",
-                    "<replacement>mx-auto max-w-[18ch] text-[3.25rem] sm:text-[3.70rem]</replacement>",
-                    "</edit>",
+                    "<subagent id=\"mock-sub-pins-fixture\" agent=\"Downtown fixture\" status=\"error\" task=\"Load the downtown fixture and count overlaps\">",
+                    "The fixture file is missing the last three stops, so the overlap count came back short.",
+                    "</subagent>",
                     "",
-                    "The heading was locked to one width, so the second half dropped as soon as the window got narrower than the line. It now wraps on the word \"with\", which is where you'd pause if you were saying it out loud.",
+                    "The cluster radius never shrinks as you zoom in, so two stops a block apart share a pin. I'm waiting on a complete downtown fixture before changing the radius.",
                 ].join("\n"),
                 2,
             ),
         ]),
-        chat("mock-chat-scroll", "Sidebar jumps when a reply lands", path, 5, [
-            msg("user", "Every time a reply finishes, the session list jumps to the top. I lose my place if I'm looking at an older chat.", 5.4),
+        chat("mock-chat-empty", "Orders list flashes empty", path, 4, [
+            msg("user", "When I open the orders page I see \"No orders yet\" for a second, then the rows pop in. We have 80 orders. It looks broken.", 4.4),
             msg(
                 "assistant",
                 [
-                    "<edit file=\"features/agent/sidebar/chats.tsx\">",
-                    "<original>key={c.id + \"-\" + c.timestamp}</original>",
-                    "<replacement>key={c.id}</replacement>",
+                    "<edit file=\"src/orders/list.tsx\">",
+                    "<original>{orders.length === 0 ? <Empty /> : <Rows orders={orders} />}</original>",
+                    "<replacement>{loading ? <RowsSkeleton /> : orders.length === 0 ? <Empty /> : <Rows orders={orders} />}</replacement>",
                     "</edit>",
                     "",
-                    "The list was remounting because every refresh minted new row keys. The scroll position now stays put when a chat updates in place. A brand new session still appears at the top.",
+                    "The empty state was rendering before the request finished. It now holds a skeleton until the rows arrive, and the empty message only shows when the list really is empty.",
                 ].join("\n"),
-                5,
+                4,
             ),
         ]),
-        chat("mock-chat-intel", "Intel Mac download points at the wrong file", path, 8, [
-            msg("user", "Someone on an Intel MacBook clicked Download and got the Apple Silicon dmg. They wrote in saying it would not open.", 8.5),
+        chat("mock-chat-export", "CSV export drops the last order", path, 8, [
+            msg("user", "I exported this morning's orders and the spreadsheet is missing the last one. It's the $18 pickup for Mara. Everything before it is there.", 8.4),
             msg(
                 "assistant",
                 [
-                    "<cat path=\"lib/releases/github.ts\" start=\"44\" end=\"70\"></cat>",
-                    "<edit file=\"components/download/detect-os.ts\">",
-                    "<original>if (/mac|iphone|ipad|macintosh|darwin/.test(haystack)) return \"macos\";</original>",
-                    "<replacement>if (/mac|iphone|ipad|macintosh|darwin/.test(haystack)) return macDownloadPlatform(ua, uaData()?.architecture);</replacement>",
-                    "</edit>",
+                    "<subagent id=\"mock-sub-export-header\" agent=\"Header row\" status=\"done\" task=\"Check the column names against the sheet\">",
+                    "The header matches the columns the shop asked for. The missing order is not a column problem.",
+                    "</subagent>",
                     "",
-                    "Mac was one button, and it always linked the arm64 dmg. Intel Macs now get `Shape-macos-x86_64.dmg`. If the browser does not say which chip it is, we still offer Apple Silicon and leave Intel in the menu.",
+                    "The exporter was splitting the file on newlines and throwing away the piece after the last one. Mara's pickup was that piece. The header row was already right.",
                 ].join("\n"),
                 8,
             ),
         ]),
-        chat("mock-chat-reset", "Reset email is going to spam", path, 26, [
-            msg("user", "I tried the forgot-password flow from a Gmail account and the code landed in spam. The From address still says onboarding@resend.dev.", 27),
-            msg(
-                "assistant",
-                "That From address is the Resend test sender. Production mail needs `Shape <noreply@useshape.org>` once the domain's DKIM record is verified. I would not change the copy of the email until that sender is the one Gmail actually receives.",
-                26,
-            ),
-            msg("user", "DKIM is verified as of this morning. Can you switch the sender?", 26.2),
-            msg("assistant", "Switched the production sender to noreply@useshape.org. Local dev still logs the code in the terminal, so you can keep using any inbox there.", 26),
-        ]),
-        chat("mock-chat-radius", "Pricing cards still use the old radius", path, 30, [
-            msg("user", "The pricing cards are the only place still on the sharp corner. Everything else moved to the softer radius last week.", 31),
+        chat("mock-chat-reset", "Reset link opens as http", path, 16, [
+            msg("user", "The password email looks fine, but the link in it is http. Chrome warns people before they can set a new password.", 16.5),
             msg(
                 "assistant",
                 [
-                    "<edit file=\"app/pricing/_components/plans.tsx\">",
-                    "<original>rounded-sm border border-border</original>",
-                    "<replacement>squircle-2xl bg-card</replacement>",
+                    "<edit file=\"src/mail/reset.ts\">",
+                    "<original>const link = `http://shop.example.com/reset?token=${token}`;</original>",
+                    "<replacement>const link = `https://shop.example.com/reset?token=${token}`;</replacement>",
                     "</edit>",
                     "",
-                    "The four plan cards now use the same corner as the settings cards. The \"Coming soon\" credit block was the odd one out, and it is gone.",
+                    "The template had the scheme hardcoded. New emails use https. Links that were already sent still point at the old scheme until they expire.",
                 ].join("\n"),
-                30,
+                16,
             ),
         ]),
-        chat("mock-chat-index", "Docs search is a day behind", path, 50, [
-            msg("user", "I published the Intel download note to the docs this morning and search still answers as if it does not exist.", 51),
+        chat("mock-chat-search", "Search ignores the second word", path, 24, [
+            msg("user", "Searching \"wool socks\" returns every wool item in the shop, including the coats. It should be the socks.", 24.6),
             msg(
                 "assistant",
-                "Search is reading the index that shipped with the last website deploy, not the docs repo. The site revalidates that index about once a minute, so a new `search-index.json` on main should show up without another deploy. I checked just now and the Intel note is in the results.",
-                50,
+                [
+                    "<subagent id=\"mock-sub-search-tokens\" agent=\"Tokenizer\" status=\"pending\" task=\"Review how a two-word query is split\">",
+                    "Not started yet.",
+                    "</subagent>",
+                    "<edit file=\"src/search/query.ts\">",
+                    "<original>const term = query.trim().split(\" \")[0];</original>",
+                    "<replacement>const terms = query.trim().split(/\\s+/).filter(Boolean);</replacement>",
+                    "</edit>",
+                    "",
+                    "Search was keeping only the first word, so \"wool socks\" meant \"wool\". Both words are queried now. The index rebuild still needs another run before the coats drop out of that search.",
+                ].join("\n"),
+                24,
+            ),
+        ]),
+        chat("mock-chat-avatar", "Staff photo upload has no size cap", path, 32, [
+            msg("user", "Someone uploaded a 40MB photo as their staff picture and the roster page now takes forever to open.", 33),
+            msg(
+                "assistant",
+                [
+                    "<edit file=\"src/uploads/avatar.ts\">",
+                    "<original>await save(file);</original>",
+                    "<replacement>if (file.size > 2 * 1024 * 1024) throw new Error(\"Photo must be under 2MB\");\nawait save(resized(file, 512));</replacement>",
+                    "</edit>",
+                    "",
+                    "Uploads were stored as-is. A staff photo now has to be under 2MB, and we keep a 512px copy for the roster. The oversized one already on the page should be replaced.",
+                ].join("\n"),
+                32,
+            ),
+        ]),
+        chat("mock-chat-report", "Nightly email still goes to the old shop", path, 40, [
+            msg("user", "The 9pm sales email is still arriving at the downtown address. We moved that list to the harbor shop last week.", 41),
+            msg(
+                "assistant",
+                [
+                    "<edit file=\"src/reports/nightly.ts\">",
+                    "<original>const shopId = \"downtown\";</original>",
+                    "<replacement>const shopId = settings.reportShopId;</replacement>",
+                    "</edit>",
+                    "",
+                    "The job had the old shop id written in. It now reads whichever shop the settings page points at. Last night's send already went to downtown, so that one will not be recalled.",
+                ].join("\n"),
+                40,
+            ),
+        ]),
+        chat("mock-chat-dates", "Picker shows yesterday after 7pm", path, 52, [
+            msg("user", "After about 7pm the date picker jumps back a day. If I pick Friday evening it saves Thursday.", 53),
+            msg(
+                "assistant",
+                "The picker was formatting the date in UTC, and the shop is in a timezone behind UTC. Evening selections were landing on the previous calendar day. It now formats in the shop timezone, so Friday evening stays Friday.",
+                52,
             ),
         ]),
     ];

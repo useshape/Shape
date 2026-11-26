@@ -12,7 +12,7 @@ describe("mock chats", () => {
         setMockChats(true);
         expect(mockChatsEnabled()).toBe(false);
         expect(mockConversations("/repo")).toEqual([]);
-        expect(mockConversation("mock-chat-tax")).toBeNull();
+        expect(mockConversation("mock-chat-tips")).toBeNull();
     });
 
     it("injects sample sessions without writing them anywhere else", () => {
@@ -21,7 +21,7 @@ describe("mock chats", () => {
         const chats = mockConversations("/repo/shape");
         expect(chats.length).toBeGreaterThan(4);
         expect(new Set(chats.map((chat) => chat.title)).size).toBe(chats.length);
-        const open = mockConversation("mock-chat-tax", "/repo/shape");
+        const open = mockConversation("mock-chat-tips", "/repo/shape");
         expect(open?.history.length).toBeGreaterThan(1);
         expect(open?.history.some((message) => message.role === "user")).toBe(true);
         expect(open?.history.some((message) => message.content.includes("<edit"))).toBe(true);

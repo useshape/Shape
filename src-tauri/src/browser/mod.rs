@@ -78,6 +78,8 @@ struct TabsPayload {
 }
 
 /// A page in its own browser context. Used by design-review personas.
+/// Kept while that review path is unwired; do not delete the API to silence warnings.
+#[allow(dead_code)]
 pub struct IsolatedPage {
     pub ws: String,
     pub target_id: String,
@@ -305,6 +307,7 @@ async fn create_target(
 /// Open a page for a design-review persona. Prefer the browse tool's Chromium
 /// when it is already running. A private context is used when DevTools allows
 /// it; otherwise the page is a normal tab in that same browser.
+#[allow(dead_code)]
 pub async fn open_isolated_page(url: &str) -> Result<IsolatedPage, String> {
     let preferred = LIVE_PORT.load(Ordering::SeqCst);
     if preferred != 0 {
@@ -318,6 +321,7 @@ pub async fn open_isolated_page(url: &str) -> Result<IsolatedPage, String> {
     open_review_page(port, &browser_ws, url).await
 }
 
+#[allow(dead_code)]
 async fn open_review_page(port: u16, browser_ws: &str, url: &str) -> Result<IsolatedPage, String> {
     // A private browser context makes Edge show "you don't have the user rights
     // to view this page" for normal sites. A regular tab in the same browser loads.
@@ -329,6 +333,7 @@ async fn open_review_page(port: u16, browser_ws: &str, url: &str) -> Result<Isol
     })
 }
 
+#[allow(dead_code)]
 pub async fn close_isolated_page(page: &IsolatedPage) {
     let browser_ws = if let Some((_, ws)) = host_alive() {
         Some(ws)

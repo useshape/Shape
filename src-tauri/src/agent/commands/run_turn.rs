@@ -1000,7 +1000,6 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                     agent_state: config.agent_state,
                     client: config.client,
                     api_key: config.api_key,
-                    model: config.model,
                     cancel: config.cancel.clone(),
                     index_state: config.index_state,
                     mcp_state: config.mcp_state,
@@ -1349,7 +1348,6 @@ pub async fn run_agent_turn(mut config: AgentTurnConfig<'_>) -> Result<AgentTurn
                 agent_state: config.agent_state,
                 client: config.client,
                 api_key: config.api_key,
-                model: config.model,
                 cancel: config.cancel.clone(),
                 index_state: config.index_state,
                 mcp_state: config.mcp_state,
@@ -1710,14 +1708,9 @@ fn track_stream_chunk(config: &AgentTurnConfig<'_>, chunk: &str, activity_label:
 }
 
 fn resolve_abs(path: &str, project_path: &str) -> String {
-    if std::path::Path::new(path).is_absolute() {
-        path.to_string()
-    } else {
-        std::path::Path::new(project_path)
-            .join(path)
-            .to_string_lossy()
-            .into_owned()
-    }
+    crate::agent::security::paths::resolve_safe_path(path, project_path)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path.to_string())
 }
 
 fn upsert_terminal_ui_chunk(accumulated: &mut String, chunk: &str) {
