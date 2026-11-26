@@ -1,0 +1,17 @@
+{
+  "dataset": "frontier-harness-eval/frontier-harness-eval@v1.1.0",
+  "model": "z-ai/glm-5.3-flash",
+  "effort": "max",
+  "evalRoot": "C:\\Users\\User\\Desktop\\shape-monorepo\\shape\\validation\\frontier-harness",
+  "sources": [
+    {
+      "repo": "harborframework/terminal-bench-2.1",
+      "rev": "main"
+    },
+    {
+      "repo": "harborframework/terminal-bench",
+      "rev": "main"
+    }
+  ],
+  "smokeTasks": ["regex-log", "fix-git", "log-summary-date-ranges"]
+}

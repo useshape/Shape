@@ -18,6 +18,7 @@
     "test:idle": "node scripts/idle-resources.mjs",
     "test:all": "npm run test && npm run test:rust",
     "validate:prompt": "node validation/run.mjs",
+    "validate:frontier": "node validation/frontier-harness/run.mjs",
     "docs:index": "node scripts/build/docs-index.mjs",
     "sync-version": "node scripts/release/version.mjs",
     "release-notes": "node scripts/release/notes.mjs",

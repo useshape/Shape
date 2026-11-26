@@ -4,6 +4,7 @@
 
 use std::sync::Mutex;
 
+#[cfg(test)]
 use regex::Regex;
 use url::Url;
 
@@ -112,10 +113,12 @@ pub fn resolve_page_url(url: Option<&str>, path: Option<&str>) -> Result<String,
         })
 }
 
+#[cfg(test)]
 fn attached_image_re() -> Regex {
     Regex::new(r"(?s)<attached_image\b[^>]*>.*?</attached_image>").expect("screenshot regex")
 }
 
+#[cfg(test)]
 fn extract_attached_images(body: &str) -> (String, Vec<String>) {
     let re = attached_image_re();
     let tags: Vec<String> = re.find_iter(body).map(|m| m.as_str().trim().to_string()).collect();
@@ -123,6 +126,7 @@ fn extract_attached_images(body: &str) -> (String, Vec<String>) {
     (stripped, tags)
 }
 
+#[cfg(test)]
 fn split_trailing_prose(body: &str) -> (String, String) {
     const CLOSERS: &[&str] = &[
         "</edit>",
@@ -152,6 +156,7 @@ fn split_trailing_prose(body: &str) -> (String, String) {
     (body[..last_end].to_string(), body[last_end..].to_string())
 }
 
+#[cfg(test)]
 fn insert_after_first_paragraph(prose: &str, tags: &str) -> String {
     let trimmed = prose.trim();
     if trimmed.is_empty() {
@@ -171,6 +176,7 @@ fn insert_after_first_paragraph(prose: &str, tags: &str) -> String {
 
 /// Put page screenshots in the user-facing reply: after the first prose
 /// paragraph, never as a trailing dump under the whole message.
+#[cfg(test)]
 pub fn place_page_screenshots(body: &str, extra_tags: &[String]) -> String {
     let (stripped, mut tags) = extract_attached_images(body);
     for tag in extra_tags {

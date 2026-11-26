@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::{Cursor, Read};
+#[cfg(test)]
 use std::path::Path;
 
 use goblin::Object;

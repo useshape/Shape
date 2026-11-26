@@ -594,10 +594,6 @@ impl AgentState {
         flight.context_breakdown = Some(context_breakdown);
     }
 
-    pub fn set_in_flight_activity_label(&self, label: Option<&str>) {
-        self.set_in_flight_activity_label_for(None, label);
-    }
-
     pub fn set_in_flight_activity_label_for(&self, conversation_id: Option<&str>, label: Option<&str>) {
         let Ok(mut guard) = self.in_flight.lock() else {
             return;
@@ -1093,10 +1089,6 @@ impl AgentState {
     /// Clear approval bookkeeping from a previous turn so stale decisions can
     /// never resolve a new pending item. When `conversation_id` is set, leave
     /// pending items that belong to another chat.
-    pub fn clear_pending_approvals(&self) {
-        self.clear_pending_approvals_for(None);
-    }
-
     pub fn clear_pending_approvals_for(&self, conversation_id: Option<&str>) {
         let keep = |owned: &Option<String>| -> bool {
             match (conversation_id, owned.as_deref()) {
@@ -1134,10 +1126,6 @@ impl AgentState {
 
     /// Drop unresolved approval waiters on Stop without wiping Accept/Reject
     /// decisions that already landed (those should still apply).
-    pub fn dismiss_unresolved_approvals(&self) {
-        self.dismiss_unresolved_approvals_for(None);
-    }
-
     pub fn dismiss_unresolved_approvals_for(&self, conversation_id: Option<&str>) {
         let keep = |owned: &Option<String>| -> bool {
             match (conversation_id, owned.as_deref()) {

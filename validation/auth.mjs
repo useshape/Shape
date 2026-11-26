@@ -186,7 +186,22 @@ export async function resolveToken({ forceLogin = false } = {}) {
     if (env) return { accessToken: env, source: "env" };
 
     const saved = await loadSession();
-    if (saved?.accessToken) return saved;
+    if (saved?.refreshToken) {
+      try {
+        const rotated = await refreshAccess(saved.refreshToken);
+        const session = {
+          accessToken: rotated.accessToken,
+          refreshToken: rotated.refreshToken || saved.refreshToken,
+          source: "refresh",
+        };
+        await saveSession(session);
+        return session;
+      } catch {
+        if (saved.accessToken) return saved;
+      }
+    } else if (saved?.accessToken) {
+      return saved;
+    }
 
     const webview = await tokenFromWebView();
     if (webview?.accessToken) {

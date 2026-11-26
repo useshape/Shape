@@ -69,7 +69,6 @@ pub struct ToolCtx<'a> {
     pub agent_state: &'a AgentState,
     pub client: &'a Client,
     pub api_key: &'a str,
-    pub model: &'a str,
     pub cancel: tokio_util::sync::CancellationToken,
     pub index_state: Option<&'a crate::agent::index::IndexState>,
     pub mcp_state: Option<&'a crate::mcp::McpState>,

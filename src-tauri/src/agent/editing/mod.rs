@@ -40,27 +40,79 @@ pub struct ResolvedEdit {
     pub is_new_file: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineEnding {
+    Lf,
+    Crlf,
+}
+
+/// Majority of the first 4096 code units, same vote Claude Code uses.
+pub fn detect_line_ending(content: &str) -> LineEnding {
+    let sample = content.get(..4096.min(content.len())).unwrap_or(content);
+    let mut crlf = 0usize;
+    let mut lf = 0usize;
+    let bytes = sample.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\n' {
+            if i > 0 && bytes[i - 1] == b'\r' {
+                crlf += 1;
+            } else {
+                lf += 1;
+            }
+        }
+        i += 1;
+    }
+    if crlf > lf {
+        LineEnding::Crlf
+    } else {
+        LineEnding::Lf
+    }
+}
+
+pub fn normalize_newlines(content: &str) -> String {
+    content.replace("\r\n", "\n")
+}
+
+/// Restore the file's original ending. New files keep the model's bytes.
+pub fn restore_line_ending(content: &str, ending: LineEnding) -> String {
+    let lf = normalize_newlines(content);
+    match ending {
+        LineEnding::Lf => lf,
+        LineEnding::Crlf => lf.replace('\n', "\r\n"),
+    }
+}
+
 /// Write a previously resolved edit to disk.
 pub async fn write_resolved_edit(
     app: &tauri::AppHandle,
     path: &str,
     resolved: &ResolvedEdit,
 ) -> Result<(), AppError> {
-    save(app, path, &resolved.merged_content).await
+    let content = if resolved.is_new_file {
+        resolved.merged_content.clone()
+    } else {
+        restore_line_ending(
+            &resolved.merged_content,
+            detect_line_ending(&resolved.original_content),
+        )
+    };
+    save(app, path, &content).await
 }
 
 fn finish_resolved(
     merged: String,
-    original: String,
+    original_lf: String,
+    original_raw: String,
     code_edit: &str,
     strategy: &'static str,
 ) -> Result<ResolvedEdit, AppError> {
-    sanity::validate_merged_edit(&merged, &original, code_edit, strategy)?;
-    let original_lines = original.lines().count();
+    sanity::validate_merged_edit(&merged, &original_lf, code_edit, strategy)?;
+    let original_lines = original_lf.lines().count();
     let merged_lines = merged.lines().count();
     Ok(ResolvedEdit {
         merged_content: merged,
-        original_content: original,
+        original_content: original_raw,
         strategy,
         original_lines,
         merged_lines,
@@ -114,8 +166,8 @@ pub async fn resolve_edit(
     client: &Client,
     api_key: &str,
 ) -> Result<ResolvedEdit, AppError> {
-    let code_edit = code_edit.replace("\r\n", "\n");
     let is_new_file = !std::path::Path::new(path).exists();
+    // New files keep the model's bytes. Existing files match on LF.
 
     logging::info(
         "editing",
@@ -136,7 +188,7 @@ pub async fn resolve_edit(
         }
         let lines = code_edit.lines().count();
         return Ok(ResolvedEdit {
-            merged_content: code_edit,
+            merged_content: code_edit.to_string(),
             original_content: String::new(),
             strategy: "new_file",
             original_lines: 0,
@@ -145,13 +197,14 @@ pub async fn resolve_edit(
         });
     }
 
-    let original = tokio::fs::read_to_string(path)
+    let code_edit = normalize_newlines(code_edit);
+    let original_raw = tokio::fs::read_to_string(path)
         .await
         .map_err(|e| {
             logging::error("editing", &format!("Failed to read {}: {}", path, e));
             AppError::Io(e)
-        })?
-        .replace("\r\n", "\n");
+        })?;
+    let original = normalize_newlines(&original_raw);
 
     if has_git_merge_conflict_markers(&original) && !code_edit.contains("<<<<<<< SEARCH") {
         if !code_edit.trim().is_empty() && !code_edit.lines().any(speculative::is_marker_line_pub) {
@@ -165,7 +218,8 @@ pub async fn resolve_edit(
             );
             return finish_resolved(
                 code_edit.clone(),
-                original,
+                original.clone(),
+                original_raw.clone(),
                 &code_edit,
                 "merge_conflict_full_file",
             );
@@ -192,7 +246,13 @@ pub async fn resolve_edit(
                     merged.lines().count()
                 ),
             );
-            return finish_resolved(merged, original, &code_edit, "speculative");
+            return finish_resolved(
+                merged,
+                original.clone(),
+                original_raw.clone(),
+                &code_edit,
+                "speculative",
+            );
         }
         Err(e) => {
             if !e.contains("No `<<<<<<< SEARCH` blocks found") {
@@ -212,13 +272,25 @@ pub async fn resolve_edit(
                 code_edit.lines().count()
             ),
         );
-        return finish_resolved(code_edit.clone(), original, &code_edit, "full_file");
+        return finish_resolved(
+            code_edit.clone(),
+            original.clone(),
+            original_raw.clone(),
+            &code_edit,
+            "full_file",
+        );
     }
 
     // 3) Fast-apply LLM fallback.
     logging::info("editing", "speculative resolver declined, falling back to fast-apply");
     match apply::fast_apply(client, api_key, &original, &code_edit, instructions).await {
-        Ok(merged) => finish_resolved(merged, original, &code_edit, "fast_apply"),
+        Ok(merged) => finish_resolved(
+            merged,
+            original.clone(),
+            original_raw.clone(),
+            &code_edit,
+            "fast_apply",
+        ),
         Err(e) => {
             logging::error("editing", &format!("fast-apply failed: {}", e));
             Err(edit_error_with_excerpt(
@@ -275,4 +347,42 @@ async fn save(app: &tauri::AppHandle, path: &str, content: &str) -> Result<(), A
         content.to_string(),
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crlf_file_stays_crlf_after_one_line_edit() {
+        let original = "alpha\r\nbeta\r\ngamma\r\n";
+        let merged_lf = "alpha\nbeta\nchanged\n";
+        let written = restore_line_ending(merged_lf, detect_line_ending(original));
+        assert_eq!(written, "alpha\r\nbeta\r\nchanged\r\n");
+        assert_eq!(detect_line_ending(&written), LineEnding::Crlf);
+    }
+
+    #[test]
+    fn lf_file_stays_lf_after_one_line_edit() {
+        let original = "alpha\nbeta\ngamma\n";
+        let merged_lf = "alpha\nbeta\nchanged\n";
+        let written = restore_line_ending(merged_lf, detect_line_ending(original));
+        assert_eq!(written, "alpha\nbeta\nchanged\n");
+        assert_eq!(detect_line_ending(&written), LineEnding::Lf);
+    }
+
+    #[test]
+    fn restoring_would_flatten_mixed_endings_so_new_files_skip_it() {
+        let mixed = "hello\r\nworld\n";
+        assert_ne!(restore_line_ending(mixed, LineEnding::Lf), mixed);
+        assert_ne!(restore_line_ending(mixed, LineEnding::Crlf), mixed);
+    }
+
+    #[test]
+    fn restore_is_idempotent_on_crlf() {
+        let original = "a\r\nb\r\n";
+        let once = restore_line_ending("a\nb\n", detect_line_ending(original));
+        let twice = restore_line_ending(&once, detect_line_ending(original));
+        assert_eq!(once, twice);
+    }
 }

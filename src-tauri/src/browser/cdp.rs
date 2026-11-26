@@ -105,6 +105,7 @@ pub async fn eval(ws_url: &str, expression: &str) -> Result<String, String> {
 }
 
 /// JPEG screenshot as base64 (no data-url prefix). `scale` shrinks the capture.
+#[allow(dead_code)]
 pub async fn screenshot_jpeg(ws_url: &str, quality: u8, scale: f64) -> Result<String, String> {
     let mut params = json!({ "format": "jpeg", "quality": quality });
     if scale < 0.999 {
@@ -134,6 +135,7 @@ pub async fn screenshot_png(ws_url: &str) -> Result<String, String> {
         .ok_or_else(|| "No screenshot data".into())
 }
 
+#[allow(dead_code)]
 pub async fn click_px(ws_url: &str, x: f64, y: f64) -> Result<(), String> {
     call_all(
         ws_url,
@@ -154,6 +156,7 @@ pub async fn click_px(ws_url: &str, x: f64, y: f64) -> Result<(), String> {
 }
 
 /// Poll until the document is ready (or the deadline passes).
+#[allow(dead_code)]
 pub async fn wait_ready(ws_url: &str, max: Duration) {
     let deadline = Instant::now() + max;
     while Instant::now() < deadline {

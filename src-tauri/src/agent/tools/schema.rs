@@ -225,6 +225,7 @@ pub struct SteerPacks {
 }
 
 impl SteerPacks {
+    #[cfg(test)]
     pub fn all_on() -> Self {
         Self {
             workspace: true,

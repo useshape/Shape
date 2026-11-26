@@ -421,8 +421,8 @@ async function applyToken(token: string | null, allowRefresh = true) {
         applyTelemetryPreference(getSettings().privacy.telemetryEnabled);
       },
     );
+    void refreshShapeCatalog(token).catch(() => undefined);
     if (account.tier !== prevTier || !cached) {
-      void refreshShapeCatalog(token).catch(() => undefined);
       void refreshShapeRuntime({ userId: account.id, tier: account.tier }).catch(() => undefined);
     }
   } catch (err) {

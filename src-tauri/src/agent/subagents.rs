@@ -274,6 +274,7 @@ pub fn can_spawn() -> Result<(), String> {
     }
 }
 
+#[cfg(test)]
 pub fn running_count() -> usize {
     RUNNING.load(Ordering::SeqCst)
 }
@@ -333,12 +334,6 @@ fn unregister_live(id: &str) {
 
 fn emit_card(app: &AppHandle, payload: Value) {
     let _ = app.emit("agent-subagent", payload);
-}
-
-fn xml_attr(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('"', "&quot;")
-        .replace('<', "&lt;")
 }
 
 fn user_message(content: &str) -> ChatMessage {

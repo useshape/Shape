@@ -863,8 +863,8 @@ export function ChatInput({
     const MODELS = getVisibleModels(allModels, enabled);
     const freeModel = allModels.find((model) => model.minTier === "free" || model.provider === "Free Models");
     const modelInfo = MODELS.find((m) => m.id === selectedModel) ?? freeModel ?? allModels[0] ?? {
-        id: "",
-        name: "Model",
+        id: selectedModel,
+        name: selectedModel && selectedModel !== "auto" ? selectedModel.split("/").at(-1) || "Model" : "Auto",
         description: "",
         provider: "",
         inputCost: 0,

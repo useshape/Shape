@@ -433,6 +433,23 @@ mod tests {
     }
 
     #[test]
+    fn crlf_source_stays_crlf_after_hunk() {
+        let original = "hello\r\nworld\r\n";
+        let hunks = vec![
+            "@@".to_string(),
+            " hello".to_string(),
+            "-world".to_string(),
+            "+world!".to_string(),
+        ];
+        let out = apply_update_hunks(original, &hunks).unwrap();
+        let written = crate::agent::editing::restore_line_ending(
+            &out,
+            crate::agent::editing::detect_line_ending(original),
+        );
+        assert_eq!(written, "hello\r\nworld!\r\n");
+    }
+
+    #[test]
     fn parse_add_file() {
         let dir = scratch_dir();
         let patch = r#"*** Begin Patch

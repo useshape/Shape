@@ -156,7 +156,11 @@ export function hydrateSubagentsFromConversations(
                     task: item.task,
                     model: item.model,
                     transcript: item.transcript,
-                    status: item.status === "error" ? "error" : "done",
+                    status: row.id.startsWith("mock-chat-")
+                        ? item.status
+                        : item.status === "error"
+                          ? "error"
+                          : "done",
                 });
             }
         }
